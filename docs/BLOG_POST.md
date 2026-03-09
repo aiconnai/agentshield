@@ -160,7 +160,8 @@ This suggests that while MCP server authors are generally careful about not runn
 
 ```bash
 # Install AgentShield
-cargo install agentshield
+brew tap limaronaldo/engram && brew install agentshield
+# or: cargo install agent-shield
 
 # Scan any MCP server before using it
 agentshield scan /path/to/mcp-server
@@ -170,11 +171,12 @@ agentshield scan /path/to/mcp-server
 
 ```yaml
 # .github/workflows/security.yml
-- uses: limaronaldo/agentshield@v0.1.0
+- uses: limaronaldo/agentshield@v0.2.3
   with:
     path: .
     fail-on: high
     format: sarif
+    ignore-tests: true
 ```
 
 This uploads results to GitHub Code Scanning, blocking PRs that introduce high-severity issues.
@@ -192,20 +194,29 @@ Run MCP servers in containers or with restricted filesystem access. Don't give a
 [AgentShield](https://github.com/limaronaldo/agentshield) is a free, open-source, offline-first security scanner for AI agent extensions. It ships as a single ~1 MiB binary with:
 
 - **12 built-in detectors** covering OWASP-style vulnerabilities adapted for AI tools
+- **4 framework adapters:** MCP, OpenClaw, CrewAI, LangChain
+- **Python + TypeScript parsers** (tree-sitter AST) with cross-file validation tracking
 - **4 output formats:** console, JSON, SARIF (GitHub Code Scanning), HTML
-- **GitHub Action** for CI/CD integration
-- **Python parser** (tree-sitter) with TypeScript coming in v0.2.0
+- **GitHub Action** with PR inline annotations
+- **VS Code extension** with inline diagnostics
 
 Install it:
 
 ```bash
-cargo install agentshield
+# Via Homebrew
+brew tap limaronaldo/engram && brew install agentshield
+
+# Via cargo
+cargo install agent-shield
+
+# Via Docker
+docker run ghcr.io/limaronaldo/agentshield:v0.2.3 scan /project
 ```
 
 Or use the GitHub Action:
 
 ```yaml
-- uses: limaronaldo/agentshield@v0.1.0
+- uses: limaronaldo/agentshield@v0.2.3
 ```
 
 Star the repo if you find it useful: [github.com/limaronaldo/agentshield](https://github.com/limaronaldo/agentshield)
