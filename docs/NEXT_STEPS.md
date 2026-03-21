@@ -1,6 +1,6 @@
 # Next Steps — Post v0.1.0
 
-Status: v0.2.4 complete. 4 framework adapters (MCP, OpenClaw, CrewAI, LangChain), 95 tests, 12 detectors, VS Code extension. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation (170 → 69 findings with `--ignore-tests`), cross-file validation tracking, PR inline annotations — all done.
+Status: v0.8.0 complete. 6 framework adapters (MCP, OpenClaw, CrewAI, LangChain, GPT Actions, Cursor Rules), 212 tests, 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations — all done.
 
 ---
 
@@ -282,6 +282,102 @@ Spawns `agentshield scan <workspace> --format json --ignore-tests` as a child pr
 - **`vscode/src/types.ts`** — TypeScript interfaces mirroring Rust JSON output
 - **`vscode/package.json`** — extension manifest with settings and activation events
 - Total: ~350 lines of TypeScript, compiles cleanly
+
+---
+
+## 12. v0.3.0 — Stable Finding Fingerprints — Done
+
+Completed March 21, 2026.
+
+### What it does
+
+Every finding now includes a stable SHA-256 fingerprint derived from rule ID, file path, line number, and code snippet. Fingerprints are deterministic across runs, enabling baseline diffing and suppression by ID.
+
+### Implementation
+
+- Versioned baseline file schema with serialization
+- Fingerprints included in all 4 output formats (console, JSON, SARIF, HTML)
+- `--write-baseline <path>` writes all current findings as a baseline file
+- `--baseline <path>` filters out findings that match a previously written baseline
+
+---
+
+## 13. v0.4.0 — Suppressions — Done
+
+Completed March 21, 2026.
+
+### What it does
+
+`suppress` and `list-suppressions` CLI subcommands for managing finding suppressions in `.agentshield.toml`. Suppressions use fingerprints to target specific findings, with required reason and optional expiration.
+
+### CLI
+
+```bash
+agentshield suppress SHIELD-001 src/tools.py:42 --reason "accepted risk"
+agentshield list-suppressions
+```
+
+---
+
+## 14. v0.5.0 — Taint Paths & Egress Policy — Done
+
+Completed March 21, 2026.
+
+### What it does
+
+- Upgraded `credential_exfil` and `prompt_injection` detectors with full taint path evidence
+- Dependency findings (SHIELD-009, SHIELD-012) now include manifest locations for SARIF output parity
+- `--emit-egress-policy <path>` analyzes scan results and generates a starter egress policy file
+- Egress policy schema for the `wrap` command
+
+---
+
+## 15. v0.6.0 — GPT Actions & Cursor Rules Adapters — Done
+
+Completed March 21, 2026.
+
+### What it does
+
+Two new framework adapters bringing the total to 6:
+
+- **GPT Actions** (`gpt_actions.rs`) — detects OpenAPI specs used in GPT Custom Actions
+- **Cursor Rules** (`cursor_rules.rs`) — detects `.cursorrules` configuration files
+
+Both use the standard 3-phase adapter pipeline and reuse shared helpers.
+
+---
+
+## 16. v0.7.0 — Egress Policy Operator Override — Done
+
+Completed March 21, 2026.
+
+### What it does
+
+Adds operator override policy layering to the `wrap` command, allowing operators to enforce egress restrictions that cannot be bypassed by individual tool configurations.
+
+---
+
+## 17. v0.8.0 — Certify & New Detectors — Done
+
+Completed March 21, 2026.
+
+### What it does
+
+- **`certify` command** — generates DSSE (Dead Simple Signing Envelope) attestation envelopes for scan results, with optional Ed25519 signing
+- **6 new detectors** (18 total):
+  - SHIELD-013: Metadata SSRF (cloud metadata endpoint access, critical)
+  - SHIELD-014: Download-Write-Execute Chain (supply chain attack pattern, critical)
+  - SHIELD-015: Overbroad Filesystem Scope (unrestricted path access, high)
+  - SHIELD-016: Unsafe Deserialization (pickle/yaml.load/eval, critical)
+  - SHIELD-017: Archive Traversal / Zip Slip (path traversal via archives, high)
+  - SHIELD-018: Secret Leakage (credentials in logs/responses, high)
+
+### CLI
+
+```bash
+agentshield certify .
+agentshield certify . --sign-key key.bin --output attestation.json
+```
 
 ---
 

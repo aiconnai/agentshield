@@ -5,8 +5,9 @@ This file provides guidance to Claude Code when working with this repository.
 ## Project Overview
 
 **AgentShield** is a Rust-based, offline-first security scanner for AI agent extensions
-(MCP servers, OpenClaw skills, LangChain tools). It produces SARIF output compatible
-with GitHub Code Scanning.
+(MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, GPT Actions, Cursor Rules).
+It produces SARIF output compatible with GitHub Code Scanning, supports DSSE attestation,
+and includes baseline diffing, suppressions, and egress policy generation.
 
 ## Repository Structure
 
@@ -15,7 +16,7 @@ agentshield/
 ├── src/
 │   ├── lib.rs                    # Public API: scan(), render_report()
 │   ├── error.rs                  # ShieldError (thiserror)
-│   ├── bin/cli.rs                # Clap CLI: scan, list-rules, init
+│   ├── bin/cli.rs                # Clap CLI: scan, list-rules, init, suppress, list-suppressions, certify
 │   ├── ir/                       # Intermediate Representation (ScanTarget)
 │   │   ├── mod.rs                # ScanTarget, Framework, SourceFile, ArgumentSource
 │   │   ├── tool_surface.rs       # Tool definitions, permissions
@@ -28,7 +29,9 @@ agentshield/
 │   │   ├── mcp.rs                # MCP server adapter + is_test_file() + shared helpers
 │   │   ├── openclaw.rs           # OpenClaw SKILL.md adapter
 │   │   ├── crewai.rs             # CrewAI adapter (BaseTool, @tool)
-│   │   └── langchain.rs          # LangChain adapter (@tool, BaseTool, langgraph)
+│   │   ├── langchain.rs          # LangChain adapter (@tool, BaseTool, langgraph)
+│   │   ├── gpt_actions.rs        # GPT Actions adapter (OpenAPI specs)
+│   │   └── cursor_rules.rs       # Cursor Rules adapter (.cursorrules files)
 │   ├── parser/                   # Language parsers
 │   │   ├── mod.rs                # Parser trait, ParsedFile, FunctionDef, CallSite
 │   │   ├── python.rs             # tree-sitter Python + regex patterns
@@ -45,7 +48,7 @@ agentshield/
 │   │   ├── finding.rs            # Finding, Severity, Evidence structs
 │   │   ├── registry.rs           # Rule metadata registry
 │   │   ├── policy.rs             # Policy evaluation (.agentshield.toml)
-│   │   └── builtin/              # 12 built-in detectors (SHIELD-001..012)
+│   │   └── builtin/              # 18 built-in detectors (SHIELD-001..018)
 │   ├── output/                   # Report formatters
 │   │   ├── mod.rs                # OutputFormat enum, render()
 │   │   ├── console.rs            # Plain text
@@ -82,7 +85,7 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (95 tests)
+# Test (212 tests)
 cargo test
 
 # Lint
@@ -92,7 +95,13 @@ cargo fmt --check
 # Run CLI
 cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- scan . --ignore-tests --format html --output report.html
+cargo run -- scan . --write-baseline baseline.json
+cargo run -- scan . --baseline baseline.json
 cargo run -- list-rules
+cargo run -- suppress SHIELD-001 src/tools.py:42 --reason "accepted risk"
+cargo run -- list-suppressions
+cargo run -- certify . --output attestation.json
+cargo run -- certify . --sign-key key.bin --output attestation.json
 ```
 
 ## Architecture Principles
@@ -188,7 +197,7 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 5. `load()` uses the 3-phase pipeline (parse → cross-file analysis → merge)
 6. Reuse shared helpers from `mcp.rs`: `collect_source_files()`, `parse_dependencies()`, `parse_provenance()`
 
-**Existing adapters:** MCP (`mcp.rs`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`)
+**Existing adapters:** MCP (`mcp.rs`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), GPT Actions (`gpt_actions.rs`), Cursor Rules (`cursor_rules.rs`)
 
 ## Conventions
 
@@ -199,7 +208,11 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 - Conventional Commits for git messages
 - Parsers extract `FunctionDef`, `CallSite`, and `sanitized_vars` for cross-file analysis
 - `ArgumentSource::Sanitized` is the safe variant for cross-file validated params — `is_tainted()` returns `false`
-- v0.2.3 release has 5-platform binaries: https://github.com/limaronaldo/agentshield/releases/tag/v0.2.3
+- Findings include stable fingerprints (SHA-256 hash of rule+file+line+snippet) for baseline diffing and suppression
+- `--baseline` / `--write-baseline` for CI noise reduction — only report new findings
+- `suppress` / `list-suppressions` CLI commands manage `.agentshield.toml` suppressions
+- `certify` command generates DSSE attestation envelopes with optional Ed25519 signing
+- `--emit-egress-policy` analyzes scan results and generates a starter egress policy
 - PR inline annotations verified via [agentshield-test PR #1](https://github.com/limaronaldo/agentshield-test/pull/1) (IBVI-488)
 
 ## Version History
@@ -212,3 +225,9 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 | 0.2.2 | 83 | Cross-file validation tracking (IBVI-482) |
 | 0.2.3 | 83 | `--ignore-tests` flag, `[scan]` config section, 5-platform release, PR annotations verified |
 | 0.2.4 | 95 | CrewAI + LangChain adapters (IBVI-486, -487) — 4 adapters total, shared helpers |
+| 0.3.0 | ~120 | Stable finding fingerprints (SHA-256), versioned baseline file schema |
+| 0.4.0 | ~140 | `suppress` + `list-suppressions` CLI, `.agentshield.toml` suppression entries |
+| 0.5.0 | ~160 | Taint path upgrades (credential_exfil, prompt_injection), egress policy schema, `--emit-egress-policy`, `--baseline`/`--write-baseline` |
+| 0.6.0 | ~180 | GPT Actions + Cursor Rules adapters — 6 adapters total |
+| 0.7.0 | ~195 | Egress policy operator override layering for `wrap` command |
+| 0.8.0 | 212 | `certify` command (DSSE attestation + Ed25519), 6 new detectors (SHIELD-013..018) |
