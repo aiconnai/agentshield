@@ -18,6 +18,7 @@ pub mod adapter;
 pub mod analysis;
 pub mod baseline;
 pub mod config;
+pub mod egress;
 pub mod error;
 pub mod ir;
 pub mod output;
@@ -370,7 +371,9 @@ mod integration_tests {
         let sarif_dep = sarif_results
             .iter()
             .find(|r| r["ruleId"].as_str() == Some("SHIELD-009"))
-            .expect("SARIF output must contain SHIELD-009 result (dep findings now have locations)");
+            .expect(
+                "SARIF output must contain SHIELD-009 result (dep findings now have locations)",
+            );
         let sarif_uri = sarif_dep["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
             .as_str()
             .expect("SARIF SHIELD-009 result must have a physicalLocation URI");
@@ -395,6 +398,25 @@ mod integration_tests {
             !html_out.contains("<code>-</code>"),
             "HTML output must not show '-' for dep finding locations that have a manifest file"
         );
+    }
+
+    #[test]
+    fn vuln_metadata_ssrf_detected() {
+        let opts = ScanOptions::default();
+        let report = scan(
+            Path::new("tests/fixtures/mcp_servers/vuln_metadata_ssrf"),
+            &opts,
+        )
+        .unwrap();
+        // The fixture has a tool that passes user-controlled `url` to requests.get,
+        // which should trigger SHIELD-003 (general SSRF) and potentially SHIELD-013
+        // (metadata SSRF) via taint paths if populated.
+        // At minimum, SHIELD-003 must fire (parameter -> network call).
+        assert!(
+            report.findings.iter().any(|f| f.rule_id == "SHIELD-003"),
+            "Expected SHIELD-003 (general SSRF) from vuln_metadata_ssrf fixture"
+        );
+        assert!(!report.verdict.pass);
     }
 
     #[test]
