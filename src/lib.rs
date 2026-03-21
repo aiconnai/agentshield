@@ -16,6 +16,7 @@
 
 pub mod adapter;
 pub mod analysis;
+pub mod baseline;
 pub mod config;
 pub mod error;
 pub mod ir;
@@ -61,6 +62,9 @@ pub struct ScanReport {
     pub target_name: String,
     pub findings: Vec<Finding>,
     pub verdict: PolicyVerdict,
+    /// Absolute (or canonicalized) path to the scanned directory.
+    /// Passed to output renderers for stable fingerprint computation.
+    pub scan_root: std::path::PathBuf,
 }
 
 /// Run a complete scan: detect framework, parse, analyze, evaluate policy.
@@ -102,10 +106,16 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
     let effective_findings = config.policy.apply(&all_findings);
     let verdict = config.policy.evaluate(&all_findings);
 
+    // Canonicalize for stable fingerprints; fall back to the raw path on error.
+    let scan_root = path
+        .canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf());
+
     Ok(ScanReport {
         target_name,
         findings: effective_findings,
         verdict,
+        scan_root,
     })
 }
 
@@ -116,6 +126,7 @@ pub fn render_report(report: &ScanReport, format: OutputFormat) -> Result<String
         &report.verdict,
         format,
         &report.target_name,
+        &report.scan_root,
     )
 }
 
