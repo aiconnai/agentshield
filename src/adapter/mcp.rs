@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::analysis::cross_file::apply_cross_file_sanitization;
 use crate::error::Result;
 use crate::ir::execution_surface::ExecutionSurface;
+use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
 use crate::parser;
 
@@ -124,13 +125,15 @@ impl super::Adapter for McpAdapter {
         // Parse provenance from package.json or pyproject.toml
         let provenance = parse_provenance(root);
 
+        let data = build_data_surface(&tools, &execution);
+
         Ok(vec![ScanTarget {
             name,
             framework: Framework::Mcp,
             root_path: root.to_path_buf(),
             tools,
             execution,
-            data: Default::default(),
+            data,
             dependencies,
             provenance,
             source_files,

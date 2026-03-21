@@ -3,6 +3,7 @@ mod command_injection;
 mod credential_exfil;
 mod dynamic_exec;
 mod excessive_permissions;
+mod metadata_ssrf;
 mod no_lockfile;
 mod prompt_injection;
 mod runtime_install;
@@ -13,7 +14,7 @@ mod unpinned_deps;
 
 use super::Detector;
 
-/// Returns all built-in detectors for the v0.1 rule set (12 rules).
+/// Returns all built-in detectors (13 rules: SHIELD-001..013).
 pub fn all_detectors() -> Vec<Box<dyn Detector>> {
     vec![
         Box::new(command_injection::CommandInjectionDetector),
@@ -28,5 +29,6 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(typosquat::TyposquatDetector),
         Box::new(dynamic_exec::DynamicExecDetector),
         Box::new(no_lockfile::NoLockfileDetector),
+        Box::new(metadata_ssrf::MetadataSsrfDetector),
     ]
 }

@@ -7,6 +7,7 @@ pub mod data_surface;
 pub mod dependency_surface;
 pub mod execution_surface;
 pub mod provenance_surface;
+pub mod taint_builder;
 pub mod tool_surface;
 
 use serde::{Deserialize, Serialize};

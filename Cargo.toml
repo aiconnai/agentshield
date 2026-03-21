@@ -26,8 +26,11 @@ default = ["python", "typescript"]
 python = ["dep:tree-sitter-python"]
 typescript = ["dep:tree-sitter-typescript"]
 
+# Runtime proxy for `wrap` command (tokio + parking_lot)
+runtime = ["dep:tokio", "dep:parking_lot"]
+
 # All features
-full = ["python", "typescript"]
+full = ["python", "typescript", "runtime"]
 
 [dependencies]
 # CLI
@@ -79,6 +82,10 @@ semver = "1.0"
 
 # URL parsing
 url = "2.5"
+
+# Async runtime for egress proxy (feature-gated)
+tokio = { version = "1", features = ["full"], optional = true }
+parking_lot = { version = "0.12", optional = true }
 
 [dev-dependencies]
 tempfile = "3.9"

@@ -5,6 +5,10 @@ use clap::{Parser, Subcommand};
 
 use agentshield::baseline::{BaselineEntry, BaselineFile};
 use agentshield::config::Config;
+#[cfg(feature = "runtime")]
+use agentshield::egress::policy::EgressPolicy;
+#[cfg(feature = "runtime")]
+use agentshield::egress::proxy::EgressProxy;
 use agentshield::output::OutputFormat;
 use agentshield::rules::{RuleEngine, Severity};
 use agentshield::ScanOptions;
@@ -100,6 +104,22 @@ enum Commands {
         #[arg(long, short = 'c')]
         config: Option<PathBuf>,
     },
+
+    /// Enforce egress policy on a command via a local HTTP proxy
+    #[cfg(feature = "runtime")]
+    Wrap {
+        /// Path to egress policy file (agentshield.egress.toml)
+        #[arg(long, value_name = "PATH")]
+        policy: PathBuf,
+
+        /// Audit log output path (overrides policy config)
+        #[arg(long, value_name = "PATH")]
+        audit_log: Option<PathBuf>,
+
+        /// The command to wrap (use -- before the command)
+        #[arg(last = true, required = true)]
+        command: Vec<String>,
+    },
 }
 
 fn main() {
@@ -134,6 +154,12 @@ fn main() {
             config,
         } => cmd_suppress(fingerprint, reason, expires, config),
         Commands::ListSuppressions { config } => cmd_list_suppressions(config),
+        #[cfg(feature = "runtime")]
+        Commands::Wrap {
+            policy,
+            audit_log,
+            command,
+        } => cmd_wrap(policy, audit_log, command),
     };
 
     match result {
@@ -343,9 +369,7 @@ fn cmd_suppress(
     Ok(0)
 }
 
-fn cmd_list_suppressions(
-    config: Option<PathBuf>,
-) -> Result<i32, agentshield::error::ShieldError> {
+fn cmd_list_suppressions(config: Option<PathBuf>) -> Result<i32, agentshield::error::ShieldError> {
     let config_path = config.unwrap_or_else(|| PathBuf::from(".agentshield.toml"));
     let cfg = Config::load(&config_path)?;
     let suppressions = &cfg.policy.suppressions;
@@ -378,4 +402,71 @@ fn cmd_list_suppressions(
     }
 
     Ok(0)
+}
+
+#[cfg(feature = "runtime")]
+fn cmd_wrap(
+    policy_path: PathBuf,
+    audit_log: Option<PathBuf>,
+    command: Vec<String>,
+) -> Result<i32, agentshield::error::ShieldError> {
+    use std::sync::Arc;
+
+    if command.is_empty() {
+        return Err(agentshield::error::ShieldError::Internal(
+            "No command provided to wrap".to_string(),
+        ));
+    }
+
+    let mut policy = EgressPolicy::load(&policy_path)?;
+    if let Some(log_path) = audit_log {
+        policy.audit.log_path = Some(log_path);
+    }
+
+    let proxy = Arc::new(EgressProxy::new(policy)?);
+
+    // Build a tokio runtime to run the proxy
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| agentshield::error::ShieldError::Internal(format!("tokio runtime: {}", e)))?;
+
+    let exit_code = rt.block_on(async {
+        let (listener, addr) = proxy.bind().await?;
+
+        // Spawn proxy loop in background
+        let proxy_clone = Arc::clone(&proxy);
+        let proxy_handle = tokio::spawn(async move {
+            proxy_clone.run(listener).await;
+        });
+
+        let proxy_url = format!("http://{}", addr);
+
+        eprintln!("agentshield: proxy listening on {}", addr);
+        eprintln!("agentshield: wrapping command: {}", command.join(" "));
+
+        // Launch child process with proxy env vars
+        let mut child = std::process::Command::new(&command[0])
+            .args(&command[1..])
+            .env("HTTP_PROXY", &proxy_url)
+            .env("HTTPS_PROXY", &proxy_url)
+            .env("http_proxy", &proxy_url)
+            .env("https_proxy", &proxy_url)
+            .spawn()
+            .map_err(|e| {
+                agentshield::error::ShieldError::Internal(format!(
+                    "Failed to start command '{}': {}",
+                    command[0], e
+                ))
+            })?;
+
+        let status = child.wait().map_err(|e| {
+            agentshield::error::ShieldError::Internal(format!("Failed to wait for command: {}", e))
+        })?;
+
+        // Shutdown proxy
+        proxy_handle.abort();
+
+        Ok::<i32, agentshield::error::ShieldError>(status.code().unwrap_or(1))
+    })?;
+
+    process::exit(exit_code);
 }

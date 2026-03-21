@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::analysis::cross_file::apply_cross_file_sanitization;
 use crate::error::Result;
+use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
 use crate::parser;
 
@@ -135,13 +136,16 @@ impl super::Adapter for LangChainAdapter {
         // Parse provenance from pyproject.toml
         let provenance = super::mcp::parse_provenance(root);
 
+        let tools = vec![];
+        let data = build_data_surface(&tools, &execution);
+
         Ok(vec![ScanTarget {
             name,
             framework: Framework::LangChain,
             root_path: root.to_path_buf(),
-            tools: vec![],
+            tools,
             execution,
-            data: Default::default(),
+            data,
             dependencies,
             provenance,
             source_files,

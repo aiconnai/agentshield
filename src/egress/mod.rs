@@ -4,3 +4,5 @@
 //! which control outbound network access from wrapped agent processes.
 
 pub mod policy;
+#[cfg(feature = "runtime")]
+pub mod proxy;

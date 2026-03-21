@@ -106,10 +106,8 @@ impl Detector for PromptInjectionDetector {
 
         // Deduplicate: keep taint-path findings over fallback at same location.
         // Collect owned locations to avoid borrowing `findings` during mutation.
-        let taint_path_locations: Vec<_> = findings
-            .iter()
-            .filter_map(|f| f.location.clone())
-            .collect();
+        let taint_path_locations: Vec<_> =
+            findings.iter().filter_map(|f| f.location.clone()).collect();
 
         let new_findings: Vec<_> = fallback_findings
             .into_iter()
@@ -344,9 +342,7 @@ mod tests {
             execution: ExecutionSurface {
                 network_operations: vec![NetworkOperation {
                     function: "fetch".into(),
-                    url_arg: ArgumentSource::Parameter {
-                        name: "url".into(),
-                    },
+                    url_arg: ArgumentSource::Parameter { name: "url".into() },
                     method: Some("GET".into()),
                     sends_data: false,
                     location: loc_at("tool.ts", 20),
@@ -380,9 +376,7 @@ mod tests {
             execution: ExecutionSurface {
                 network_operations: vec![NetworkOperation {
                     function: "requests.get".into(),
-                    url_arg: ArgumentSource::Parameter {
-                        name: "url".into(),
-                    },
+                    url_arg: ArgumentSource::Parameter { name: "url".into() },
                     method: Some("GET".into()),
                     sends_data: false,
                     location: shared_loc.clone(),

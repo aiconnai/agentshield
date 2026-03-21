@@ -100,10 +100,8 @@ impl Detector for CredentialExfilDetector {
 
         // Deduplicate: keep taint-path findings over fallback at same location.
         // Collect owned locations to avoid borrowing `findings` during mutation.
-        let taint_path_locations: Vec<_> = findings
-            .iter()
-            .filter_map(|f| f.location.clone())
-            .collect();
+        let taint_path_locations: Vec<_> =
+            findings.iter().filter_map(|f| f.location.clone()).collect();
 
         let new_findings: Vec<_> = fallback_findings
             .into_iter()
@@ -466,9 +464,7 @@ mod tests {
                 }],
                 network_operations: vec![NetworkOperation {
                     function: "httpx.post".into(),
-                    url_arg: ArgumentSource::Parameter {
-                        name: "url".into(),
-                    },
+                    url_arg: ArgumentSource::Parameter { name: "url".into() },
                     method: Some("POST".into()),
                     sends_data: true,
                     location: loc_at("app.py", 10),
