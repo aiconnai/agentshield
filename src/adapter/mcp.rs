@@ -325,6 +325,7 @@ pub(super) fn parse_dependencies(root: &Path) -> dependency_surface::DependencyS
                 for (key, is_dev) in [("dependencies", false), ("devDependencies", true)] {
                     if let Some(deps) = value.get(key).and_then(|v| v.as_object()) {
                         for (name, version) in deps {
+                            let line = find_json_key_line(&content, name);
                             surface.dependencies.push(Dependency {
                                 name: name.clone(),
                                 version_constraint: version.as_str().map(|s| s.to_string()),
@@ -332,7 +333,13 @@ pub(super) fn parse_dependencies(root: &Path) -> dependency_surface::DependencyS
                                 locked_hash: None,
                                 registry: "npm".into(),
                                 is_dev,
-                                location: None,
+                                location: Some(SourceLocation {
+                                    file: pkg_json.clone(),
+                                    line,
+                                    column: 0,
+                                    end_line: None,
+                                    end_column: None,
+                                }),
                             });
                         }
                     }
@@ -353,6 +360,18 @@ pub(super) fn parse_dependencies(root: &Path) -> dependency_surface::DependencyS
     }
 
     surface
+}
+
+/// Find the 1-based line number where a JSON key (e.g. `"package-name"`) appears.
+/// Falls back to line 1 if the key is not found.
+fn find_json_key_line(content: &str, key: &str) -> usize {
+    let needle = format!("\"{}\"", key);
+    for (idx, line) in content.lines().enumerate() {
+        if line.contains(&needle) {
+            return idx + 1;
+        }
+    }
+    1
 }
 
 pub(super) fn parse_provenance(root: &Path) -> provenance_surface::ProvenanceSurface {

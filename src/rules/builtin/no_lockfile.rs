@@ -1,4 +1,4 @@
-use crate::ir::ScanTarget;
+use crate::ir::{ScanTarget, SourceLocation};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
 };
@@ -40,6 +40,21 @@ impl Detector for NoLockfileDetector {
                 .into_iter()
                 .collect();
 
+            // Use the first dependency's manifest file as the location for this
+            // finding, so it appears in SARIF output and GitHub Code Scanning.
+            let manifest_location = target
+                .dependencies
+                .dependencies
+                .first()
+                .and_then(|d| d.location.as_ref())
+                .map(|loc| SourceLocation {
+                    file: loc.file.clone(),
+                    line: 1,
+                    column: 0,
+                    end_line: None,
+                    end_column: None,
+                });
+
             findings.push(Finding {
                 rule_id: "SHIELD-012".into(),
                 rule_name: "No Lockfile".into(),
@@ -51,12 +66,12 @@ impl Detector for NoLockfileDetector {
                     dep_count,
                     registries.join(", ")
                 ),
-                location: None,
+                location: manifest_location.clone(),
                 evidence: vec![Evidence {
                     description: "Expected lockfile (Pipfile.lock, poetry.lock, uv.lock, \
                          package-lock.json, yarn.lock, pnpm-lock.yaml) but none found"
                         .to_string(),
-                    location: None,
+                    location: manifest_location,
                     snippet: None,
                 }],
                 taint_path: None,
