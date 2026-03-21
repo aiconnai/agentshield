@@ -17,6 +17,7 @@
 pub mod adapter;
 pub mod analysis;
 pub mod baseline;
+pub mod certify;
 pub mod config;
 pub mod egress;
 pub mod error;
@@ -29,6 +30,7 @@ use std::path::Path;
 
 use config::Config;
 use error::Result;
+use ir::ScanTarget;
 use output::OutputFormat;
 use rules::policy::PolicyVerdict;
 use rules::{Finding, RuleEngine};
@@ -66,6 +68,9 @@ pub struct ScanReport {
     /// Absolute (or canonicalized) path to the scanned directory.
     /// Passed to output renderers for stable fingerprint computation.
     pub scan_root: std::path::PathBuf,
+    /// Raw scan targets produced by the adapter pipeline.
+    /// Used by callers that need to inspect the IR (e.g., `--emit-egress-policy`).
+    pub targets: Vec<ScanTarget>,
 }
 
 /// Run a complete scan: detect framework, parse, analyze, evaluate policy.
@@ -115,6 +120,7 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
         findings: effective_findings,
         verdict,
         scan_root,
+        targets,
     })
 }
 

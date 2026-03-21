@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::error::ShieldError;
+use crate::ir::{ArgumentSource, ScanTarget};
+use crate::ir::tool_surface::PermissionType;
 
 const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -198,6 +200,56 @@ impl EgressPolicy {
             .unwrap_or(self.rate_limits.max_requests_per_minute)
     }
 
+    /// Build a starter egress policy by analyzing all `ScanTarget`s.
+    ///
+    /// Extracts domains from:
+    /// - Literal URL arguments in `NetworkOperation` entries
+    /// - `NetworkAccess` declared permissions with a scope/target URL or domain
+    ///
+    /// The resulting policy allows all discovered domains and uses safe defaults
+    /// for network-level blocking and rate limiting.
+    pub fn from_scan_targets(targets: &[ScanTarget]) -> Self {
+        let mut domains = std::collections::HashSet::new();
+
+        for target in targets {
+            // Extract domains from network operations with literal URLs
+            for net_op in &target.execution.network_operations {
+                if let ArgumentSource::Literal(ref url) = net_op.url_arg {
+                    if let Some(domain) = extract_domain(url) {
+                        domains.insert(domain);
+                    }
+                }
+            }
+
+            // Extract domains from tool declared permissions (NetworkAccess)
+            for tool in &target.tools {
+                for perm in &tool.declared_permissions {
+                    if matches!(perm.permission_type, PermissionType::NetworkAccess) {
+                        if let Some(ref scope) = perm.target {
+                            if let Some(domain) = extract_domain(scope) {
+                                domains.insert(domain);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut allow: Vec<String> = domains.into_iter().collect();
+        allow.sort();
+
+        EgressPolicy {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            domains: DomainPolicy {
+                allow,
+                deny: vec![],
+            },
+            networks: NetworkPolicy::default(),
+            rate_limits: RateLimitPolicy::default(),
+            audit: AuditPolicy::default(),
+        }
+    }
+
     /// Generate a starter policy TOML string for `agentshield init --egress`.
     pub fn starter_toml() -> &'static str {
         r#"# AgentShield Egress Policy
@@ -226,6 +278,36 @@ log_format = "json"
 log_allowed = false
 "#
     }
+}
+
+/// Extract the hostname from a URL string or bare domain.
+///
+/// Handles `http://`, `https://` URLs (strips scheme, path, port) and bare
+/// domain names (e.g., `"api.example.com"`). Returns `None` for strings that
+/// cannot be mapped to a useful hostname (e.g., paths, IP-like without dot).
+pub fn extract_domain(url_or_domain: &str) -> Option<String> {
+    // Try stripping http:// or https://
+    let rest = if let Some(r) = url_or_domain.strip_prefix("https://") {
+        r
+    } else if let Some(r) = url_or_domain.strip_prefix("http://") {
+        r
+    } else {
+        // Bare domain: must contain a dot and no slashes
+        if url_or_domain.contains('.') && !url_or_domain.contains('/') {
+            return Some(url_or_domain.to_string());
+        }
+        return None;
+    };
+
+    // Take the host portion (before first '/')
+    let host = rest.split('/').next()?;
+    // Strip port if present
+    let host = host.split(':').next()?;
+
+    if host.is_empty() {
+        return None;
+    }
+    Some(host.to_string())
 }
 
 /// Simple glob matching for domain patterns.
@@ -470,5 +552,159 @@ deny = []
         assert!(policy.networks.block_metadata);
         assert_eq!(policy.rate_limits.max_requests_per_minute, 60);
         assert_eq!(policy.audit.log_format, "json");
+    }
+
+    // ── from_scan_targets tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_extract_domain_from_url() {
+        // Full URLs with scheme
+        assert_eq!(
+            extract_domain("https://api.example.com/v1/items"),
+            Some("api.example.com".into())
+        );
+        assert_eq!(
+            extract_domain("http://api.example.com:8080/path"),
+            Some("api.example.com".into())
+        );
+        assert_eq!(
+            extract_domain("https://api.github.com"),
+            Some("api.github.com".into())
+        );
+        // Bare domain
+        assert_eq!(
+            extract_domain("api.example.com"),
+            Some("api.example.com".into())
+        );
+        // No dot, no scheme → None
+        assert_eq!(extract_domain("localhost"), None);
+        // Path without scheme → None (has slash)
+        assert_eq!(extract_domain("/some/path"), None);
+        // Empty string → None
+        assert_eq!(extract_domain(""), None);
+    }
+
+    #[test]
+    fn test_from_scan_targets_extracts_domains() {
+        use crate::ir::execution_surface::{NetworkOperation, ExecutionSurface};
+        use crate::ir::tool_surface::{DeclaredPermission, PermissionType, ToolSurface};
+        use crate::ir::{
+            ArgumentSource, DataSurface, DependencySurface, Framework, ProvenanceSurface,
+            ScanTarget, SourceLocation,
+        };
+        use std::path::PathBuf;
+
+        let make_loc = || SourceLocation {
+            file: PathBuf::from("server.py"),
+            line: 1,
+            column: 0,
+            end_line: None,
+            end_column: None,
+        };
+
+        let target = ScanTarget {
+            name: "test-server".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("/tmp/test"),
+            tools: vec![ToolSurface {
+                name: "fetch_data".into(),
+                description: None,
+                input_schema: None,
+                output_schema: None,
+                declared_permissions: vec![DeclaredPermission {
+                    permission_type: PermissionType::NetworkAccess,
+                    target: Some("https://api.stripe.com/v1".into()),
+                    description: None,
+                }],
+                defined_at: None,
+            }],
+            execution: ExecutionSurface {
+                network_operations: vec![
+                    NetworkOperation {
+                        function: "requests.get".into(),
+                        url_arg: ArgumentSource::Literal(
+                            "https://api.openai.com/v1/chat".into(),
+                        ),
+                        method: Some("GET".into()),
+                        sends_data: false,
+                        location: make_loc(),
+                    },
+                    NetworkOperation {
+                        function: "requests.post".into(),
+                        // Non-literal: should be skipped
+                        url_arg: ArgumentSource::Parameter { name: "url".into() },
+                        method: Some("POST".into()),
+                        sends_data: true,
+                        location: make_loc(),
+                    },
+                ],
+                ..ExecutionSurface::default()
+            },
+            data: DataSurface::default(),
+            dependencies: DependencySurface::default(),
+            provenance: ProvenanceSurface::default(),
+            source_files: vec![],
+        };
+
+        let policy = EgressPolicy::from_scan_targets(&[target]);
+
+        // schema_version must be 1
+        assert_eq!(policy.schema_version, 1);
+        // deny list must be empty (starter policy)
+        assert!(policy.domains.deny.is_empty());
+        // allow list must contain both discovered domains, sorted
+        assert!(
+            policy.domains.allow.contains(&"api.openai.com".to_string()),
+            "Expected api.openai.com in allow list, got: {:?}",
+            policy.domains.allow
+        );
+        assert!(
+            policy.domains.allow.contains(&"api.stripe.com".to_string()),
+            "Expected api.stripe.com in allow list, got: {:?}",
+            policy.domains.allow
+        );
+        // Allow list should be sorted
+        assert_eq!(
+            policy.domains.allow,
+            {
+                let mut sorted = policy.domains.allow.clone();
+                sorted.sort();
+                sorted
+            },
+            "Allow list should be sorted"
+        );
+        // Network defaults must be secure
+        assert!(policy.networks.block_private);
+        assert!(policy.networks.block_localhost);
+        assert!(policy.networks.block_link_local);
+        assert!(policy.networks.block_metadata);
+        // Rate limit default
+        assert_eq!(policy.rate_limits.max_requests_per_minute, 60);
+    }
+
+    #[test]
+    fn test_emit_egress_policy_integration() {
+        // Scan the vuln_ssrf fixture — it has literal HTTP requests.
+        // Build the policy from targets embedded in the report and round-trip it.
+        use crate::{scan, ScanOptions};
+        use std::path::Path;
+
+        let opts = ScanOptions::default();
+        let report = scan(Path::new("tests/fixtures/mcp_servers/vuln_ssrf"), &opts)
+            .expect("scan should succeed");
+
+        let policy = EgressPolicy::from_scan_targets(&report.targets);
+
+        // Policy must be valid (round-trip save/load)
+        let tmp = TempDir::new().unwrap();
+        let policy_path = tmp.path().join("agentshield.egress.toml");
+        policy.save(&policy_path).unwrap();
+
+        let loaded = EgressPolicy::load(&policy_path).unwrap();
+        assert_eq!(loaded.schema_version, 1);
+        assert!(loaded.networks.block_private);
+        assert!(loaded.networks.block_metadata);
+        // deny list must be empty in a generated starter policy
+        assert!(loaded.domains.deny.is_empty());
     }
 }

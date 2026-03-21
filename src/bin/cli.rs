@@ -5,7 +5,6 @@ use clap::{Parser, Subcommand};
 
 use agentshield::baseline::{BaselineEntry, BaselineFile};
 use agentshield::config::Config;
-#[cfg(feature = "runtime")]
 use agentshield::egress::policy::EgressPolicy;
 #[cfg(feature = "runtime")]
 use agentshield::egress::proxy::EgressProxy;
@@ -64,6 +63,10 @@ enum Commands {
         /// Write all current findings as a baseline file
         #[arg(long, value_name = "PATH")]
         write_baseline: Option<PathBuf>,
+
+        /// Analyze scan results and emit a starter egress policy to the given path
+        #[arg(long, value_name = "PATH")]
+        emit_egress_policy: Option<PathBuf>,
     },
 
     /// List all available detection rules
@@ -105,6 +108,29 @@ enum Commands {
         config: Option<PathBuf>,
     },
 
+    /// Generate a DSSE attestation envelope for scan results
+    Certify {
+        /// Path to the extension directory
+        #[arg(default_value = ".")]
+        path: PathBuf,
+
+        /// Path to Ed25519 private key file (32 bytes, raw binary)
+        #[arg(long)]
+        sign_key: Option<PathBuf>,
+
+        /// Write output to file instead of stdout
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Config file path
+        #[arg(long, short = 'c')]
+        config: Option<PathBuf>,
+
+        /// Skip test files
+        #[arg(long)]
+        ignore_tests: bool,
+    },
+
     /// Enforce egress policy on a command via a local HTTP proxy
     #[cfg(feature = "runtime")]
     Wrap {
@@ -135,6 +161,7 @@ fn main() {
             ignore_tests,
             baseline,
             write_baseline,
+            emit_egress_policy,
         } => cmd_scan(ScanArgs {
             path,
             config,
@@ -144,6 +171,7 @@ fn main() {
             ignore_tests,
             baseline_path: baseline,
             write_baseline_path: write_baseline,
+            emit_egress_policy_path: emit_egress_policy,
         }),
         Commands::ListRules { format } => cmd_list_rules(format),
         Commands::Init { force } => cmd_init(force),
@@ -154,6 +182,13 @@ fn main() {
             config,
         } => cmd_suppress(fingerprint, reason, expires, config),
         Commands::ListSuppressions { config } => cmd_list_suppressions(config),
+        Commands::Certify {
+            path,
+            sign_key,
+            output,
+            config,
+            ignore_tests,
+        } => cmd_certify(path, sign_key, output, config, ignore_tests),
         #[cfg(feature = "runtime")]
         Commands::Wrap {
             policy,
@@ -181,6 +216,7 @@ struct ScanArgs {
     ignore_tests: bool,
     baseline_path: Option<PathBuf>,
     write_baseline_path: Option<PathBuf>,
+    emit_egress_policy_path: Option<PathBuf>,
 }
 
 fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
@@ -193,6 +229,7 @@ fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
         ignore_tests,
         baseline_path,
         write_baseline_path,
+        emit_egress_policy_path,
     } = args;
     let format = OutputFormat::from_str_lenient(&format_str).unwrap_or_else(|| {
         eprintln!("Warning: unknown format '{}', using console", format_str);
@@ -253,6 +290,17 @@ fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
             "Wrote {} findings to baseline: {}",
             report.findings.len(),
             wb_path.display()
+        );
+    }
+
+    // Emit egress policy if --emit-egress-policy is provided
+    if let Some(ref egress_path) = emit_egress_policy_path {
+        let policy = EgressPolicy::from_scan_targets(&report.targets);
+        policy.save(egress_path)?;
+        eprintln!(
+            "Wrote egress policy with {} allowed domain(s) to {}",
+            policy.domains.allow.len(),
+            egress_path.display()
         );
     }
 
@@ -399,6 +447,72 @@ fn cmd_list_suppressions(config: Option<PathBuf>) -> Result<i32, agentshield::er
             "{:<16}  {:<40}  {:<10}  {}",
             fp_short, reason_truncated, expires_display, status
         );
+    }
+
+    Ok(0)
+}
+
+fn cmd_certify(
+    path: PathBuf,
+    sign_key: Option<PathBuf>,
+    output: Option<PathBuf>,
+    config: Option<PathBuf>,
+    ignore_tests: bool,
+) -> Result<i32, agentshield::error::ShieldError> {
+    use agentshield::certify::envelope::{build_attestation, DsseEnvelope};
+
+    let options = ScanOptions {
+        config_path: config.clone(),
+        format: OutputFormat::Console,
+        fail_on_override: None,
+        ignore_tests,
+    };
+
+    let report = agentshield::scan(&path, &options)?;
+
+    // Load suppressions from config
+    let config_path = config.unwrap_or_else(|| path.join(".agentshield.toml"));
+    let cfg = Config::load(&config_path)?;
+    let suppressions = &cfg.policy.suppressions;
+
+    let payload = build_attestation(
+        &report.scan_root,
+        &report.findings,
+        suppressions,
+        &report.targets,
+        None,
+    );
+
+    let mut envelope = DsseEnvelope::new(&payload)?;
+
+    // Optionally sign with Ed25519 key
+    if let Some(key_path) = sign_key {
+        let key_bytes = std::fs::read(&key_path).map_err(|e| {
+            agentshield::error::ShieldError::Internal(format!(
+                "Failed to read signing key '{}': {}",
+                key_path.display(),
+                e
+            ))
+        })?;
+        envelope.sign(&key_bytes)?;
+        eprintln!(
+            "Signed attestation with key: {}",
+            key_path.display()
+        );
+    }
+
+    let json = serde_json::to_string_pretty(&envelope)?;
+
+    match output {
+        Some(out) => {
+            std::fs::write(&out, &json)?;
+            eprintln!(
+                "Wrote attestation to: {} ({} findings)",
+                out.display(),
+                report.findings.len()
+            );
+        }
+        None => print!("{}", json),
     }
 
     Ok(0)
