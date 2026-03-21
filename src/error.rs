@@ -31,6 +31,9 @@ pub enum ShieldError {
     #[error("TOML parse error: {0}")]
     Toml(#[from] toml::de::Error),
 
+    #[error("TOML serialize error: {0}")]
+    TomlSer(#[from] toml::ser::Error),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }

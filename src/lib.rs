@@ -102,14 +102,12 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
         all_findings.extend(findings);
     }
 
-    // Apply policy (ignore rules, overrides)
-    let effective_findings = config.policy.apply(&all_findings);
-    let verdict = config.policy.evaluate(&all_findings);
-
     // Canonicalize for stable fingerprints; fall back to the raw path on error.
-    let scan_root = path
-        .canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf());
+    let scan_root = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+    // Apply policy (ignore rules, overrides, suppressions)
+    let effective_findings = config.policy.apply(&all_findings, &scan_root);
+    let verdict = config.policy.evaluate(&all_findings);
 
     Ok(ScanReport {
         target_name,
@@ -184,6 +182,120 @@ mod integration_tests {
         .unwrap();
         assert!(report.findings.iter().any(|f| f.rule_id == "SHIELD-002"));
         assert!(!report.verdict.pass);
+    }
+
+    #[test]
+    fn baseline_write_and_filter_round_trip() {
+        use crate::baseline::{BaselineEntry, BaselineFile};
+        use tempfile::NamedTempFile;
+
+        let fixture = Path::new("tests/fixtures/mcp_servers/vuln_cmd_inject");
+        let opts = ScanOptions::default();
+
+        // Step 1: scan and get findings
+        let report = scan(fixture, &opts).unwrap();
+        assert!(
+            !report.findings.is_empty(),
+            "vuln_cmd_inject should produce findings"
+        );
+
+        // Step 2: write baseline from findings
+        let baseline_file = NamedTempFile::new().unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+        let entries: Vec<BaselineEntry> = report
+            .findings
+            .iter()
+            .map(|f| BaselineEntry {
+                fingerprint: f.fingerprint(&report.scan_root),
+                rule_id: f.rule_id.clone(),
+                first_seen: now.clone(),
+            })
+            .collect();
+        let baseline = BaselineFile::new(entries);
+        baseline.save(baseline_file.path()).unwrap();
+
+        // Step 3: re-scan and filter with baseline
+        let report2 = scan(fixture, &opts).unwrap();
+        let loaded_baseline = BaselineFile::load(baseline_file.path()).unwrap();
+        let filtered: Vec<_> = report2
+            .findings
+            .into_iter()
+            .filter(|f| {
+                let fp = f.fingerprint(&report2.scan_root);
+                !loaded_baseline.contains(&fp)
+            })
+            .collect();
+
+        // Step 4: all findings should be filtered out
+        assert!(
+            filtered.is_empty(),
+            "All findings should be filtered by baseline, but {} remain: {:?}",
+            filtered.len(),
+            filtered.iter().map(|f| &f.rule_id).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn suppress_command_roundtrip() {
+        use crate::config::Config;
+        use crate::rules::policy::Suppression;
+        use tempfile::TempDir;
+
+        // Use a temp dir so we don't pollute fixture directories
+        let tmp = TempDir::new().unwrap();
+        let fixture = Path::new("tests/fixtures/mcp_servers/vuln_cmd_inject");
+
+        // Step 1: Scan the fixture to get a real fingerprint
+        let opts = ScanOptions::default();
+        let report = scan(fixture, &opts).unwrap();
+        assert!(
+            !report.findings.is_empty(),
+            "vuln_cmd_inject should produce findings"
+        );
+
+        let first_finding = &report.findings[0];
+        let fp = first_finding.fingerprint(&report.scan_root);
+        let rule_id = first_finding.rule_id.clone();
+
+        // Step 2: Write a config with the suppression into a temp dir
+        let config_path = tmp.path().join(".agentshield.toml");
+        let mut cfg = Config::default();
+        cfg.policy.suppressions.push(Suppression {
+            fingerprint: fp.clone(),
+            reason: "Integration test suppression".into(),
+            expires: None,
+            created_at: Some("2026-03-21".into()),
+        });
+        let toml_str = toml::to_string_pretty(&cfg).unwrap();
+        std::fs::write(&config_path, &toml_str).unwrap();
+
+        // Step 3: Verify the config round-trips correctly
+        let loaded = Config::load(&config_path).unwrap();
+        assert_eq!(loaded.policy.suppressions.len(), 1);
+        assert_eq!(loaded.policy.suppressions[0].fingerprint, fp);
+        assert_eq!(
+            loaded.policy.suppressions[0].reason,
+            "Integration test suppression"
+        );
+
+        // Step 4: Re-scan using the config with the suppression
+        let opts_with_config = ScanOptions {
+            config_path: Some(config_path.clone()),
+            ..ScanOptions::default()
+        };
+        let report2 = scan(fixture, &opts_with_config).unwrap();
+
+        // The suppressed finding should no longer appear
+        let still_present = report2
+            .findings
+            .iter()
+            .any(|f| f.rule_id == rule_id && f.fingerprint(&report2.scan_root) == fp);
+
+        assert!(
+            !still_present,
+            "Suppressed finding {} should not appear in re-scan",
+            fp
+        );
     }
 
     #[test]
