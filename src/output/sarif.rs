@@ -39,8 +39,11 @@ pub fn render(findings: &[Finding], target_name: &str, scan_root: &Path) -> Resu
         .iter()
         .filter_map(|f| {
             // SARIF consumers (GitHub Code Scanning) require at least one
-            // location per result. Skip findings without a source location
-            // (e.g. supply-chain findings like SHIELD-009, SHIELD-012).
+            // location per result. Skip findings without a source location.
+            // SHIELD-008 (Excessive Permissions) has no meaningful code
+            // location, so it is excluded from SARIF output. Dependency
+            // findings (SHIELD-009, SHIELD-012) now carry manifest file
+            // locations and pass through.
             let loc = f.location.as_ref()?;
 
             let mut result = json!({

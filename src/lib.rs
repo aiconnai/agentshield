@@ -298,6 +298,105 @@ mod integration_tests {
         );
     }
 
+    /// Verify that dependency findings with manifest file locations appear
+    /// consistently across all 4 output formats (console, JSON, SARIF, HTML).
+    ///
+    /// Prior to T7, SHIELD-009 and SHIELD-012 had `location: None` and were
+    /// silently dropped from SARIF output while appearing as "-" in console
+    /// and HTML. Now that the adapter populates manifest file locations, all
+    /// formats must agree on the same location.
+    #[test]
+    fn dep_findings_location_parity_across_output_formats() {
+        use crate::output::OutputFormat;
+
+        let fixture = Path::new("tests/fixtures/mcp_servers/vuln_unpinned_deps");
+        let opts = ScanOptions::default();
+        let report = scan(fixture, &opts).unwrap();
+
+        // The fixture has requirements.txt with >=versions and no lockfile.
+        // Expect at least one SHIELD-009 (Unpinned Dependencies) finding.
+        let dep_finding = report
+            .findings
+            .iter()
+            .find(|f| f.rule_id == "SHIELD-009")
+            .expect("Expected at least one SHIELD-009 finding from vuln_unpinned_deps fixture");
+
+        // The finding must have a location pointing to requirements.txt.
+        let loc = dep_finding
+            .location
+            .as_ref()
+            .expect("SHIELD-009 finding must carry a manifest file location");
+        assert!(
+            loc.file.to_string_lossy().contains("requirements.txt"),
+            "SHIELD-009 location file should be requirements.txt, got: {}",
+            loc.file.display()
+        );
+        assert!(loc.line >= 1, "SHIELD-009 location line must be >= 1");
+
+        let expected_file = loc.file.to_string_lossy().to_string();
+
+        // Render all 4 formats and verify the location is present in each.
+        let console_out =
+            render_report(&report, OutputFormat::Console).expect("console render failed");
+        assert!(
+            console_out.contains("requirements.txt"),
+            "Console output should contain requirements.txt for dep findings"
+        );
+
+        let json_out = render_report(&report, OutputFormat::Json).expect("json render failed");
+        let json_val: serde_json::Value =
+            serde_json::from_str(&json_out).expect("JSON output must be valid JSON");
+        let json_findings = json_val["findings"]
+            .as_array()
+            .expect("JSON must have findings array");
+        let json_dep = json_findings
+            .iter()
+            .find(|f| f["rule_id"].as_str() == Some("SHIELD-009"))
+            .expect("JSON output must contain SHIELD-009 finding");
+        let json_file = json_dep["location"]["file"]
+            .as_str()
+            .expect("JSON SHIELD-009 finding must have location.file");
+        assert!(
+            json_file.contains("requirements.txt"),
+            "JSON location.file should contain requirements.txt, got: {json_file}"
+        );
+
+        let sarif_out = render_report(&report, OutputFormat::Sarif).expect("SARIF render failed");
+        let sarif_val: serde_json::Value =
+            serde_json::from_str(&sarif_out).expect("SARIF output must be valid JSON");
+        let sarif_results = sarif_val["runs"][0]["results"]
+            .as_array()
+            .expect("SARIF must have runs[0].results array");
+        let sarif_dep = sarif_results
+            .iter()
+            .find(|r| r["ruleId"].as_str() == Some("SHIELD-009"))
+            .expect("SARIF output must contain SHIELD-009 result (dep findings now have locations)");
+        let sarif_uri = sarif_dep["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+            .as_str()
+            .expect("SARIF SHIELD-009 result must have a physicalLocation URI");
+        assert!(
+            sarif_uri.contains("requirements.txt"),
+            "SARIF artifactLocation URI should contain requirements.txt, got: {sarif_uri}"
+        );
+        // Verify the URI matches the JSON location (both point to the same file)
+        assert!(
+            expected_file.contains("requirements.txt"),
+            "Location file {expected_file} must reference requirements.txt"
+        );
+
+        let html_out = render_report(&report, OutputFormat::Html).expect("HTML render failed");
+        assert!(
+            html_out.contains("requirements.txt"),
+            "HTML output should contain requirements.txt for dep findings"
+        );
+        // HTML must NOT show "-" for the dep finding location
+        // (the table shows the location as "file:line")
+        assert!(
+            !html_out.contains("<code>-</code>"),
+            "HTML output must not show '-' for dep finding locations that have a manifest file"
+        );
+    }
+
     #[test]
     fn safe_filesystem_no_file_access_findings() {
         // This fixture has a handler that validates paths via validatePath()
