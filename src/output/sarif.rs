@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::error::Result;
 use crate::rules::{Finding, Severity};
 
@@ -6,8 +8,9 @@ use serde_json::{json, Value};
 /// Render findings as SARIF 2.1.0.
 ///
 /// Produces a self-contained SARIF log compatible with GitHub Code Scanning
-/// and other SARIF consumers.
-pub fn render(findings: &[Finding], target_name: &str) -> Result<String> {
+/// and other SARIF consumers. Each result includes a `fingerprint` in its
+/// `properties` bag for stable deduplication across scan runs.
+pub fn render(findings: &[Finding], target_name: &str, scan_root: &Path) -> Result<String> {
     let rules: Vec<Value> = findings
         .iter()
         .map(|f| &f.rule_id)
@@ -57,9 +60,15 @@ pub fn render(findings: &[Finding], target_name: &str) -> Result<String> {
                 }],
             });
 
-            if let Some(remediation) = &f.remediation {
-                result["properties"] = json!({ "remediation": remediation });
-            }
+            // Merge remediation and fingerprint into the properties bag.
+            let fingerprint = f.fingerprint(scan_root);
+            result["properties"] = match &f.remediation {
+                Some(remediation) => json!({
+                    "fingerprint": fingerprint,
+                    "remediation": remediation,
+                }),
+                None => json!({ "fingerprint": fingerprint }),
+            };
 
             Some(result)
         })

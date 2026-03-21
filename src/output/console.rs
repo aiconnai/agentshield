@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::rules::policy::PolicyVerdict;
 use crate::rules::{Finding, Severity};
 
@@ -13,7 +15,10 @@ const MAGENTA: &str = "\x1b[35m";
 const CYAN: &str = "\x1b[36m";
 
 /// Render findings as colored console output, grouped by severity then file path.
-pub fn render(findings: &[Finding], verdict: &PolicyVerdict) -> String {
+///
+/// Each finding includes a truncated fingerprint (first 12 hex chars) for quick
+/// cross-referencing with JSON/SARIF/HTML outputs.
+pub fn render(findings: &[Finding], verdict: &PolicyVerdict, scan_root: &Path) -> String {
     let use_color = std::env::var("NO_COLOR").is_err();
     let mut output = String::new();
 
@@ -81,6 +86,13 @@ pub fn render(findings: &[Finding], verdict: &PolicyVerdict) -> String {
         output.push_str(&format!(
             "           {dim}at {}{reset}\n",
             location,
+            dim = if use_color { DIM } else { "" },
+            reset = if use_color { RESET } else { "" },
+        ));
+        let fp = finding.fingerprint(scan_root);
+        output.push_str(&format!(
+            "           {dim}fp {}{reset}\n",
+            &fp[..12],
             dim = if use_color { DIM } else { "" },
             reset = if use_color { RESET } else { "" },
         ));

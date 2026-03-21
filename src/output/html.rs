@@ -1,9 +1,19 @@
+use std::path::Path;
+
 use crate::error::Result;
 use crate::rules::policy::PolicyVerdict;
 use crate::rules::{Finding, Severity};
 
 /// Render findings as a self-contained HTML report.
-pub fn render(findings: &[Finding], verdict: &PolicyVerdict, target_name: &str) -> Result<String> {
+///
+/// `scan_root` is used to compute stable fingerprints shown in each finding's
+/// detail panel.
+pub fn render(
+    findings: &[Finding],
+    verdict: &PolicyVerdict,
+    target_name: &str,
+    scan_root: &Path,
+) -> Result<String> {
     let mut sorted: Vec<&Finding> = findings.iter().collect();
     sorted.sort_by(|a, b| {
         b.severity
@@ -36,6 +46,7 @@ pub fn render(findings: &[Finding], verdict: &PolicyVerdict, target_name: &str) 
                 })
                 .unwrap_or_else(|| "-".into());
             let remediation = f.remediation.as_deref().unwrap_or("-");
+            let fingerprint = f.fingerprint(scan_root);
             let evidence_html: String = f
                 .evidence
                 .iter()
@@ -65,6 +76,7 @@ pub fn render(findings: &[Finding], verdict: &PolicyVerdict, target_name: &str) 
       <summary>Evidence &amp; Remediation</summary>
       <ul>{evidence}</ul>
       <p><strong>Fix:</strong> {remediation}</p>
+      <p><strong>Fingerprint:</strong> <code class="fingerprint">{fingerprint}</code></p>
     </details>
   </td>
 </tr>"#,
@@ -78,6 +90,7 @@ pub fn render(findings: &[Finding], verdict: &PolicyVerdict, target_name: &str) 
                 confidence = f.confidence,
                 evidence = evidence_html,
                 remediation = html_escape(remediation),
+                fingerprint = fingerprint,
             )
         })
         .collect();
@@ -142,6 +155,7 @@ pub fn render(findings: &[Finding], verdict: &PolicyVerdict, target_name: &str) 
   details pre {{ background: var(--bg); padding: 0.5rem; border-radius: 4px;
     margin-top: 0.3rem; overflow-x: auto; font-size: 0.8rem; }}
   details p {{ font-size: 0.85rem; margin-top: 0.5rem; }}
+  .fingerprint {{ font-size: 0.75rem; color: var(--badge-info); letter-spacing: 0.02em; }}
   footer {{ margin-top: 1.5rem; text-align: center; font-size: 0.8rem;
     color: var(--badge-info); }}
   footer a {{ color: var(--badge-low); }}

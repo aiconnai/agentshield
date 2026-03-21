@@ -25,6 +25,8 @@ export interface Finding {
   taint_path: unknown | null;
   remediation: string | null;
   cwe_id: string | null;
+  /** Stable 64-char SHA-256 hex fingerprint; present in JSON output only. */
+  fingerprint: string | null;
 }
 
 export interface SourceLocation {
