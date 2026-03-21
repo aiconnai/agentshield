@@ -57,9 +57,11 @@ walkdir = "2.5"
 ignore = "0.4"
 glob = "0.3"
 
-# Hashing
+# Hashing & signing
 sha2 = "0.10"
 hex = "0.4"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+base64 = "0.22"
 
 # Config parsing
 toml = "0.8"

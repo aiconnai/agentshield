@@ -1,20 +1,25 @@
 mod arbitrary_file_access;
+mod archive_traversal;
 mod command_injection;
 mod credential_exfil;
+mod download_exec;
 mod dynamic_exec;
 mod excessive_permissions;
 mod metadata_ssrf;
 mod no_lockfile;
+mod overbroad_fs;
 mod prompt_injection;
 mod runtime_install;
+mod secret_leakage;
 mod self_modification;
 mod ssrf;
 mod typosquat;
+mod unsafe_deser;
 mod unpinned_deps;
 
 use super::Detector;
 
-/// Returns all built-in detectors (13 rules: SHIELD-001..013).
+/// Returns all built-in detectors (18 rules: SHIELD-001..018).
 pub fn all_detectors() -> Vec<Box<dyn Detector>> {
     vec![
         Box::new(command_injection::CommandInjectionDetector),
@@ -30,5 +35,10 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(dynamic_exec::DynamicExecDetector),
         Box::new(no_lockfile::NoLockfileDetector),
         Box::new(metadata_ssrf::MetadataSsrfDetector),
+        Box::new(download_exec::DownloadExecDetector),
+        Box::new(overbroad_fs::OverbroadFsDetector),
+        Box::new(unsafe_deser::UnsafeDeserDetector),
+        Box::new(archive_traversal::ArchiveTraversalDetector),
+        Box::new(secret_leakage::SecretLeakageDetector),
     ]
 }
