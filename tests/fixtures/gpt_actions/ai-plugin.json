@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Weather Plugin",
+  "name_for_model": "weather",
+  "description_for_human": "Get weather forecast data for any location.",
+  "description_for_model": "Plugin for getting weather forecasts. Use when the user asks about weather, temperature, or forecasts.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://api.weather.example.com/openapi.json"
+  },
+  "logo_url": "https://api.weather.example.com/logo.png",
+  "contact_email": "support@weather.example.com",
+  "legal_info_url": "https://weather.example.com/legal"
+}

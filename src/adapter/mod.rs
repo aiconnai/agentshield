@@ -1,4 +1,6 @@
 pub mod crewai;
+pub mod cursor_rules;
+pub mod gpt_actions;
 pub mod langchain;
 pub mod mcp;
 pub mod openclaw;
@@ -29,6 +31,8 @@ pub fn all_adapters() -> Vec<Box<dyn Adapter>> {
         Box::new(openclaw::OpenClawAdapter),
         Box::new(crewai::CrewAiAdapter),
         Box::new(langchain::LangChainAdapter),
+        Box::new(gpt_actions::GptActionsAdapter),
+        Box::new(cursor_rules::CursorRulesAdapter),
     ]
 }
 

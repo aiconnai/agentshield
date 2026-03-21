@@ -1,0 +1,16 @@
+# Project Cursor Rules
+
+Use TypeScript for all code.
+Always validate user input before processing.
+Follow the existing project conventions.
+Prefer immutable data structures.
+
+## Code Style
+- Use 2-space indentation
+- Use single quotes for strings
+- Always add explicit return types to functions
+
+## Testing
+- Write tests for every new function
+- Use Jest for unit tests
+- Aim for 80%+ coverage

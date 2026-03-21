@@ -1,0 +1,67 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Weather API",
+    "version": "1.0.0",
+    "description": "Provides weather forecast data for GPT Actions"
+  },
+  "x-openai-isConsequential": false,
+  "servers": [
+    { "url": "https://api.weather.example.com" }
+  ],
+  "paths": {
+    "/forecast": {
+      "get": {
+        "operationId": "getForecast",
+        "summary": "Get weather forecast",
+        "description": "Returns a weather forecast for the given location",
+        "parameters": [
+          {
+            "name": "location",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "City or coordinates to get forecast for"
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 7 },
+            "description": "Number of forecast days (1-14)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful forecast response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": { "type": "string" },
+                    "forecast": { "type": "array" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts": {
+      "get": {
+        "operationId": "getAlerts",
+        "summary": "Get weather alerts",
+        "parameters": [
+          {
+            "name": "region",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ]
+      }
+    }
+  }
+}
