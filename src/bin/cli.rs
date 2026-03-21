@@ -138,6 +138,10 @@ enum Commands {
         #[arg(long, value_name = "PATH")]
         policy: PathBuf,
 
+        /// Path to an operator override policy (same format). Can only restrict, never expand.
+        #[arg(long = "override-policy", value_name = "PATH")]
+        override_policy: Option<PathBuf>,
+
         /// Audit log output path (overrides policy config)
         #[arg(long, value_name = "PATH")]
         audit_log: Option<PathBuf>,
@@ -192,9 +196,10 @@ fn main() {
         #[cfg(feature = "runtime")]
         Commands::Wrap {
             policy,
+            override_policy,
             audit_log,
             command,
-        } => cmd_wrap(policy, audit_log, command),
+        } => cmd_wrap(policy, override_policy, audit_log, command),
     };
 
     match result {
@@ -521,6 +526,7 @@ fn cmd_certify(
 #[cfg(feature = "runtime")]
 fn cmd_wrap(
     policy_path: PathBuf,
+    override_policy_path: Option<PathBuf>,
     audit_log: Option<PathBuf>,
     command: Vec<String>,
 ) -> Result<i32, agentshield::error::ShieldError> {
@@ -532,7 +538,26 @@ fn cmd_wrap(
         ));
     }
 
-    let mut policy = EgressPolicy::load(&policy_path)?;
+    let base = EgressPolicy::load(&policy_path)?;
+
+    // Apply operator override (restricts, never expands)
+    let mut policy = if let Some(ref override_path) = override_policy_path {
+        let operator = EgressPolicy::load(override_path).map_err(|e| {
+            agentshield::error::ShieldError::Internal(format!(
+                "Failed to load override policy '{}': {}",
+                override_path.display(),
+                e
+            ))
+        })?;
+        eprintln!(
+            "agentshield: applying operator override policy: {}",
+            override_path.display()
+        );
+        base.merge_override(&operator)
+    } else {
+        base
+    };
+
     if let Some(log_path) = audit_log {
         policy.audit.log_path = Some(log_path);
     }

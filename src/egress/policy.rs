@@ -250,6 +250,81 @@ impl EgressPolicy {
         }
     }
 
+    /// Merge with an operator override policy. The override can only restrict, never expand.
+    ///
+    /// Merge rules:
+    /// - `domains.allow` = intersection(self.allow, override.allow)
+    ///   If override.allow is empty, self.allow is kept (empty means "no restriction").
+    ///   If self.allow is empty (allow all), operator's allow list becomes the effective list.
+    /// - `domains.deny` = union(self.deny, override.deny)
+    /// - `networks`: if either policy blocks a range, it is blocked in the result
+    /// - `rate_limits.max_requests_per_minute` = min(self, override)
+    /// - `rate_limits.per_domain`: min rate per domain; missing entries inherit the global min
+    /// - `audit`: operator override wins (operator controls where logs go)
+    pub fn merge_override(&self, operator: &EgressPolicy) -> EgressPolicy {
+        // Allow list: intersection when both are non-empty; operator restricts further
+        let allow = if operator.domains.allow.is_empty() {
+            // Empty override allow = "no additional restriction on allow"
+            self.domains.allow.clone()
+        } else if self.domains.allow.is_empty() {
+            // Self allows all; operator restricts to its list
+            operator.domains.allow.clone()
+        } else {
+            // Both have allow lists: intersection (only domains in BOTH lists)
+            self.domains
+                .allow
+                .iter()
+                .filter(|d| {
+                    operator
+                        .domains
+                        .allow
+                        .iter()
+                        .any(|o| domain_matches(d, o) || domain_matches(o, d))
+                })
+                .cloned()
+                .collect()
+        };
+
+        // Deny list: union (operator can only add more denials)
+        let mut deny = self.domains.deny.clone();
+        for d in &operator.domains.deny {
+            if !deny.contains(d) {
+                deny.push(d.clone());
+            }
+        }
+
+        // Rate limits: take the minimum (more restrictive wins)
+        let global_min = self
+            .rate_limits
+            .max_requests_per_minute
+            .min(operator.rate_limits.max_requests_per_minute);
+
+        let mut per_domain = self.rate_limits.per_domain.clone();
+        for (domain, &op_rate) in &operator.rate_limits.per_domain {
+            let entry = per_domain
+                .entry(domain.clone())
+                .or_insert(self.rate_limits.max_requests_per_minute);
+            *entry = (*entry).min(op_rate);
+        }
+
+        EgressPolicy {
+            schema_version: self.schema_version,
+            domains: DomainPolicy { allow, deny },
+            networks: NetworkPolicy {
+                block_private: self.networks.block_private || operator.networks.block_private,
+                block_link_local: self.networks.block_link_local
+                    || operator.networks.block_link_local,
+                block_localhost: self.networks.block_localhost || operator.networks.block_localhost,
+                block_metadata: self.networks.block_metadata || operator.networks.block_metadata,
+            },
+            rate_limits: RateLimitPolicy {
+                max_requests_per_minute: global_min,
+                per_domain,
+            },
+            audit: operator.audit.clone(),
+        }
+    }
+
     /// Generate a starter policy TOML string for `agentshield init --egress`.
     pub fn starter_toml() -> &'static str {
         r#"# AgentShield Egress Policy
@@ -680,6 +755,228 @@ deny = []
         assert!(policy.networks.block_metadata);
         // Rate limit default
         assert_eq!(policy.rate_limits.max_requests_per_minute, 60);
+    }
+
+    // ── merge_override tests ─────────────────────────────────────────────────
+
+    fn base_policy() -> EgressPolicy {
+        EgressPolicy {
+            schema_version: 1,
+            domains: DomainPolicy {
+                allow: vec![
+                    "api.example.com".into(),
+                    "api.github.com".into(),
+                    "api.openai.com".into(),
+                ],
+                deny: vec!["evil.com".into()],
+            },
+            networks: NetworkPolicy {
+                block_private: false,
+                block_link_local: true,
+                block_localhost: true,
+                block_metadata: false,
+            },
+            rate_limits: RateLimitPolicy {
+                max_requests_per_minute: 60,
+                per_domain: {
+                    let mut m = HashMap::new();
+                    m.insert("api.openai.com".into(), 20);
+                    m
+                },
+            },
+            audit: AuditPolicy {
+                log_path: Some(PathBuf::from("/tmp/base-audit.jsonl")),
+                log_format: "json".into(),
+                log_allowed: false,
+            },
+        }
+    }
+
+    #[test]
+    fn test_merge_deny_union() {
+        let base = base_policy();
+        let operator = EgressPolicy {
+            schema_version: 1,
+            domains: DomainPolicy {
+                allow: vec![],
+                deny: vec!["extra-bad.com".into()],
+            },
+            networks: NetworkPolicy::default(),
+            rate_limits: RateLimitPolicy::default(),
+            audit: AuditPolicy::default(),
+        };
+
+        let merged = base.merge_override(&operator);
+
+        assert!(
+            merged.domains.deny.contains(&"evil.com".to_string()),
+            "base deny entry must be preserved"
+        );
+        assert!(
+            merged.domains.deny.contains(&"extra-bad.com".to_string()),
+            "operator deny entry must be added"
+        );
+        assert_eq!(merged.domains.deny.len(), 2);
+    }
+
+    #[test]
+    fn test_merge_allow_intersection() {
+        let base = base_policy();
+        let operator = EgressPolicy {
+            schema_version: 1,
+            domains: DomainPolicy {
+                // B and C overlap with base; D is operator-only (not in base → excluded)
+                allow: vec!["api.github.com".into(), "api.openai.com".into(), "api.stripe.com".into()],
+                deny: vec![],
+            },
+            networks: NetworkPolicy::default(),
+            rate_limits: RateLimitPolicy::default(),
+            audit: AuditPolicy::default(),
+        };
+
+        let merged = base.merge_override(&operator);
+
+        assert!(
+            merged.domains.allow.contains(&"api.github.com".to_string()),
+            "intersection: api.github.com must be in result"
+        );
+        assert!(
+            merged.domains.allow.contains(&"api.openai.com".to_string()),
+            "intersection: api.openai.com must be in result"
+        );
+        assert!(
+            !merged.domains.allow.contains(&"api.example.com".to_string()),
+            "api.example.com not in operator allow → must be excluded"
+        );
+        assert!(
+            !merged.domains.allow.contains(&"api.stripe.com".to_string()),
+            "api.stripe.com not in base allow → must be excluded"
+        );
+    }
+
+    #[test]
+    fn test_merge_rate_limits_min() {
+        let base = base_policy(); // global = 60, openai = 20
+        let operator = EgressPolicy {
+            schema_version: 1,
+            domains: DomainPolicy {
+                allow: vec![],
+                deny: vec![],
+            },
+            networks: NetworkPolicy::default(),
+            rate_limits: RateLimitPolicy {
+                max_requests_per_minute: 30,
+                per_domain: {
+                    let mut m = HashMap::new();
+                    m.insert("api.openai.com".into(), 10);
+                    m.insert("api.github.com".into(), 5);
+                    m
+                },
+            },
+            audit: AuditPolicy::default(),
+        };
+
+        let merged = base.merge_override(&operator);
+
+        assert_eq!(
+            merged.rate_limits.max_requests_per_minute, 30,
+            "global rate: min(60, 30) = 30"
+        );
+        assert_eq!(
+            merged.rate_limits.per_domain["api.openai.com"], 10,
+            "per-domain rate: min(20, 10) = 10"
+        );
+        assert_eq!(
+            merged.rate_limits.per_domain["api.github.com"], 5,
+            "operator-only per-domain: min(60, 5) = 5"
+        );
+    }
+
+    #[test]
+    fn test_merge_network_blocks_or() {
+        let base = base_policy(); // block_private=false, block_metadata=false
+        let operator = EgressPolicy {
+            schema_version: 1,
+            domains: DomainPolicy {
+                allow: vec![],
+                deny: vec![],
+            },
+            networks: NetworkPolicy {
+                block_private: true,
+                block_link_local: false,
+                block_localhost: false,
+                block_metadata: true,
+            },
+            rate_limits: RateLimitPolicy::default(),
+            audit: AuditPolicy::default(),
+        };
+
+        let merged = base.merge_override(&operator);
+
+        assert!(merged.networks.block_private, "false || true = true");
+        assert!(
+            merged.networks.block_link_local,
+            "true || false = true (base had it)"
+        );
+        assert!(
+            merged.networks.block_localhost,
+            "true || false = true (base had it)"
+        );
+        assert!(merged.networks.block_metadata, "false || true = true");
+    }
+
+    #[test]
+    fn test_merge_empty_override_allow_keeps_base() {
+        let base = base_policy(); // has 3 allow entries
+        let operator = EgressPolicy {
+            schema_version: 1,
+            domains: DomainPolicy {
+                allow: vec![], // empty = no restriction on allow
+                deny: vec![],
+            },
+            networks: NetworkPolicy::default(),
+            rate_limits: RateLimitPolicy::default(),
+            audit: AuditPolicy::default(),
+        };
+
+        let merged = base.merge_override(&operator);
+
+        assert_eq!(
+            merged.domains.allow, base.domains.allow,
+            "empty operator allow must not restrict base allow list"
+        );
+    }
+
+    #[test]
+    fn test_merge_audit_override_wins() {
+        let base = base_policy(); // log_path = /tmp/base-audit.jsonl
+        let operator = EgressPolicy {
+            schema_version: 1,
+            domains: DomainPolicy {
+                allow: vec![],
+                deny: vec![],
+            },
+            networks: NetworkPolicy::default(),
+            rate_limits: RateLimitPolicy::default(),
+            audit: AuditPolicy {
+                log_path: Some(PathBuf::from("/var/log/agentshield/operator.jsonl")),
+                log_format: "text".into(),
+                log_allowed: true,
+            },
+        };
+
+        let merged = base.merge_override(&operator);
+
+        assert_eq!(
+            merged.audit.log_path,
+            Some(PathBuf::from("/var/log/agentshield/operator.jsonl")),
+            "operator audit log_path must win"
+        );
+        assert_eq!(
+            merged.audit.log_format, "text",
+            "operator audit log_format must win"
+        );
+        assert!(merged.audit.log_allowed, "operator audit log_allowed must win");
     }
 
     #[test]
