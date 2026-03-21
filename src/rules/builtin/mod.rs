@@ -14,8 +14,8 @@ mod secret_leakage;
 mod self_modification;
 mod ssrf;
 mod typosquat;
-mod unsafe_deser;
 mod unpinned_deps;
+mod unsafe_deser;
 
 use super::Detector;
 

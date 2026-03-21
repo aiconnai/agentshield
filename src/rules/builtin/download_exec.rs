@@ -43,14 +43,10 @@ impl Detector for DownloadExecDetector {
 
         if has_http_to_file && has_process_exec_sink {
             // Find the specific paths to build evidence
-            let http_to_file = target
-                .data
-                .taint_paths
-                .iter()
-                .find(|p| {
-                    matches!(p.source.source_type, TaintSourceType::HttpResponse)
-                        && matches!(p.sink.sink_type, TaintSinkType::FileWrite)
-                });
+            let http_to_file = target.data.taint_paths.iter().find(|p| {
+                matches!(p.source.source_type, TaintSourceType::HttpResponse)
+                    && matches!(p.sink.sink_type, TaintSinkType::FileWrite)
+            });
 
             let file_to_exec = target
                 .data
@@ -63,18 +59,12 @@ impl Detector for DownloadExecDetector {
 
             if let Some(path) = http_to_file {
                 evidence.push(Evidence {
-                    description: format!(
-                        "HTTP download: '{}'",
-                        path.source.description
-                    ),
+                    description: format!("HTTP download: '{}'", path.source.description),
                     location: Some(path.source.location.clone()),
                     snippet: None,
                 });
                 evidence.push(Evidence {
-                    description: format!(
-                        "File write: '{}'",
-                        path.sink.description
-                    ),
+                    description: format!("File write: '{}'", path.sink.description),
                     location: Some(path.sink.location.clone()),
                     snippet: None,
                 });
@@ -83,10 +73,7 @@ impl Detector for DownloadExecDetector {
             if let Some(path) = file_to_exec {
                 location = Some(path.sink.location.clone());
                 evidence.push(Evidence {
-                    description: format!(
-                        "Process execution: '{}'",
-                        path.sink.description
-                    ),
+                    description: format!("Process execution: '{}'", path.sink.description),
                     location: Some(path.sink.location.clone()),
                     snippet: None,
                 });
@@ -131,10 +118,7 @@ impl Detector for DownloadExecDetector {
 
                 if let Some(net_op) = target.execution.network_operations.first() {
                     evidence.push(Evidence {
-                        description: format!(
-                            "Network operation: '{}'",
-                            net_op.function
-                        ),
+                        description: format!("Network operation: '{}'", net_op.function),
                         location: Some(net_op.location.clone()),
                         snippet: None,
                     });
@@ -155,10 +139,7 @@ impl Detector for DownloadExecDetector {
 
                 if let Some(cmd) = target.execution.commands.first() {
                     evidence.push(Evidence {
-                        description: format!(
-                            "Command execution: '{}'",
-                            cmd.function
-                        ),
+                        description: format!("Command execution: '{}'", cmd.function),
                         location: Some(cmd.location.clone()),
                         snippet: None,
                     });

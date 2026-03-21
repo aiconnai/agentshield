@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::error::ShieldError;
-use crate::ir::{ArgumentSource, ScanTarget};
 use crate::ir::tool_surface::PermissionType;
+use crate::ir::{ArgumentSource, ScanTarget};
 
 const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -661,7 +661,7 @@ deny = []
 
     #[test]
     fn test_from_scan_targets_extracts_domains() {
-        use crate::ir::execution_surface::{NetworkOperation, ExecutionSurface};
+        use crate::ir::execution_surface::{ExecutionSurface, NetworkOperation};
         use crate::ir::tool_surface::{DeclaredPermission, PermissionType, ToolSurface};
         use crate::ir::{
             ArgumentSource, DataSurface, DependencySurface, Framework, ProvenanceSurface,
@@ -697,9 +697,7 @@ deny = []
                 network_operations: vec![
                     NetworkOperation {
                         function: "requests.get".into(),
-                        url_arg: ArgumentSource::Literal(
-                            "https://api.openai.com/v1/chat".into(),
-                        ),
+                        url_arg: ArgumentSource::Literal("https://api.openai.com/v1/chat".into()),
                         method: Some("GET".into()),
                         sends_data: false,
                         location: make_loc(),
@@ -826,7 +824,11 @@ deny = []
             schema_version: 1,
             domains: DomainPolicy {
                 // B and C overlap with base; D is operator-only (not in base → excluded)
-                allow: vec!["api.github.com".into(), "api.openai.com".into(), "api.stripe.com".into()],
+                allow: vec![
+                    "api.github.com".into(),
+                    "api.openai.com".into(),
+                    "api.stripe.com".into(),
+                ],
                 deny: vec![],
             },
             networks: NetworkPolicy::default(),
@@ -845,7 +847,10 @@ deny = []
             "intersection: api.openai.com must be in result"
         );
         assert!(
-            !merged.domains.allow.contains(&"api.example.com".to_string()),
+            !merged
+                .domains
+                .allow
+                .contains(&"api.example.com".to_string()),
             "api.example.com not in operator allow → must be excluded"
         );
         assert!(
@@ -976,7 +981,10 @@ deny = []
             merged.audit.log_format, "text",
             "operator audit log_format must win"
         );
-        assert!(merged.audit.log_allowed, "operator audit log_allowed must win");
+        assert!(
+            merged.audit.log_allowed,
+            "operator audit log_allowed must win"
+        );
     }
 
     #[test]

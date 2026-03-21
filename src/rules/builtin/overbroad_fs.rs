@@ -10,31 +10,13 @@ use crate::rules::{
 pub struct OverbroadFsDetector;
 
 /// Paths that grant overly broad filesystem access.
-const OVERBROAD_PATHS: &[&str] = &[
-    "/",
-    "~",
-    "$HOME",
-    "C:\\",
-    "C:/",
-    "*",
-    "**/*",
-    "**\\*",
-];
+const OVERBROAD_PATHS: &[&str] = &["/", "~", "$HOME", "C:\\", "C:/", "*", "**/*", "**\\*"];
 
 /// Patterns indicating path traversal attempts.
-const TRAVERSAL_PATTERNS: &[&str] = &[
-    "../",
-    "..\\",
-    "%2e%2e/",
-    "%2e%2e\\",
-];
+const TRAVERSAL_PATTERNS: &[&str] = &["../", "..\\", "%2e%2e/", "%2e%2e\\"];
 
 /// Home directory expansion functions.
-const HOME_EXPAND_PATTERNS: &[&str] = &[
-    "os.path.expanduser",
-    "Path.home()",
-    "os.homedir()",
-];
+const HOME_EXPAND_PATTERNS: &[&str] = &["os.path.expanduser", "Path.home()", "os.homedir()"];
 
 /// Returns a description if the path is overbroad, or None if it's acceptable.
 fn check_overbroad(path_str: &str) -> Option<&'static str> {
@@ -94,10 +76,7 @@ impl Detector for OverbroadFsDetector {
                             ),
                             location: Some(file_op.location.clone()),
                             evidence: vec![Evidence {
-                                description: format!(
-                                    "Overbroad path '{}' ({reason})",
-                                    path_str
-                                ),
+                                description: format!("Overbroad path '{}' ({reason})", path_str),
                                 location: Some(file_op.location.clone()),
                                 snippet: None,
                             }],

@@ -91,10 +91,7 @@ fn parse_mcp_servers(
     tools: &mut Vec<ToolSurface>,
     execution: &mut ExecutionSurface,
 ) {
-    let servers = match value
-        .get("mcpServers")
-        .and_then(|v| v.as_object())
-    {
+    let servers = match value.get("mcpServers").and_then(|v| v.as_object()) {
         Some(s) => s,
         None => return,
     };

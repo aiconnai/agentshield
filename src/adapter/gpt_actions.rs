@@ -182,11 +182,7 @@ fn extract_server_urls(
 ///
 /// Name format: `{method}_{path}` (e.g. `get_/forecast`).
 /// Operation parameters are mapped to the input schema `properties`.
-fn extract_path_tools(
-    spec: &serde_json::Value,
-    spec_path: &Path,
-    tools: &mut Vec<ToolSurface>,
-) {
+fn extract_path_tools(spec: &serde_json::Value, spec_path: &Path, tools: &mut Vec<ToolSurface>) {
     let paths = match spec.get("paths").and_then(|v| v.as_object()) {
         Some(p) => p,
         None => return,
@@ -423,7 +419,10 @@ mod tests {
             .and_then(|v| v.as_object())
             .expect("properties should be an object");
 
-        assert!(props.contains_key("location"), "expected 'location' parameter");
+        assert!(
+            props.contains_key("location"),
+            "expected 'location' parameter"
+        );
         assert!(props.contains_key("days"), "expected 'days' parameter");
     }
 
@@ -445,7 +444,10 @@ mod tests {
             .network_operations
             .iter()
             .find(|op| matches!(&op.url_arg, ArgumentSource::Literal(u) if u.contains("weather.example.com")));
-        assert!(server_url.is_some(), "expected weather.example.com server URL");
+        assert!(
+            server_url.is_some(),
+            "expected weather.example.com server URL"
+        );
     }
 
     #[test]

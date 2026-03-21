@@ -144,9 +144,7 @@ impl DsseEnvelope {
         use ed25519_dalek::{Signer, SigningKey};
 
         let key_array: [u8; 32] = private_key_bytes.try_into().map_err(|_| {
-            crate::error::ShieldError::Internal(
-                "Invalid key length: expected 32 bytes".to_string(),
-            )
+            crate::error::ShieldError::Internal("Invalid key length: expected 32 bytes".to_string())
         })?;
         let signing_key = SigningKey::from_bytes(&key_array);
 
@@ -197,7 +195,10 @@ impl DsseEnvelope {
             verifying_key
                 .verify(pae_string.as_bytes(), &signature)
                 .map_err(|e| {
-                    crate::error::ShieldError::Internal(format!("Signature verification failed: {}", e))
+                    crate::error::ShieldError::Internal(format!(
+                        "Signature verification failed: {}",
+                        e
+                    ))
                 })?;
         }
 
@@ -389,10 +390,7 @@ mod tests {
             "https://agentshield.dev/attestation/v1"
         );
         assert_eq!(parsed["subject"].as_array().unwrap().len(), 1);
-        assert_eq!(
-            parsed["predicate"]["findings"].as_array().unwrap().len(),
-            1
-        );
+        assert_eq!(parsed["predicate"]["findings"].as_array().unwrap().len(), 1);
         assert_eq!(
             parsed["predicate"]["suppressions"]
                 .as_array()

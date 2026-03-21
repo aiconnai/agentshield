@@ -500,10 +500,7 @@ fn cmd_certify(
             ))
         })?;
         envelope.sign(&key_bytes)?;
-        eprintln!(
-            "Signed attestation with key: {}",
-            key_path.display()
-        );
+        eprintln!("Signed attestation with key: {}", key_path.display());
     }
 
     let json = serde_json::to_string_pretty(&envelope)?;

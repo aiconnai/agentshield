@@ -77,8 +77,7 @@ impl Detector for SecretLeakageDetector {
                     attack_category: AttackCategory::DataExfiltration,
                     message: format!(
                         "{} '{}' flows to {} '{}' without redaction",
-                        source_desc, path.source.description,
-                        sink_desc, path.sink.description
+                        source_desc, path.source.description, sink_desc, path.sink.description
                     ),
                     location: Some(path.sink.location.clone()),
                     evidence: vec![
@@ -91,10 +90,7 @@ impl Detector for SecretLeakageDetector {
                             snippet: None,
                         },
                         Evidence {
-                            description: format!(
-                                "Sink: {} '{}'",
-                                sink_desc, path.sink.description
-                            ),
+                            description: format!("Sink: {} '{}'", sink_desc, path.sink.description),
                             location: Some(path.sink.location.clone()),
                             snippet: None,
                         },

@@ -110,9 +110,7 @@ impl Detector for UnsafeDeserDetector {
                         ),
                         location: Some(dyn_exec.location.clone()),
                         evidence: vec![Evidence {
-                            description: format!(
-                                "Unsafe code execution pattern '{pattern}'"
-                            ),
+                            description: format!("Unsafe code execution pattern '{pattern}'"),
                             location: Some(dyn_exec.location.clone()),
                             snippet: None,
                         }],

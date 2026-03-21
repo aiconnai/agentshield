@@ -73,9 +73,7 @@ impl Detector for ArchiveTraversalDetector {
 
         // Phase 1: Check dynamic_exec and commands for archive extraction functions
         for dyn_exec in &target.execution.dynamic_exec {
-            if is_archive_extract(&dyn_exec.function)
-                && dyn_exec.code_arg.is_tainted()
-            {
+            if is_archive_extract(&dyn_exec.function) && dyn_exec.code_arg.is_tainted() {
                 findings.push(Finding {
                     rule_id: "SHIELD-017".into(),
                     rule_name: "Archive Traversal (Zip Slip)".into(),
@@ -149,9 +147,7 @@ impl Detector for ArchiveTraversalDetector {
             let lines: Vec<&str> = source_file.content.lines().collect();
 
             for (line_idx, line) in lines.iter().enumerate() {
-                let has_extract = ARCHIVE_SOURCE_PATTERNS
-                    .iter()
-                    .any(|p| line.contains(p));
+                let has_extract = ARCHIVE_SOURCE_PATTERNS.iter().any(|p| line.contains(p));
 
                 if !has_extract {
                     continue;
@@ -251,8 +247,7 @@ mod tests {
         target.source_files.push(SourceFile {
             path: PathBuf::from("extract.py"),
             language: Language::Python,
-            content: "import zipfile\nz = zipfile.ZipFile(path)\nz.extractall('/tmp')\n"
-                .into(),
+            content: "import zipfile\nz = zipfile.ZipFile(path)\nz.extractall('/tmp')\n".into(),
             size_bytes: 60,
             content_hash: "abc".into(),
         });
