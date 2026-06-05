@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - GPT Actions and Cursor Rules are now part of the documented supported adapter scope alongside MCP, OpenClaw, CrewAI, and LangChain/LangGraph.
 - Documentation for the current CLI command surface: `scan`, `list-rules`, `init`, `suppress`, `list-suppressions`, `certify`, and feature-gated `wrap`.
+- `agentshield doctor` diagnostics for version, config, compile features, and adapter detection.
 - Release notes for 0.8.0 in `docs/releases/0.8.0.md`.
 - General release checklist in `docs/RELEASE_CHECKLIST.md`.
 

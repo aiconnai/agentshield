@@ -125,6 +125,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 |---------|---------|
 | `agentshield scan [path]` | Scan an agent extension directory and emit console, JSON, SARIF, or HTML output. |
 | `agentshield list-rules` | List available detection rules as a table or JSON. |
+| `agentshield doctor [path]` | Print environment, config, compile-feature, and adapter diagnostics. |
 | `agentshield init` | Generate a starter `.agentshield.toml` config file. |
 | `agentshield suppress <fingerprint>` | Add a suppression entry with a required reason and optional expiry. |
 | `agentshield list-suppressions` | Show suppressions configured in `.agentshield.toml`. |
@@ -160,6 +161,17 @@ agentshield list-rules --format json
 ---
 
 ## Configuration
+
+### Trust workflows
+
+AgentShield includes trust workflow documentation for baselines, suppressions, certification attestations, and egress enforcement:
+
+- `docs/BASELINES.md`: write and use `.agentshield-baseline.json` for known findings.
+- `docs/SUPPRESSIONS.md`: suppress individual findings by fingerprint with required reasons and optional expiry.
+- `docs/CERTIFICATION.md`: generate unsigned or Ed25519-signed DSSE attestations.
+- `docs/EGRESS.md`: emit `agentshield.egress.toml` and enforce it with `agentshield wrap`.
+
+Release binaries are built with the `full` feature set, including Python parsing, TypeScript parsing, and runtime `wrap` support. If building from source, use `cargo build --features full --release` to include `agentshield wrap`.
 
 Create `.agentshield.toml` in your project root or run `agentshield init`:
 

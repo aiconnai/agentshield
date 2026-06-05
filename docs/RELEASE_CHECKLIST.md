@@ -19,6 +19,9 @@ Use this checklist for public AgentShield releases.
 - [ ] Run a CLI smoke scan against a known vulnerable fixture.
 - [ ] Run `agentshield list-rules` and check the rule list for release drift.
 - [ ] If `runtime` is part of the release, build with `--features full` and smoke test `agentshield wrap`.
+- [ ] Confirm release workflow builds with `--features full`.
+- [ ] Confirm native release jobs smoke-check `agentshield --help` for the `wrap` command.
+- [ ] Do not execute cross-compiled aarch64 Linux artifacts on x86 runners.
 - [ ] If the GitHub Action changed, test SARIF upload in a disposable repository or workflow run.
 
 ## Packaging
