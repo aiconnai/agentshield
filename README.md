@@ -9,7 +9,7 @@
 
 AgentShield scans AI agent extensions for security vulnerabilities before they reach production. It runs locally as a single Rust binary, shares no source code with a service, and emits console, JSON, SARIF, and HTML reports.
 
-AgentShield is currently aligned with the `0.8.0` release line.
+AgentShield is currently aligned with the `0.8.3` release line.
 
 ---
 
@@ -92,6 +92,23 @@ agentshield init
 ### Pre-built binaries
 
 Download from the [latest release](https://github.com/limaronaldo/agentshield/releases/latest) for Linux, macOS, and Windows targets.
+
+### Docker
+
+The GHCR image is built with the `full` feature set, including Python parsing, TypeScript parsing, and runtime `wrap` support. The `0.8.3` image is published for `linux/amd64` and `linux/arm64`.
+
+```bash
+docker pull ghcr.io/aiconnai/agentshield:0.8.3
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.3 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:0.8.3 --version
+```
+
+If the GHCR package is private in your organization, authenticate first:
+
+```bash
+gh auth refresh -h github.com -s read:packages
+gh auth token | docker login ghcr.io -u "$(gh api user --jq .login)" --password-stdin
+```
 
 ### From source
 
@@ -286,4 +303,4 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- list-rules
 ```
 
-For release-specific notes, see `docs/releases/0.8.0.md` and `docs/RELEASE_CHECKLIST.md`.
+For release-specific notes, see `docs/releases/0.8.3.md` and `docs/RELEASE_CHECKLIST.md`.

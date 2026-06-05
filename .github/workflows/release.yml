@@ -12,8 +12,29 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  version-check:
+    name: Check release version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Ensure tag matches Cargo.toml version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          if [ -z "$cargo_version" ]; then
+            echo "Could not read package version from Cargo.toml"
+            exit 1
+          fi
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "Release tag v$tag_version does not match Cargo.toml version $cargo_version"
+            exit 1
+          fi
+          echo "Release tag matches Cargo.toml version: $cargo_version"
+
   build:
     name: Build (${{ matrix.target }})
+    needs: version-check
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

@@ -1,6 +1,6 @@
 # Next Steps — Post v0.1.0
 
-Status: v0.8.0 complete. 6 framework adapters (MCP, OpenClaw, CrewAI, LangChain, GPT Actions, Cursor Rules), 212 tests, 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations — all done.
+Status: v0.8.3 complete. 6 framework adapters (MCP, OpenClaw, CrewAI, LangChain, GPT Actions, Cursor Rules), 212 tests, 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering, Node 24-ready workflows, full-feature release binaries, and multi-arch GHCR image. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations — all done.
 
 ---
 
