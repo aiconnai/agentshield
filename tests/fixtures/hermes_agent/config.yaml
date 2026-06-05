@@ -1,0 +1,17 @@
+model:
+  provider: openrouter
+terminal:
+  cwd: /tmp/project
+mcp_servers:
+  filesystem:
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/project"]
+    env:
+      GITHUB_PERSONAL_ACCESS_TOKEN: "***"
+  company_api:
+    url: "https://mcp.internal.example.com"
+    headers:
+      Authorization: "Bearer ***"
+  legacy:
+    url: "https://mcp.legacy.internal"
+    enabled: false
