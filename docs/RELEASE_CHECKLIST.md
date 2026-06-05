@@ -5,6 +5,7 @@ Use this checklist for public AgentShield releases.
 ## Pre-release
 
 - [ ] Confirm `Cargo.toml` has the intended version.
+- [ ] Confirm the release tag is `v<version>` and exactly matches `Cargo.toml`.
 - [ ] Confirm `README.md` describes only commands and adapters that exist in the release branch.
 - [ ] Confirm `CHANGELOG.md` has a dated top entry for the release.
 - [ ] Confirm `docs/releases/<version>.md` exists and summarizes scope, notable changes, and readiness state.
@@ -22,8 +23,11 @@ Use this checklist for public AgentShield releases.
 - [ ] If `runtime` is part of the release, build with `--features full` and smoke test `agentshield wrap`.
 - [ ] Confirm release workflow builds with `--features full`.
 - [ ] Confirm the release workflow `Check release invariants` job passed before any build matrix started.
+- [ ] Confirm release workflow fails when the pushed tag does not match `Cargo.toml`.
 - [ ] Confirm native release jobs smoke-check `agentshield --help` for the `wrap` command.
 - [ ] Do not execute cross-compiled aarch64 Linux artifacts on x86 runners.
+- [ ] Confirm the Docker image includes `wrap` and reports the intended version.
+- [ ] Confirm the Docker image publishes both `linux/amd64` and `linux/arm64` manifests.
 - [ ] If the GitHub Action changed, test SARIF upload in a disposable repository or workflow run.
 
 ## Packaging
@@ -32,6 +36,7 @@ Use this checklist for public AgentShield releases.
 - [ ] Generate SHA256 checksums.
 - [ ] Confirm archive names match `action.yml` download expectations.
 - [ ] Confirm the binary starts and reports the intended version on each target.
+- [ ] Confirm `docker pull ghcr.io/aiconnai/agentshield:<version>` works on supported platforms.
 - [ ] Confirm crate/package metadata points to the correct repository, license, README, and homepage.
 
 ## Publication
