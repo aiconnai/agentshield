@@ -8,7 +8,7 @@ We built [AgentShield](https://github.com/limaronaldo/agentshield), an open-sour
 
 ## The Problem
 
-The [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) lets AI assistants like Claude, Cursor, and Windsurf call external tools — read files, query databases, browse the web, control applications. It's powerful. It's also a new attack surface.
+The [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) lets AI assistants like Cursor, Windsurf, and other MCP clients call external tools — read files, query databases, browse the web, control applications. It's powerful. It's also a new attack surface.
 
 When you install an MCP server, you're giving an AI agent the ability to execute code on your machine. Most developers review the *agent's* behavior but not the *tools* it's calling. A malicious or poorly-written MCP server can:
 

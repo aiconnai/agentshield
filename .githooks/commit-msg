@@ -1,0 +1,13 @@
+#!/bin/sh
+
+commit_msg_file="$1"
+
+if grep -Eiq '^[[:space:]]*Co-authored-by:[[:space:]].*(Claude|Anthropic|noreply@anthropic\.com)' "$commit_msg_file"; then
+  cat >&2 <<'MSG'
+Commit blocked: remove Claude/Anthropic Co-authored-by trailers before committing.
+
+This repository does not attribute Claude/Anthropic as a co-author. Edit the
+commit message and retry.
+MSG
+  exit 1
+fi
