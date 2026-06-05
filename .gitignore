@@ -6,3 +6,12 @@ Cargo.lock
 .orchestrator/
 .env
 .worktrees/
+
+docs/harness/.baseline-last
+docs/harness/.sensors-last
+docs/harness/.quarterly-audit-last
+docs/harness/audits/*.md
+docs/harness/reviews/*.md
+docs/harness/reviews/*.raw
+!docs/harness/audits/.gitkeep
+!docs/harness/reviews/.gitkeep
