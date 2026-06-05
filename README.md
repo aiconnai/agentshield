@@ -113,7 +113,7 @@ scripts/rtk-check.sh clippy
 scripts/rtk-check.sh scan-fixture
 ```
 
-The wrapper is intentionally local-only. It does not change AgentShield's scanner behavior, output formats, CI contract, or GitHub Code Scanning SARIF output.
+The wrapper is intentionally local-only. RTK filters local command output only. It must not alter AgentShield JSON, SARIF, HTML, or console output contracts consumed by users, clients, CI, or GitHub Code Scanning.
 
 Use raw output for debugging, audit, and security decisions:
 
