@@ -53,11 +53,22 @@ jobs:
 
       - name: Build (native)
         if: "!matrix.cross"
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} --features full
 
       - name: Build (cross)
         if: matrix.cross
-        run: cross build --release --target ${{ matrix.target }}
+        run: cross build --release --target ${{ matrix.target }} --features full
+
+      - name: Smoke check wrap command (unix)
+        if: matrix.cross == false && runner.os != 'Windows'
+        run: |
+          target/${{ matrix.target }}/release/agentshield --help | grep wrap
+
+      - name: Smoke check wrap command (windows)
+        if: matrix.cross == false && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          target\${{ matrix.target }}\release\agentshield.exe --help | Select-String wrap
 
       - name: Package (unix)
         if: matrix.archive == 'tar.gz'
