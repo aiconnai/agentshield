@@ -138,6 +138,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 |-----------|--------|------------------|
 | MCP (Model Context Protocol) | Supported | MCP server manifests, Python/TypeScript/JavaScript source, tool schemas, dependencies, provenance |
 | OpenClaw | Supported | `SKILL.md` skill files plus related source/dependency surfaces |
+| Hermes Agent | Supported | Hermes config/profile files, `mcp_servers`, `.hermes.md`, skill trees, optional MCP manifests |
 | CrewAI | Supported | Python projects detected from dependency metadata or imports |
 | LangChain / LangGraph | Supported | LangChain/LangGraph dependency metadata, imports, and `langgraph.json` |
 | GPT Actions | Supported | Action/OpenAPI-style surfaces for custom GPT integrations |

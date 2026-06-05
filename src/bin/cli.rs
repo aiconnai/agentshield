@@ -16,7 +16,7 @@ use agentshield::ScanOptions;
 #[derive(Parser)]
 #[command(
     name = "agentshield",
-    about = "Security scanner for AI agent extensions (MCP, OpenClaw, LangChain)",
+    about = "Security scanner for AI agent extensions (MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules)",
     long_about = "AgentShield scans AI agent extensions for security vulnerabilities.\n\n\
                   It detects command injection, credential exfiltration, SSRF, arbitrary \
                   file access, supply chain issues, and more. Results can be output as \

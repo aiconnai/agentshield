@@ -1,6 +1,6 @@
 # Next Steps — Post v0.1.0
 
-Status: v0.8.0 complete. 6 framework adapters (MCP, OpenClaw, CrewAI, LangChain, GPT Actions, Cursor Rules), 212 tests, 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations — all done.
+Status: v0.8.0 complete plus Hermes Agent support. 7 framework/client adapters (MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations — all done.
 
 ---
 
@@ -346,6 +346,17 @@ Two new framework adapters bringing the total to 6:
 Both use the standard 3-phase adapter pipeline and reuse shared helpers.
 
 ---
+
+## 18. Hermes Agent Adapter — Done
+
+Detects Hermes Agent client projects and turns documented Hermes artifacts into AgentShield IR:
+
+- **`src/adapter/hermes.rs`** — detects Hermes config/profile files, `.hermes.md`, skill trees, and optional MCP manifests
+- **`mcp_servers` config** — emits configured MCP servers as tool surfaces, command invocations, HTTP network operations, env accesses, and sensitive headers
+- **Skill artifacts** — scans `skills/` and `optional-skills/` trees, including `SKILL.md` and script/source files, through the existing parser pipeline
+
+No detector changes are needed because Hermes Agent surfaces are normalized into `ScanTarget`.
+
 
 ## 16. v0.7.0 — Egress Policy Operator Override — Done
 

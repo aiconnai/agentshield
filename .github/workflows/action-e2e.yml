@@ -178,14 +178,14 @@ jobs:
           fi
 
       # --- Test 7: list-rules command ---
-      - name: "Test 7: list-rules shows all 12 detectors"
+      - name: "Test 7: list-rules shows all 18 detectors"
         shell: bash
         run: |
           COUNT=$(agentshield list-rules 2>&1 | grep -c "SHIELD-0")
-          if [ "$COUNT" -ge 12 ]; then
-            echo "PASS: list-rules shows $COUNT detectors (>= 12)"
+          if [ "$COUNT" -ge 18 ]; then
+            echo "PASS: list-rules shows $COUNT detectors (>= 18)"
           else
-            echo "::error::Expected >= 12 detectors, got $COUNT"
+            echo "::error::Expected >= 18 detectors, got $COUNT"
             exit 1
           fi
 
@@ -211,5 +211,5 @@ jobs:
           echo "| 4 | Cred exfil → SHIELD-002 | Passed |" >> $GITHUB_STEP_SUMMARY
           echo "| 5 | Console output format | Passed |" >> $GITHUB_STEP_SUMMARY
           echo "| 6 | HTML output format | Passed |" >> $GITHUB_STEP_SUMMARY
-          echo "| 7 | list-rules (12 detectors) | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| 7 | list-rules (18 detectors) | Passed |" >> $GITHUB_STEP_SUMMARY
           echo "| 8 | SARIF upload to Code Scanning | Attempted |" >> $GITHUB_STEP_SUMMARY

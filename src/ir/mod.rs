@@ -48,6 +48,7 @@ pub struct ScanTarget {
 pub enum Framework {
     Mcp,
     OpenClaw,
+    HermesAgent,
     LangChain,
     CrewAi,
     GptActions,
@@ -60,6 +61,7 @@ impl std::fmt::Display for Framework {
         match self {
             Self::Mcp => write!(f, "MCP"),
             Self::OpenClaw => write!(f, "OpenClaw"),
+            Self::HermesAgent => write!(f, "Hermes Agent"),
             Self::LangChain => write!(f, "LangChain"),
             Self::CrewAi => write!(f, "CrewAI"),
             Self::GptActions => write!(f, "GPT Actions"),
