@@ -10,7 +10,7 @@ COPY Cargo.toml Cargo.lock* ./
 COPY src/ src/
 COPY benches/ benches/
 
-RUN cargo build --release --locked 2>/dev/null || cargo build --release
+RUN cargo build --release --locked --features full 2>/dev/null || cargo build --release --features full
 
 # Runtime: distroless for minimal attack surface
 FROM gcr.io/distroless/cc-debian12:nonroot
