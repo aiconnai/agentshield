@@ -102,6 +102,32 @@ cargo build --release
 ./target/release/agentshield scan /path/to/agent-extension
 ```
 
+## Token-Optimized Local Checks with RTK
+
+AgentShield can produce noisy command output during local development, especially from `cargo test`, `cargo clippy`, and scanner runs that emit JSON or SARIF. If `rtk` is installed, use the optional wrapper to reduce output shown to humans and coding agents:
+
+```bash
+scripts/rtk-check.sh quick
+scripts/rtk-check.sh test
+scripts/rtk-check.sh clippy
+scripts/rtk-check.sh scan-fixture
+```
+
+The wrapper is intentionally local-only. RTK filters local command output only. It must not alter AgentShield JSON, SARIF, HTML, or console output contracts consumed by users, clients, CI, or GitHub Code Scanning.
+
+Use raw output for debugging, audit, and security decisions:
+
+```bash
+scripts/rtk-check.sh raw -- cargo test
+scripts/rtk-check.sh raw -- cargo run -- scan tests/fixtures/mcp_servers/safe_calculator --format sarif --output target/agentshield/scan.sarif
+```
+
+Policy:
+
+- Use filtered output for fast local feedback.
+- Use raw output when investigating test failures, parser bugs, detector behavior, or security-sensitive findings.
+- Always write complete `json` and `sarif` reports to files when clients or CI consume them.
+
 ---
 
 ## Supported Frameworks

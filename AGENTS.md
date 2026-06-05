@@ -95,6 +95,31 @@ cargo run -- scan . --ignore-tests --format html --output report.html
 cargo run -- list-rules
 ```
 
+## RTK Usage for Agent Check Loops
+
+RTK is optional and should only filter command output seen by agents or humans. RTK filters local command output only. It must not alter AgentShield JSON, SARIF, HTML, or console output contracts consumed by users, clients, CI, or GitHub Code Scanning.
+
+Use filtered commands for noisy local checks:
+
+```bash
+rtk cargo test
+rtk cargo clippy -- -D warnings
+rtk cargo run -- scan tests/fixtures/mcp_servers/safe_calculator
+```
+
+Use raw commands for complete diagnostics:
+
+```bash
+rtk proxy cargo test
+rtk proxy cargo run -- scan tests/fixtures/mcp_servers/safe_calculator --format sarif --output target/agentshield/scan.sarif
+```
+
+Rules:
+
+- Do not filter final JSON, SARIF, HTML, or console artifacts consumed by users, clients, CI, or GitHub Code Scanning.
+- Do not rely on filtered output to make security-critical decisions.
+- If a test, parser, detector, or policy check fails, rerun the specific command raw before making code changes based on the failure.
+
 ## Architecture Principles
 
 1. **Adapters produce IR, detectors consume IR.** Adding a new framework never changes any detector.
