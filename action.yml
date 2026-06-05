@@ -1,5 +1,5 @@
 name: 'AgentShield Security Scanner'
-description: 'Scan AI agent extensions (MCP servers, OpenClaw skills) for security vulnerabilities'
+description: 'Scan supported AI agent extension frameworks for security vulnerabilities'
 author: 'Ronaldo Lima'
 
 branding:
