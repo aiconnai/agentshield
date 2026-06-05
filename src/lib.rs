@@ -114,7 +114,7 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
 
     // Apply policy (ignore rules, overrides, suppressions)
     let effective_findings = config.policy.apply(&all_findings, &scan_root);
-    let verdict = config.policy.evaluate(&all_findings);
+    let verdict = config.policy.evaluate(&effective_findings);
 
     Ok(ScanReport {
         target_name,
