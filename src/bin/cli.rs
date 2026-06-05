@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 
 use agentshield::baseline::{BaselineEntry, BaselineFile};
 use agentshield::config::Config;
+use agentshield::doctor::DoctorReport;
 use agentshield::egress::policy::EgressPolicy;
 #[cfg(feature = "runtime")]
 use agentshield::egress::proxy::EgressProxy;
@@ -108,6 +109,25 @@ enum Commands {
         config: Option<PathBuf>,
     },
 
+    /// Print environment and configuration diagnostics
+    Doctor {
+        /// Path to inspect
+        #[arg(default_value = ".")]
+        path: PathBuf,
+
+        /// Config file path
+        #[arg(long, short = 'c')]
+        config: Option<PathBuf>,
+
+        /// Emit diagnostics as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Skip test files in effective scan settings
+        #[arg(long)]
+        ignore_tests: bool,
+    },
+
     /// Generate a DSSE attestation envelope for scan results
     Certify {
         /// Path to the extension directory
@@ -186,6 +206,12 @@ fn main() {
             config,
         } => cmd_suppress(fingerprint, reason, expires, config),
         Commands::ListSuppressions { config } => cmd_list_suppressions(config),
+        Commands::Doctor {
+            path,
+            config,
+            json,
+            ignore_tests,
+        } => cmd_doctor(path, config, json, ignore_tests),
         Commands::Certify {
             path,
             sign_key,
@@ -318,6 +344,59 @@ fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
 
     // Exit code: 0 = pass, 1 = findings above threshold
     Ok(if report.verdict.pass { 0 } else { 1 })
+}
+
+fn cmd_doctor(
+    path: PathBuf,
+    config: Option<PathBuf>,
+    json: bool,
+    ignore_tests: bool,
+) -> Result<i32, agentshield::error::ShieldError> {
+    let report = agentshield::doctor::run_doctor(&path, config, ignore_tests)?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        print_doctor_console(&report);
+    }
+
+    Ok(0)
+}
+
+fn print_doctor_console(report: &DoctorReport) {
+    println!("AgentShield doctor");
+    println!("Version: {}", report.version);
+    println!("Target: {}", report.target.display());
+    println!(
+        "Config: {} ({})",
+        report.config_path.display(),
+        if report.config_found {
+            "found"
+        } else {
+            "not found, using defaults"
+        }
+    );
+    println!("Fail on: {}", report.fail_on);
+    println!("Ignore tests: {}", report.ignore_tests);
+    println!(
+        "Features: python={}, typescript={}, runtime={}",
+        report.enabled_features.python,
+        report.enabled_features.typescript,
+        report.enabled_features.runtime
+    );
+    println!(
+        "Adapters: detected [{}], available [{}]",
+        report.detected_adapters.join(", "),
+        report.available_adapters.join(", ")
+    );
+    println!(
+        "Runtime wrap: {}",
+        if report.runtime_wrap_available {
+            "available"
+        } else {
+            "not available"
+        }
+    );
 }
 
 fn cmd_list_rules(format_str: String) -> Result<i32, agentshield::error::ShieldError> {
