@@ -699,7 +699,7 @@ Complete Cargo test failure output, including panic messages and stack traces wh
 Run:
 
 ```bash
-scripts/rtk-check.sh raw -- cargo run -- scan . --ignore-tests --format sarif --output target/agentshield/investigation.sarif
+scripts/rtk-check.sh raw -- cargo run -- scan tests/fixtures/mcp_servers/safe_calculator --ignore-tests --format sarif --output target/agentshield/investigation.sarif
 ```
 
 Expected:
@@ -713,7 +713,7 @@ Complete SARIF is written to target/agentshield/investigation.sarif.
 Run:
 
 ```bash
-scripts/rtk-check.sh raw -- cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
+scripts/rtk-check.sh raw -- cargo run -- scan tests/fixtures/mcp_servers/safe_calculator
 ```
 
 Expected:
