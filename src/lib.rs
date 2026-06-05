@@ -19,6 +19,7 @@ pub mod analysis;
 pub mod baseline;
 pub mod certify;
 pub mod config;
+pub mod doctor;
 pub mod egress;
 pub mod error;
 pub mod ir;
