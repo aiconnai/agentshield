@@ -1,6 +1,6 @@
 # AgentShield for VS Code
 
-**Inline security findings for AI agent extensions — MCP, LangChain, CrewAI, OpenClaw.**
+**Inline security findings for AI agent extensions — MCP, OpenClaw, CrewAI, LangChain/LangGraph, GPT Actions, and Cursor Rules.**
 
 AgentShield scans your AI agent tools for command injection, SSRF, credential exfiltration, and 9 other vulnerability patterns. Findings appear as inline squiggles and in the Problems panel.
 
@@ -10,7 +10,7 @@ AgentShield scans your AI agent tools for command injection, SSRF, credential ex
 - **Automatic scanning** — rescans on file save (debounced, configurable)
 - **Status bar** — shows scan status and finding count
 - **12 detectors** — SHIELD-001 through SHIELD-012 covering command injection, SSRF, credential leaks, arbitrary file access, and more
-- **4 frameworks** — MCP servers, OpenClaw skills, CrewAI agents, LangChain tools
+- **Current framework coverage** — MCP servers, OpenClaw skills, CrewAI agents, LangChain/LangGraph tools, GPT Actions, and Cursor Rules
 
 ## Requirements
 
@@ -36,11 +36,38 @@ cargo install agent-shield
 
 ## Usage
 
-1. Open a project containing AI agent tools (MCP server, LangChain tools, etc.)
+1. Open a project containing AI agent tools (MCP server, OpenClaw skill, CrewAI agent, LangChain/LangGraph tool, GPT Action, Cursor Rule, etc.)
 2. The extension auto-scans on open and shows findings inline
 3. Use `Cmd+Shift+P` > **AgentShield: Scan Workspace** to trigger a manual scan
 4. Click the status bar item to rescan
 5. Click a finding's rule ID to view documentation
+
+## Supported Frameworks
+
+The VS Code extension displays findings produced by the installed AgentShield CLI. Current AgentShield scans cover:
+
+- MCP servers
+- OpenClaw skills
+- CrewAI agents and tools
+- LangChain tools and LangGraph projects
+- GPT Actions
+- Cursor Rules
+
+## CLI Compatibility
+
+The extension shells out to the local AgentShield CLI instead of reimplementing scanning logic:
+
+```bash
+agentshield scan <workspace> --format json
+```
+
+When `agentshield.ignoreTests` is enabled, the extension also passes `--ignore-tests`.
+
+The extension expects JSON output containing a top-level `findings` array. Each finding should include rule IDs, severity, location, message, remediation, and fingerprint fields so diagnostics can be displayed consistently and suppression state can remain stable across scans.
+
+## Suppressions
+
+Suppressions are managed by the AgentShield CLI using each finding's stable fingerprint. Once a finding is suppressed through the CLI workflow, later CLI scans honor that suppression, and the VS Code extension reflects the filtered JSON results it receives from `agentshield scan --format json`.
 
 ## Severity Mapping
 
