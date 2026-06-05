@@ -9,7 +9,7 @@
 
 AgentShield scans AI agent extensions for security vulnerabilities before they reach production. It runs locally as a single Rust binary, shares no source code with a service, and emits console, JSON, SARIF, and HTML reports.
 
-AgentShield is currently aligned with the `0.8.0` release line.
+AgentShield is currently aligned with the `0.8.4` release line.
 
 ---
 
@@ -92,6 +92,12 @@ agentshield init
 ### Pre-built binaries
 
 Download from the [latest release](https://github.com/limaronaldo/agentshield/releases/latest) for Linux, macOS, and Windows targets.
+
+For container consumers, the release image tag is:
+
+```text
+ghcr.io/aiconnai/agentshield:0.8.4
+```
 
 ### From source
 
@@ -287,4 +293,4 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- list-rules
 ```
 
-For release-specific notes, see `docs/releases/0.8.0.md` and `docs/RELEASE_CHECKLIST.md`.
+For release-specific notes, see `docs/releases/0.8.4.md` and `docs/RELEASE_CHECKLIST.md`.
