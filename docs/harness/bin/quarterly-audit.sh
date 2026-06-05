@@ -16,7 +16,12 @@ TIMESTAMP="$(date -u +%Y-%m-%dT%H%M%SZ)"
 REPORT_DIR="docs/harness/audits"
 REPORT="$REPORT_DIR/${TIMESTAMP}-quarterly-audit.md"
 LAST_FILE="docs/harness/.quarterly-audit-last"
-RG_SAFE_GLOBS="--glob '!docs/harness/audits/**' --glob '!docs/harness/reviews/**' --glob '!target/**' --glob '!vscode/node_modules/**'"
+RG_SAFE_GLOBS=(
+  --glob '!docs/harness/audits/**'
+  --glob '!docs/harness/reviews/**'
+  --glob '!target/**'
+  --glob '!vscode/node_modules/**'
+)
 
 mkdir -p "$REPORT_DIR"
 
@@ -72,6 +77,10 @@ append_decision_table() {
 need git
 need rg
 
+rg_safe_globs_args() {
+  printf ' %q' "${RG_SAFE_GLOBS[@]}"
+}
+
 cat > "$REPORT" <<EOF_REPORT
 # Quarterly Harness Audit
 
@@ -103,8 +112,8 @@ append_cmd "Harness policy references" "rg -n 'WHAT_WE_DONT_DO|CODE_REVIEW_POLIC
 } >> "$REPORT"
 append_cmd "Adapter modules" "find src/adapter -maxdepth 1 -type f -name '*.rs' | sort"
 append_cmd "Parser modules" "find src/parser -maxdepth 1 -type f -name '*.rs' | sort"
-append_cmd "Detector registration and rule references" "rg -n 'Box::new|SHIELD-[0-9]{3}' src/rules README.md docs/RULES.md $RG_SAFE_GLOBS | head -260"
-append_cmd "Taint and sanitizer references" "rg -n 'ArgumentSource|Sanitized|is_tainted|sanitize|validate|cross_file' src tests docs $RG_SAFE_GLOBS | head -240"
+append_cmd "Detector registration and rule references" "rg -n 'Box::new|SHIELD-[0-9]{3}' src/rules README.md docs/RULES.md$(rg_safe_globs_args) | head -260"
+append_cmd "Taint and sanitizer references" "rg -n 'ArgumentSource|Sanitized|is_tainted|sanitize|validate|cross_file' src tests docs$(rg_safe_globs_args) | head -240"
 append_decision_table "Scanner Surface Decisions"
 
 {
@@ -113,8 +122,8 @@ append_decision_table "Scanner Surface Decisions"
   echo
   echo "Look for commands, features, adapters, or versions advertised in docs but absent from code."
 } >> "$REPORT"
-append_cmd "CLI command references" "rg -n 'agentshield (scan|list-rules|init|suppress|list-suppressions|certify|wrap|doctor)' README.md docs src/bin/cli.rs action.yml $RG_SAFE_GLOBS | head -260"
-append_cmd "Potential stale version or issue references" "rg -n 'v0\\.[0-9]|doctor|IBVI|Linear|Huly|AGENT-|TODO|Done v' README.md docs action.yml .github $RG_SAFE_GLOBS | head -260"
+append_cmd "CLI command references" "rg -n 'agentshield (scan|list-rules|init|suppress|list-suppressions|certify|wrap|doctor)' README.md docs src/bin/cli.rs action.yml$(rg_safe_globs_args) | head -260"
+append_cmd "Potential stale version or issue references" "rg -n 'v0\\.[0-9]|doctor|IBVI|Linear|Huly|AGENT-|TODO|Done v' README.md docs action.yml .github$(rg_safe_globs_args) | head -260"
 append_decision_table "Documentation Parity Decisions"
 
 {
@@ -124,7 +133,7 @@ append_decision_table "Documentation Parity Decisions"
   echo "Review whether fixtures still represent the supported framework and rule surface."
 } >> "$REPORT"
 append_cmd "Fixture files" "find tests/fixtures -maxdepth 3 -type f | sort | head -260"
-append_cmd "Fixture references in tests" "rg -n 'tests/fixtures|safe_calculator|vuln_cmd_inject|crewai|langchain|gpt_actions|cursor_rules' src tests docs $RG_SAFE_GLOBS | head -260"
+append_cmd "Fixture references in tests" "rg -n 'tests/fixtures|safe_calculator|vuln_cmd_inject|crewai|langchain|gpt_actions|cursor_rules' src tests docs$(rg_safe_globs_args) | head -260"
 append_decision_table "Fixture Decisions"
 
 {
@@ -133,7 +142,7 @@ append_decision_table "Fixture Decisions"
   echo
   echo "Review GitHub Code Scanning compatibility, output contracts, and fingerprint behavior."
 } >> "$REPORT"
-append_cmd "SARIF and output references" "rg -n 'SARIF|sarif|Code Scanning|upload-sarif|startColumn|fingerprint|fingerprints|results' src/output src/rules README.md docs action.yml $RG_SAFE_GLOBS | head -280"
+append_cmd "SARIF and output references" "rg -n 'SARIF|sarif|Code Scanning|upload-sarif|startColumn|fingerprint|fingerprints|results' src/output src/rules README.md docs action.yml$(rg_safe_globs_args) | head -280"
 append_decision_table "Output Compatibility Decisions"
 
 {
@@ -142,7 +151,7 @@ append_decision_table "Output Compatibility Decisions"
   echo
   echo "Review baseline, suppression, certification, egress, and runtime wrap behavior."
 } >> "$REPORT"
-append_cmd "Trust workflow references" "rg -n -i 'baseline|suppress|certify|egress|wrap|DSSE|attestation|operator override|policy' src README.md docs action.yml .github $RG_SAFE_GLOBS | head -280"
+append_cmd "Trust workflow references" "rg -n -i 'baseline|suppress|certify|egress|wrap|DSSE|attestation|operator override|policy' src README.md docs action.yml .github$(rg_safe_globs_args) | head -280"
 append_decision_table "Trust Workflow Decisions"
 
 {
@@ -151,8 +160,8 @@ append_decision_table "Trust Workflow Decisions"
   echo
   echo "Review distribution surfaces for compatibility drift."
 } >> "$REPORT"
-append_cmd "Release workflow features and targets" "rg -n -- '--features full|wrap|target:|agentshield-' .github/workflows/release.yml docs/RELEASE_CHECKLIST.md README.md $RG_SAFE_GLOBS | head -240"
-append_cmd "GitHub Action behavior" "rg -n 'ignore-tests|upload-sarif|AGENTSHIELD_EXIT|finding-count|sarif-file|fail-on|format' action.yml README.md docs $RG_SAFE_GLOBS | head -240"
+append_cmd "Release workflow features and targets" "rg -n -- '--features full|wrap|target:|agentshield-' .github/workflows/release.yml docs/RELEASE_CHECKLIST.md README.md$(rg_safe_globs_args) | head -240"
+append_cmd "GitHub Action behavior" "rg -n 'ignore-tests|upload-sarif|AGENTSHIELD_EXIT|finding-count|sarif-file|fail-on|format' action.yml README.md docs$(rg_safe_globs_args) | head -240"
 append_cmd "VS Code extension behavior" "rg -n 'agentshield|scan|ignoreTests|timeout|Diagnostic|diagnostic|json' vscode/package.json vscode/src vscode/README.md vscode/CHANGELOG.md 2>/dev/null | head -240"
 append_decision_table "Distribution Surface Decisions"
 
@@ -163,7 +172,7 @@ append_decision_table "Distribution Surface Decisions"
   echo "Review generated evidence volume, known-issue exclusions, and skipped verification conventions."
 } >> "$REPORT"
 append_cmd "Harness generated artifacts volume" "find docs/harness/reviews docs/harness/progress docs/harness/audits docs/harness/canvas -maxdepth 1 -type f 2>/dev/null | sort | wc -l | tr -d ' '"
-append_cmd "Known issue and verification references" "rg -n 'known-issue|exclude-sensor|harness_verify|skipped_reason|REVIEW_VERDICT|HARNESS_SCRIPT_REVIEW_EVIDENCE' docs/harness $RG_SAFE_GLOBS | head -260"
+append_cmd "Known issue and verification references" "rg -n 'known-issue|exclude-sensor|harness_verify|skipped_reason|REVIEW_VERDICT|HARNESS_SCRIPT_REVIEW_EVIDENCE' docs/harness$(rg_safe_globs_args) | head -260"
 append_decision_table "Harness Discipline Decisions"
 
 {
@@ -172,8 +181,8 @@ append_decision_table "Harness Discipline Decisions"
   echo
   echo "Review optional features, parser dependencies, runtime dependencies, and package manager drift."
 } >> "$REPORT"
-append_cmd "Cargo dependency declarations" "rg -n '^([a-zA-Z0-9_-]+\\s*=|\\[dependencies|\\[dev-dependencies|\\[features\\])' Cargo.toml $RG_SAFE_GLOBS | head -240"
-append_cmd "Optional/runtime/parser dependency references" "rg -n -i 'optional = true|tree-sitter|runtime|tokio|parking_lot|ed25519|features =|default-features' Cargo.toml src docs $RG_SAFE_GLOBS | head -260"
+append_cmd "Cargo dependency declarations" "rg -n '^([a-zA-Z0-9_-]+\\s*=|\\[dependencies|\\[dev-dependencies|\\[features\\])' Cargo.toml$(rg_safe_globs_args) | head -240"
+append_cmd "Optional/runtime/parser dependency references" "rg -n -i 'optional = true|tree-sitter|runtime|tokio|parking_lot|ed25519|features =|default-features' Cargo.toml src docs$(rg_safe_globs_args) | head -260"
 append_cmd "VS Code package dependencies" "rg -n 'dependencies|devDependencies|typescript|vscode|vsce' vscode/package.json vscode/package-lock.json 2>/dev/null | head -240"
 append_decision_table "Dependency Decisions"
 
