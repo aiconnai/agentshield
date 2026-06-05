@@ -1,5 +1,5 @@
 # Multi-stage build for minimal image (~15 MB)
-FROM rust:1.85-slim AS builder
+FROM rust:1.86-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
