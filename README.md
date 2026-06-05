@@ -99,6 +99,23 @@ For container consumers, the release image tag is:
 ghcr.io/aiconnai/agentshield:0.8.4
 ```
 
+### Docker
+
+The GHCR image is built with the `full` feature set, including runtime `wrap` support. The image is published for `linux/amd64` and `linux/arm64`.
+
+```bash
+docker pull ghcr.io/aiconnai/agentshield:0.8.4
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.4 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:0.8.4 --version
+```
+
+If the GHCR package is private in your organization, authenticate first:
+
+```bash
+gh auth refresh -h github.com -s read:packages
+gh auth token | docker login ghcr.io -u "$(gh api user --jq .login)" --password-stdin
+```
+
 ### From source
 
 ```bash
