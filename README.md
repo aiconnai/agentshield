@@ -9,7 +9,7 @@
 
 AgentShield scans AI agent extensions for security vulnerabilities before they reach production. It runs locally as a single Rust binary, shares no source code with a service, and emits console, JSON, SARIF, and HTML reports.
 
-AgentShield is currently aligned with the `0.8.3` release line.
+AgentShield is currently aligned with the `0.8.4` release line.
 
 ---
 
@@ -93,14 +93,20 @@ agentshield init
 
 Download from the [latest release](https://github.com/limaronaldo/agentshield/releases/latest) for Linux, macOS, and Windows targets.
 
+For container consumers, the release image tag is:
+
+```text
+ghcr.io/aiconnai/agentshield:0.8.4
+```
+
 ### Docker
 
-The GHCR image is built with the `full` feature set, including Python parsing, TypeScript parsing, and runtime `wrap` support. The `0.8.3` image is published for `linux/amd64` and `linux/arm64`.
+The GHCR image is built with the `full` feature set, including runtime `wrap` support. The image is published for `linux/amd64` and `linux/arm64`.
 
 ```bash
-docker pull ghcr.io/aiconnai/agentshield:0.8.3
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.3 scan .
-docker run --rm ghcr.io/aiconnai/agentshield:0.8.3 --version
+docker pull ghcr.io/aiconnai/agentshield:0.8.4
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.4 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:0.8.4 --version
 ```
 
 If the GHCR package is private in your organization, authenticate first:
@@ -155,6 +161,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 |-----------|--------|------------------|
 | MCP (Model Context Protocol) | Supported | MCP server manifests, Python/TypeScript/JavaScript source, tool schemas, dependencies, provenance |
 | OpenClaw | Supported | `SKILL.md` skill files plus related source/dependency surfaces |
+| Hermes Agent | Supported | Hermes config/profile files, `mcp_servers`, `.hermes.md`, skill trees, optional MCP manifests |
 | CrewAI | Supported | Python projects detected from dependency metadata or imports |
 | LangChain / LangGraph | Supported | LangChain/LangGraph dependency metadata, imports, and `langgraph.json` |
 | GPT Actions | Supported | Action/OpenAPI-style surfaces for custom GPT integrations |
@@ -303,4 +310,4 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- list-rules
 ```
 
-For release-specific notes, see `docs/releases/0.8.3.md` and `docs/RELEASE_CHECKLIST.md`.
+For release-specific notes, see `docs/releases/0.8.4.md` and `docs/RELEASE_CHECKLIST.md`.

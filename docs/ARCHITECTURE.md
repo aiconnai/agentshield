@@ -24,6 +24,7 @@ and output formatters produce different report formats.
 src/adapter/mod.rs       — Adapter trait, auto_detect_and_load()
 src/adapter/mcp.rs       — MCP server adapter + shared helpers (pub(super))
 src/adapter/openclaw.rs  — OpenClaw SKILL.md adapter
+src/adapter/hermes.rs    — Hermes Agent config, MCP server, and skill adapter
 src/adapter/crewai.rs    — CrewAI Python adapter
 src/adapter/langchain.rs — LangChain / LangGraph Python adapter
 ```
@@ -42,6 +43,7 @@ pub trait Adapter: Send + Sync {
 - `load()` uses parsers to populate a `ScanTarget`; when `ignore_tests` is true, test files are filtered out before parsing via `is_test_file()`
 - **All matching adapters run** — a project can be both an MCP server and contain OpenClaw skills
 - **Shared helpers** — `collect_source_files()`, `parse_dependencies()`, `parse_provenance()` in `mcp.rs` are `pub(super)` and reused by CrewAI and LangChain adapters
+- **Client config adapters** (Hermes Agent, Cursor Rules) turn configured MCP servers and agent guidance files into the same IR used by source-framework adapters
 - **Python-only adapters** (CrewAI, LangChain) collect all source files then filter to `.py` only
 
 ### 2. Parser (Language Analysis)
@@ -172,7 +174,7 @@ The `Sanitized` variant was added in v0.2.2 and is produced by `apply_cross_file
 ```
 src/rules/mod.rs          — RuleEngine, Detector trait
 src/rules/finding.rs      — Finding, Severity, Confidence, Evidence
-src/rules/builtin/        — 12 built-in detectors
+src/rules/builtin/        — 18 built-in detectors
 ```
 
 Each detector implements:
@@ -251,7 +253,7 @@ All formatters receive `(&[Finding], &PolicyVerdict)` and produce a `String`.
              ▼
      ┌───────────────┐
      │  RuleEngine   │
-     │  12 detectors │
+     │  18 detectors │
      └───────┬───────┘
              │
         Vec<Finding>

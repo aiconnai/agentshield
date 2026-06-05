@@ -10,6 +10,7 @@ Use this checklist for public AgentShield releases.
 - [ ] Confirm `CHANGELOG.md` has a dated top entry for the release.
 - [ ] Confirm `docs/releases/<version>.md` exists and summarizes scope, notable changes, and readiness state.
 - [ ] Confirm `action.yml` metadata reflects the supported scanner scope.
+- [ ] Run `.github/scripts/check-release-invariants.sh v<version>` before pushing the tag.
 - [ ] Confirm no `.env` files, private keys, tokens, or local secrets are staged.
 
 ## Validation
@@ -21,6 +22,7 @@ Use this checklist for public AgentShield releases.
 - [ ] Run `agentshield list-rules` and check the rule list for release drift.
 - [ ] If `runtime` is part of the release, build with `--features full` and smoke test `agentshield wrap`.
 - [ ] Confirm release workflow builds with `--features full`.
+- [ ] Confirm the release workflow `Check release invariants` job passed before any build matrix started.
 - [ ] Confirm release workflow fails when the pushed tag does not match `Cargo.toml`.
 - [ ] Confirm native release jobs smoke-check `agentshield --help` for the `wrap` command.
 - [ ] Do not execute cross-compiled aarch64 Linux artifacts on x86 runners.

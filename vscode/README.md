@@ -2,14 +2,14 @@
 
 **Inline security findings for AI agent extensions — MCP, OpenClaw, CrewAI, LangChain/LangGraph, GPT Actions, and Cursor Rules.**
 
-AgentShield scans your AI agent tools for command injection, SSRF, credential exfiltration, and 9 other vulnerability patterns. Findings appear as inline squiggles and in the Problems panel.
+AgentShield scans your AI agent tools for command injection, SSRF, credential exfiltration, and additional vulnerability patterns. Findings appear as inline squiggles and in the Problems panel.
 
 ## Features
 
 - **Inline diagnostics** — security findings shown directly in the editor with severity-colored underlines
 - **Automatic scanning** — rescans on file save (debounced, configurable)
 - **Status bar** — shows scan status and finding count
-- **12 detectors** — SHIELD-001 through SHIELD-012 covering command injection, SSRF, credential leaks, arbitrary file access, and more
+- **18 detectors** — SHIELD-001 through SHIELD-018 covering command injection, SSRF, credential leaks, arbitrary file access, archive traversal, secret leakage, and more
 - **Current framework coverage** — MCP servers, OpenClaw skills, CrewAI agents, LangChain/LangGraph tools, GPT Actions, and Cursor Rules
 
 ## Requirements
@@ -93,6 +93,12 @@ Suppressions are managed by the AgentShield CLI using each finding's stable fing
 | SHIELD-010 | Typosquat Detection | Medium |
 | SHIELD-011 | Dynamic Code Execution | Critical |
 | SHIELD-012 | No Lockfile | Low |
+| SHIELD-013 | Metadata SSRF | High |
+| SHIELD-014 | Download-Write-Execute Chain | High |
+| SHIELD-015 | Overbroad Filesystem Scope | High |
+| SHIELD-016 | Unsafe Deserialization | High |
+| SHIELD-017 | Archive Traversal | High |
+| SHIELD-018 | Secret Leakage | Critical |
 
 ## Links
 
