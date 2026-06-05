@@ -1,44 +1,47 @@
 # AgentShield
 
-**Security scanner for AI agent extensions — offline-first, multi-framework, SARIF output.**
+**Security scanner for AI agent extensions - offline-first, multi-framework, SARIF output.**
 
 [![CI](https://github.com/limaronaldo/agentshield/actions/workflows/ci.yml/badge.svg)](https://github.com/limaronaldo/agentshield/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
 
-AgentShield scans MCP servers, OpenClaw skills, LangChain tools, CrewAI agents, and other AI agent extensions for security vulnerabilities **before they reach production**. Single Rust binary, zero data sharing, runs entirely on your machine.
+AgentShield scans AI agent extensions for security vulnerabilities before they reach production. It runs locally as a single Rust binary, shares no source code with a service, and emits console, JSON, SARIF, and HTML reports.
+
+AgentShield is currently aligned with the `0.8.0` release line.
 
 ---
 
 ## Why AgentShield?
 
-AI agents are being given tools that can execute commands, read files, make HTTP requests, and install packages. A single malicious or poorly-written extension can:
+AI agents are being connected to tools that can execute commands, read and write files, make HTTP requests, install packages, and call external services. A single malicious or poorly-written extension can:
 
-- **Exfiltrate credentials** — read env vars and POST them to an external server
-- **Execute arbitrary commands** — pass user input straight to `subprocess.run(shell=True)`
-- **Install backdoors at runtime** — `pip install` inside a tool handler
-- **Serve as SSRF proxies** — fetch attacker-controlled URLs from tool parameters
+- **Exfiltrate credentials** by reading environment variables or local secret files and sending them to an attacker-controlled endpoint.
+- **Execute arbitrary commands** by passing user-controlled input into shell or process APIs.
+- **Install backdoors at runtime** through package manager calls inside tool handlers.
+- **Proxy SSRF requests** by fetching URLs derived from tool arguments.
+- **Leak sensitive data to model context** through unguarded prompts, tool results, or rule files.
 
-AgentShield catches these patterns with 12 built-in detectors and cross-file validation tracking that eliminates false positives, producing SARIF reports that integrate directly with GitHub Code Scanning.
+AgentShield catches these patterns with static analysis, framework adapters, policy evaluation, suppressions, baselines, egress policy generation, attestations, and SARIF output for GitHub Code Scanning.
 
 ### How it compares
 
 | Feature | AgentShield | mcp-scan | Invariant Labs |
 |---------|:-----------:|:--------:|:--------------:|
-| Rust single binary | Yes | No (Python) | No (Cloud) |
+| Rust single binary | Yes | No | No |
 | Offline / local-first | Yes | Partial | No |
-| Multi-framework | MCP, OpenClaw, LangChain, CrewAI | MCP only | MCP only |
-| Cross-file analysis | Yes | No | No |
+| Multi-framework adapters | Yes | MCP-focused | MCP-focused |
+| Static analysis | tree-sitter + targeted parsers | Regex-oriented | Runtime/cloud-oriented |
+| Cross-file sanitizer analysis | Yes | No | No |
 | SARIF output | Yes | No | No |
 | GitHub Action | Yes | No | No |
-| Static analysis (AST) | tree-sitter | Regex | Runtime |
 
 ---
 
 ## Quick Start
 
-### GitHub Action (recommended)
+### GitHub Action
 
 Add to `.github/workflows/security.yml`:
 
@@ -59,7 +62,7 @@ jobs:
           upload-sarif: true
 ```
 
-Findings appear as PR annotations and in the repository's **Security > Code scanning** tab.
+Findings appear as PR annotations and in the repository's **Security > Code scanning** tab when SARIF upload is enabled.
 
 ### CLI
 
@@ -70,14 +73,14 @@ cargo install agent-shield
 # Scan current directory
 agentshield scan .
 
-# Scan with specific format and threshold
-agentshield scan ./my-mcp-server --format sarif --fail-on medium --output results.sarif
+# Scan with a specific format and policy threshold
+agentshield scan ./my-agent-extension --format sarif --fail-on medium --output results.sarif
 
-# Skip test files (test/, tests/, __tests__/, *.test.ts, *.spec.ts, etc.)
-agentshield scan ./my-mcp-server --ignore-tests
+# Skip test files
+agentshield scan ./my-agent-extension --ignore-tests
 
-# Generate HTML report
-agentshield scan ./my-mcp-server --format html --output report.html
+# Generate a standalone HTML report
+agentshield scan ./my-agent-extension --format html --output report.html
 
 # List all rules
 agentshield list-rules
@@ -88,7 +91,7 @@ agentshield init
 
 ### Pre-built binaries
 
-Download from the [latest release](https://github.com/limaronaldo/agentshield/releases/latest) — available for Linux (x86_64, aarch64), macOS (x86_64, aarch64), and Windows (x86_64).
+Download from the [latest release](https://github.com/limaronaldo/agentshield/releases/latest) for Linux, macOS, and Windows targets.
 
 ### From source
 
@@ -96,27 +99,53 @@ Download from the [latest release](https://github.com/limaronaldo/agentshield/re
 git clone https://github.com/limaronaldo/agentshield.git
 cd agentshield
 cargo build --release
-./target/release/agentshield scan /path/to/mcp-server
+./target/release/agentshield scan /path/to/agent-extension
 ```
+
+---
+
+## Supported Frameworks
+
+AgentShield runs all matching adapters in a repository instead of stopping at the first match.
+
+| Framework | Status | Adapter coverage |
+|-----------|--------|------------------|
+| MCP (Model Context Protocol) | Supported | MCP server manifests, Python/TypeScript/JavaScript source, tool schemas, dependencies, provenance |
+| OpenClaw | Supported | `SKILL.md` skill files plus related source/dependency surfaces |
+| CrewAI | Supported | Python projects detected from dependency metadata or imports |
+| LangChain / LangGraph | Supported | LangChain/LangGraph dependency metadata, imports, and `langgraph.json` |
+| GPT Actions | Supported | Action/OpenAPI-style surfaces for custom GPT integrations |
+| Cursor Rules | Supported | Cursor rule files and related agent guidance surfaces |
+
+---
+
+## CLI Commands
+
+| Command | Purpose |
+|---------|---------|
+| `agentshield scan [path]` | Scan an agent extension directory and emit console, JSON, SARIF, or HTML output. |
+| `agentshield list-rules` | List available detection rules as a table or JSON. |
+| `agentshield doctor [path]` | Print environment, config, compile-feature, and adapter diagnostics. |
+| `agentshield init` | Generate a starter `.agentshield.toml` config file. |
+| `agentshield suppress <fingerprint>` | Add a suppression entry with a required reason and optional expiry. |
+| `agentshield list-suppressions` | Show suppressions configured in `.agentshield.toml`. |
+| `agentshield certify [path]` | Generate a DSSE attestation envelope for scan results. |
+| `agentshield wrap --policy <path> -- <command>` | Enforce an egress policy through a local HTTP proxy when built with the `runtime` feature. |
+
+Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
 
 ---
 
 ## Detection Rules
 
-| ID | Name | Severity | What it detects |
-|----|------|----------|-----------------|
-| SHIELD-001 | Command Injection | Critical | `subprocess`/`os.system` with non-literal args |
-| SHIELD-002 | Credential Exfiltration | Critical | Reads secrets + makes HTTP requests in same file |
-| SHIELD-003 | SSRF | High | Fetches URLs from tool parameters |
-| SHIELD-004 | Arbitrary File Access | High | File read/write with parameter-derived paths |
-| SHIELD-005 | Runtime Package Install | High | `pip install`/`npm install` at runtime |
-| SHIELD-006 | Self-Modification | High | Writes to own source files |
-| SHIELD-007 | Prompt Injection Surface | Medium | Returns unescaped external content to LLM |
-| SHIELD-008 | Excessive Permissions | Medium | Declares more capabilities than used |
-| SHIELD-009 | Unpinned Dependencies | Medium | No version pinning (`>=`, `~=`, `^`, `*`) |
-| SHIELD-010 | Typosquat Detection | Medium | Package name similar to popular packages |
-| SHIELD-011 | Dynamic Code Execution | Critical | `eval`/`exec` with non-literal args |
-| SHIELD-012 | No Lockfile | Low | Dependencies declared without lockfile |
+AgentShield ships built-in rules for command execution, credential exfiltration, SSRF, arbitrary file access, runtime package installation, self-modification, prompt injection surfaces, excessive permissions, dependency hygiene, dynamic code execution, metadata service access, download-and-execute flows, overbroad filesystem capabilities, unsafe deserialization, archive traversal, and secret leakage.
+
+Use the CLI for the authoritative rule list in your installed version:
+
+```bash
+agentshield list-rules
+agentshield list-rules --format json
+```
 
 ---
 
@@ -124,36 +153,31 @@ cargo build --release
 
 | Format | Flag | Use case |
 |--------|------|----------|
-| Console | `--format console` | Local development (default) |
-| JSON | `--format json` | Programmatic consumption |
-| SARIF | `--format sarif` | GitHub Code Scanning, VS Code |
+| Console | `--format console` | Local development default |
+| JSON | `--format json` | Programmatic consumption and fingerprint extraction |
+| SARIF | `--format sarif` | GitHub Code Scanning and compatible tools |
 | HTML | `--format html` | Shareable standalone reports |
-
-### Console output
-
-```
-  4 finding(s) detected:
-
-  [CRITICAL] SHIELD-001 'subprocess.run' receives parameter 'command' as command argument
-           at server.py:13
-           fix: Validate and sanitize the input, or use an allowlist of permitted commands.
-
-  [HIGH]     SHIELD-003 HTTP request to URL from parameter 'url'
-           at server.py:8
-           fix: Validate URLs against an allowlist of permitted domains.
-
-  Result: FAIL (threshold: high, highest: critical)
-```
 
 ---
 
 ## Configuration
 
-Create `.agentshield.toml` in your project root (or run `agentshield init`):
+### Trust workflows
+
+AgentShield includes trust workflow documentation for baselines, suppressions, certification attestations, and egress enforcement:
+
+- `docs/BASELINES.md`: write and use `.agentshield-baseline.json` for known findings.
+- `docs/SUPPRESSIONS.md`: suppress individual findings by fingerprint with required reasons and optional expiry.
+- `docs/CERTIFICATION.md`: generate unsigned or Ed25519-signed DSSE attestations.
+- `docs/EGRESS.md`: emit `agentshield.egress.toml` and enforce it with `agentshield wrap`.
+
+Release binaries are built with the `full` feature set, including Python parsing, TypeScript parsing, and runtime `wrap` support. If building from source, use `cargo build --features full --release` to include `agentshield wrap`.
+
+Create `.agentshield.toml` in your project root or run `agentshield init`:
 
 ```toml
 [policy]
-# Minimum severity to fail the scan (info, low, medium, high, critical)
+# Minimum severity to fail the scan: info, low, medium, high, critical
 fail_on = "high"
 
 # Rules to skip entirely
@@ -164,9 +188,11 @@ ignore_rules = ["SHIELD-008"]
 "SHIELD-012" = "info"
 
 [scan]
-# Skip test files (test/, tests/, __tests__/, *.test.ts, *.spec.ts, etc.)
+# Skip test files before parsing
 ignore_tests = true
 ```
+
+Suppressions can be added through `agentshield suppress <fingerprint> --reason "..."` after obtaining finding fingerprints from JSON output.
 
 ---
 
@@ -174,111 +200,64 @@ ignore_tests = true
 
 | Code | Meaning |
 |------|---------|
-| 0 | Scan passed (no findings above threshold) |
-| 1 | Scan failed (findings above threshold) |
-| 2 | Scan error (invalid config, no adapter found, etc.) |
-
----
-
-## Supported Frameworks
-
-| Framework | Status | Adapter |
-|-----------|--------|---------|
-| MCP (Model Context Protocol) | Supported | Auto-detects `package.json` with MCP SDK + Python source |
-| OpenClaw | Supported | Auto-detects `SKILL.md` files |
-| CrewAI | Supported | Auto-detects `pyproject.toml`/`requirements.txt` with CrewAI deps or Python imports |
-| LangChain / LangGraph | Supported | Auto-detects `pyproject.toml`/`requirements.txt`/`langgraph.json` with LangChain deps or Python imports |
+| 0 | Scan passed with no findings above threshold |
+| 1 | Scan failed with findings above threshold |
+| 2 | Scan error, such as invalid config or no supported adapter found |
 
 ---
 
 ## Language Support
 
-| Language | Parser | Feature Flag |
-|----------|--------|-------------|
-| Python | tree-sitter AST | `python` (default) |
-| TypeScript/TSX | tree-sitter AST | `typescript` (default) |
-| JavaScript/JSX | tree-sitter AST | `typescript` (default) |
-| Shell (bash/zsh) | Regex | always on |
-| JSON Schema | MCP tool input parser | always on |
+| Language | Parser | Feature flag |
+|----------|--------|--------------|
+| Python | tree-sitter AST with regex source/sink patterns | `python` (default) |
+| TypeScript/TSX | tree-sitter AST with fallback patterns | `typescript` (default) |
+| JavaScript/JSX | tree-sitter AST through TypeScript grammar support | `typescript` (default) |
+| Shell | Regex parser | always on |
+| JSON Schema / OpenAPI-style schemas | Schema parser | always on |
 
-Both tree-sitter parsers are feature-gated. Build without them for a smaller binary:
+Both tree-sitter parsers are feature-gated:
 
 ```bash
-cargo build --no-default-features   # regex fallback for all languages
-cargo build --features python        # only Python AST
-cargo build --features full          # all parsers
+cargo build --no-default-features
+cargo build --features python
+cargo build --features full
 ```
+
+The `full` feature enables language parsers plus the runtime proxy used by `agentshield wrap`.
 
 ---
 
 ## Architecture
 
-```
-CLI / GitHub Action
-       │
-┌──────▼──────┐
-│  Scan Engine │ ── scan() → ScanReport
-└──────┬──────┘
-       │
-  ┌────┼────────────┐
-  ▼    ▼            ▼
-Adapters  Parsers    Supply Chain
-MCP,      Python,    Analysis
-OpenClaw, TypeScript,
-CrewAI,
-LangChain
-          Shell,
-          JSON Schema
-  └────┬────────────┘
-       ▼
-  Cross-File Analysis
-  (sanitizer tracking)
-       ▼
-  Unified IR (ScanTarget)
-       │
-  ┌────▼────┐
-  │  Rules  │ ── 12 detectors
-  │  Engine │
-  └────┬────┘
-       ▼
-    Output
-  SARIF, JSON,
-  HTML, Console
+```text
+CLI / GitHub Action / Library API
+       |
+       v
+Scan Engine -> ScanReport
+       |
+       v
+Adapters -> Parsers -> Cross-file analysis -> Unified IR (ScanTarget)
+       |
+       v
+Rule Engine -> Policy / Suppressions / Baseline filtering
+       |
+       v
+Console / JSON / SARIF / HTML / DSSE attestation
 ```
 
-Adapters translate framework-specific files into a **unified intermediate representation** (`ScanTarget`). Cross-file analysis eliminates false positives from helper functions that receive already-validated input. Detectors only read the IR, so adding a new framework never requires changing any detector.
+Adapters translate framework-specific files into a unified intermediate representation. Detectors consume only that IR, so new frameworks can be added without rewriting every rule. Policy, suppressions, and baselines are separate from detection so scans remain explainable and repeatable.
 
 ---
 
 ## Development
 
 ```bash
-# Run tests
 cargo test
-
-# Run with strict lints
 cargo clippy -- -D warnings
-
-# Check formatting
 cargo fmt --check
-
-# Build release binary
-cargo build --release
+cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
+cargo run -- list-rules
 ```
 
----
-
-## License
-
-Licensed under either of
-
-* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-* MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-
-at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
-dual licensed as above, without any additional terms or conditions.
+For release-specific notes, see `docs/releases/0.8.0.md` and `docs/RELEASE_CHECKLIST.md`.

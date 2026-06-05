@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Documented current framework support for MCP, OpenClaw, CrewAI, LangChain/LangGraph, GPT Actions, and Cursor Rules.
+- Added CLI compatibility notes for the extension's `agentshield scan --format json` integration and expected finding fields.
+- Added suppression workflow notes explaining fingerprint-based CLI suppressions and how later scans honor them.
+
 ## [0.1.0] - 2026-02-20
 
 ### Added

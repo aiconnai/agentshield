@@ -5,6 +5,22 @@ All notable changes to AgentShield will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-06-05
+
+### Added
+
+- GPT Actions and Cursor Rules are now part of the documented supported adapter scope alongside MCP, OpenClaw, CrewAI, and LangChain/LangGraph.
+- Documentation for the current CLI command surface: `scan`, `list-rules`, `init`, `suppress`, `list-suppressions`, `certify`, and feature-gated `wrap`.
+- `agentshield doctor` diagnostics for version, config, compile features, and adapter detection.
+- Release notes for 0.8.0 in `docs/releases/0.8.0.md`.
+- General release checklist in `docs/RELEASE_CHECKLIST.md`.
+
+### Changed
+
+- README now aligns with the 0.8.0 release scope and avoids stale exact framework or detector counts.
+- GitHub Action metadata now describes the scanner as covering supported AI agent extension frameworks rather than MCP/OpenClaw only.
+
+
 ## [0.2.4] - 2026-02-20
 
 ### Added
