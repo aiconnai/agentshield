@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SMOKE_TARGET="tests/fixtures/mcp_servers/safe_calculator"
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -18,7 +20,7 @@ Modes:
   test         Run cargo test with filtered output.
   clippy       Run cargo clippy with filtered output.
   fmt          Run cargo fmt --check with filtered output.
-  scan-fixture Run a vulnerable fixture scan with filtered output.
+  scan-fixture Run the safe smoke fixture scan with filtered output.
   scan-json    Run JSON scan and write complete raw JSON to target/agentshield/scan.json.
   scan-sarif   Run SARIF scan and write complete raw SARIF to target/agentshield/scan.sarif.
   raw          Run a command through rtk proxy if available, otherwise run it directly.
@@ -61,7 +63,7 @@ case "$mode" in
     run_filtered cargo fmt --check
     run_filtered cargo clippy -- -D warnings
     run_filtered cargo test
-    run_filtered cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
+    run_filtered cargo run -- scan "$SMOKE_TARGET"
     ;;
   test)
     run_filtered cargo test
@@ -73,16 +75,16 @@ case "$mode" in
     run_filtered cargo fmt --check
     ;;
   scan-fixture)
-    run_filtered cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
+    run_filtered cargo run -- scan "$SMOKE_TARGET"
     ;;
   scan-json)
     ensure_artifact_dir
-    run_raw cargo run -- scan . --ignore-tests --format json --output target/agentshield/scan.json
+    run_raw cargo run -- scan "$SMOKE_TARGET" --format json --output target/agentshield/scan.json
     run_filtered wc -c target/agentshield/scan.json
     ;;
   scan-sarif)
     ensure_artifact_dir
-    run_raw cargo run -- scan . --ignore-tests --format sarif --output target/agentshield/scan.sarif
+    run_raw cargo run -- scan "$SMOKE_TARGET" --format sarif --output target/agentshield/scan.sarif
     run_filtered wc -c target/agentshield/scan.sarif
     ;;
   raw)

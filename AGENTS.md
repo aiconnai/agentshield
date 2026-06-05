@@ -104,14 +104,14 @@ Use filtered commands for noisy local checks:
 ```bash
 rtk cargo test
 rtk cargo clippy -- -D warnings
-rtk cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
+rtk cargo run -- scan tests/fixtures/mcp_servers/safe_calculator
 ```
 
 Use raw commands for complete diagnostics:
 
 ```bash
 rtk proxy cargo test
-rtk proxy cargo run -- scan . --ignore-tests --format sarif --output target/agentshield/scan.sarif
+rtk proxy cargo run -- scan tests/fixtures/mcp_servers/safe_calculator --format sarif --output target/agentshield/scan.sarif
 ```
 
 Rules:

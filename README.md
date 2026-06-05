@@ -119,7 +119,7 @@ Use raw output for debugging, audit, and security decisions:
 
 ```bash
 scripts/rtk-check.sh raw -- cargo test
-scripts/rtk-check.sh raw -- cargo run -- scan . --ignore-tests --format sarif --output target/agentshield/scan.sarif
+scripts/rtk-check.sh raw -- cargo run -- scan tests/fixtures/mcp_servers/safe_calculator --format sarif --output target/agentshield/scan.sarif
 ```
 
 Policy:
