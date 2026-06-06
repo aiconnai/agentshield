@@ -26,6 +26,8 @@ pub mod ir;
 pub mod output;
 pub mod parser;
 pub mod rules;
+#[cfg(feature = "runtime-guard")]
+pub mod runtime;
 
 use std::path::Path;
 

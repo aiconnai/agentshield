@@ -6,11 +6,19 @@ Use this checklist for public AgentShield releases.
 
 - [ ] Confirm `Cargo.toml` has the intended version.
 - [ ] Confirm the release tag is `v<version>` and exactly matches `Cargo.toml`.
+- [ ] Confirm the worktree state before release preflight:
+  ```bash
+  git status --short
+  ```
 - [ ] Confirm `README.md` describes only commands and adapters that exist in the release branch.
 - [ ] Confirm `CHANGELOG.md` has a dated top entry for the release.
 - [ ] Confirm `docs/releases/<version>.md` exists and summarizes scope, notable changes, and readiness state.
 - [ ] Confirm `action.yml` metadata reflects the supported scanner scope.
-- [ ] Run `.github/scripts/check-release-invariants.sh v<version>` before pushing the tag.
+- [ ] Run `.github/scripts/check-release-invariants.sh v<version>` before pushing the tag. This must confirm the canonical Docker image is `ghcr.io/aiconnai/agentshield:<version>`.
+- [ ] Run the automated release checklist before tagging:
+  ```bash
+  bash docs/harness/bin/release-checklist.sh 0.8.3 --allow-untagged
+  ```
 - [ ] Confirm no `.env` files, private keys, tokens, or local secrets are staged.
 
 ## Validation
@@ -24,6 +32,7 @@ Use this checklist for public AgentShield releases.
 - [ ] Confirm release workflow builds with `--features full`.
 - [ ] Confirm the release workflow `Check release invariants` job passed before any build matrix started.
 - [ ] Confirm release workflow fails when the pushed tag does not match `Cargo.toml`.
+- [ ] Confirm release workflow publishes `ghcr.io/aiconnai/agentshield:<version>` without the leading `v` from the Git tag.
 - [ ] Confirm native release jobs smoke-check `agentshield --help` for the `wrap` command.
 - [ ] Do not execute cross-compiled aarch64 Linux artifacts on x86 runners.
 - [ ] Confirm the Docker image includes `wrap` and reports the intended version.
@@ -42,8 +51,15 @@ Use this checklist for public AgentShield releases.
 ## Publication
 
 - [ ] Tag the release with `v<version>`.
+  ```bash
+  git tag -a v0.8.3 -m "Release v0.8.3"
+  ```
+- [ ] Run the final release checklist after tagging:
+  ```bash
+  bash docs/harness/bin/release-checklist.sh 0.8.3
+  ```
 - [ ] Publish the GitHub release with release notes and artifacts.
-- [ ] Publish the crate if this is a crates.io release.
+- [ ] Publish the crate if this is a crates.io release. `cargo publish` is the human-approved final action, and it must not run from a dirty worktree.
 - [ ] Confirm the GitHub Action can resolve `latest` after publication.
 - [ ] Confirm GitHub Code Scanning accepts generated SARIF from the release binary.
 

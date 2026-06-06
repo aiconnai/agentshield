@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use super::{CallSite, FunctionDef, LanguageParser, ParsedFile};
-use crate::analysis::cross_file::is_sanitizer;
+use crate::analysis::cross_file::{sanitizer_category, sanitizer_label, SanitizerCategory};
 use crate::error::Result;
 use crate::ir::execution_surface::*;
 use crate::ir::{ArgumentSource, Language, SourceLocation};
@@ -120,8 +120,15 @@ impl LanguageParser for PythonParser {
         for cap in SANITIZER_ASSIGN_RE.captures_iter(content) {
             let var_name = &cap[1];
             let func_name = &cap[2];
-            if is_sanitizer(func_name) {
+            if sanitizer_category(func_name)
+                .is_some_and(|category| !matches!(category, SanitizerCategory::Redaction))
+            {
                 parsed.sanitized_vars.insert(var_name.to_string());
+                if let Some(label) = sanitizer_label(func_name) {
+                    parsed
+                        .sanitized_vars
+                        .insert(sanitized_var_marker(var_name, &label));
+                }
             }
         }
 
@@ -449,10 +456,8 @@ fn classify_argument(
     // Check if this is a sanitized variable first
     let ident = first_arg.split('.').next().unwrap_or(first_arg);
     let ident = ident.split('[').next().unwrap_or(ident);
-    if sanitized_vars.contains(ident) {
-        return ArgumentSource::Sanitized {
-            sanitizer: ident.to_string(),
-        };
+    if let Some(sanitizer) = sanitized_label_for_var(ident, sanitized_vars) {
+        return ArgumentSource::Sanitized { sanitizer };
     }
 
     // String literal
@@ -484,6 +489,31 @@ fn classify_argument(
     }
 
     ArgumentSource::Unknown
+}
+
+fn sanitized_var_marker(var_name: &str, sanitizer_label: &str) -> String {
+    format!("{var_name}::{sanitizer_label}")
+}
+
+fn sanitized_label_for_var(
+    ident: &str,
+    sanitized_vars: &std::collections::HashSet<String>,
+) -> Option<String> {
+    for category in [
+        SanitizerCategory::Path,
+        SanitizerCategory::Network,
+        SanitizerCategory::TypeCoercion,
+    ] {
+        let prefix = format!("{}:", category.as_str());
+        if let Some(marker) = sanitized_vars
+            .iter()
+            .find(|value| value.starts_with(&format!("{ident}::{prefix}")))
+        {
+            return marker.split_once("::").map(|(_, label)| label.to_string());
+        }
+    }
+
+    sanitized_vars.contains(ident).then(|| ident.to_string())
 }
 
 fn loc(file: &Path, line: usize) -> SourceLocation {
@@ -727,6 +757,46 @@ def handler(args):
             matches!(&rf.arguments[0], ArgumentSource::Sanitized { .. }),
             "safe_path should be Sanitized, got: {:?}",
             rf.arguments[0]
+        );
+    }
+
+    #[test]
+    fn urlparse_assignment_is_not_sanitized_for_ssrf() {
+        let code = r#"
+from urllib.parse import urlparse
+import requests
+
+def handler(url: str):
+    parsed_url = urlparse(url)
+    return requests.get(parsed_url)
+"#;
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+
+        assert!(!parsed.sanitized_vars.contains("parsed_url"));
+        assert_eq!(parsed.network_operations.len(), 1);
+        assert!(
+            parsed.network_operations[0].url_arg.is_tainted(),
+            "urlparse output must remain tainted for network sinks"
+        );
+    }
+
+    #[test]
+    fn redaction_assignment_is_not_sanitized_for_file_paths() {
+        let code = r#"
+def redactSecret(value: str) -> str:
+    return value.replace("secret", "[REDACTED]")
+
+def handler(path: str):
+    redacted_path = redactSecret(path)
+    return open(redacted_path).read()
+"#;
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+
+        assert!(!parsed.sanitized_vars.contains("redacted_path"));
+        assert_eq!(parsed.file_operations.len(), 1);
+        assert!(
+            parsed.file_operations[0].path_arg.is_tainted(),
+            "redaction output must remain tainted for file path sinks"
         );
     }
 }
