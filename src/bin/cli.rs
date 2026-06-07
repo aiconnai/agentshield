@@ -356,23 +356,50 @@ fn cmd_mcp_proxy(config_path: Option<std::path::PathBuf>) -> agentshield::error:
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    for line in stdin.lock().lines() {
-        let line = match line {
-            Ok(line) => line,
-            Err(_) => break, // stdin closed / non-UTF8 line: stop.
+    let mut reader = stdin.lock();
+    let mut raw = Vec::new();
+    loop {
+        // Read one line with a hard byte cap so a single huge line cannot
+        // exhaust memory (mirrors the stdin guard's 1 MiB limit). A line that
+        // exceeds the cap is treated as malformed and blocked (fail closed).
+        raw.clear();
+        let read = (&mut reader)
+            .take((GUARD_STDIN_MAX_BYTES + 1) as u64)
+            .read_until(b'\n', &mut raw);
+        let n = match read {
+            Ok(0) => break, // EOF
+            Ok(n) => n,
+            Err(_) => break,
         };
-        if line.trim().is_empty() {
+        let over_limit = n > GUARD_STDIN_MAX_BYTES;
+        let line = String::from_utf8_lossy(&raw);
+        let line = line.trim_end_matches(['\n', '\r']);
+        if !over_limit && line.trim().is_empty() {
             continue;
         }
 
-        let response = match serde_json::from_str::<serde_json::Value>(&line) {
-            Ok(request) => match decide_tool_call(&request, &policy) {
-                ProxyDecision::Forward => serde_json::json!({ "forward": request }),
-                ProxyDecision::Block(error) => {
-                    blocked_any = true;
-                    error
+        let parsed = if over_limit {
+            // Force the fail-closed branch below without parsing a truncated line.
+            Err(())
+        } else {
+            serde_json::from_str::<serde_json::Value>(line).map_err(|_| ())
+        };
+
+        let response = match parsed {
+            Ok(request) => {
+                match decide_tool_call(&request, &policy) {
+                    ProxyDecision::Forward => serde_json::json!({ "forward": request }),
+                    ProxyDecision::ForwardSuppressed { rule_id } => {
+                        // Audit: a block was suppressed by a `never` override.
+                        eprintln!("agentshield: forwarded a {rule_id} block suppressed by a 'never' override");
+                        serde_json::json!({ "forward": request })
+                    }
+                    ProxyDecision::Block(error) => {
+                        blocked_any = true;
+                        error
+                    }
                 }
-            },
+            }
             // Fail closed: an unparseable line is blocked with a synthetic error.
             Err(_) => {
                 blocked_any = true;
