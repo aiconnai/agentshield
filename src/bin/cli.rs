@@ -154,6 +154,14 @@ enum Commands {
         /// (defaults to ./.agentshield.toml).
         #[arg(long)]
         config: Option<std::path::PathBuf>,
+
+        /// EXPERIMENTAL: with --mcp-proxy, the command after `--` is spawned as
+        /// the downstream MCP server and stdio is bridged both ways. Forwarded
+        /// `tools/call` requests reach the server and its real response is
+        /// returned; blocked ones are not forwarded. With no command, the proxy
+        /// runs in line mode (emits `{"forward": ...}` envelopes).
+        #[arg(last = true)]
+        server: Vec<String>,
     },
 
     /// Generate a DSSE attestation envelope for scan results
@@ -245,9 +253,14 @@ fn main() {
             stdin,
             mcp_proxy,
             config,
+            server,
         } => {
             if mcp_proxy {
-                cmd_mcp_proxy(config)
+                if server.is_empty() {
+                    cmd_mcp_proxy(config)
+                } else {
+                    cmd_mcp_proxy_transport(config, server)
+                }
             } else {
                 cmd_guard(stdin)
             }
@@ -458,6 +471,160 @@ fn load_proxy_policy(config_path: Option<std::path::PathBuf>) -> agentshield::ru
             .map(|override_entry| (override_entry.name, map_fail_on(override_entry.fail_on)))
             .collect(),
     }
+}
+
+/// Run the MCP proxy with a real bidirectional stdio bridge to a downstream
+/// server. Spawns `server` (argv), forwards pass-through / allowed `tools/call`
+/// requests to it and streams its responses back to the client, and answers a
+/// blocked `tools/call` itself (the server never sees it).
+///
+/// Fails closed: if the server cannot be spawned, every call is blocked. A
+/// malformed or oversized client line is blocked without forwarding.
+#[cfg(feature = "runtime-guard")]
+fn cmd_mcp_proxy_transport(
+    config_path: Option<std::path::PathBuf>,
+    server: Vec<String>,
+) -> agentshield::error::Result<i32> {
+    use agentshield::runtime::{decide_tool_call, ProxyDecision};
+    use std::io::{BufRead, Write};
+    use std::process::{Command, Stdio};
+    use std::thread;
+
+    let policy = load_proxy_policy(config_path);
+
+    let (program, args) = match server.split_first() {
+        Some(parts) => parts,
+        None => return cmd_mcp_proxy(None), // no command → line mode
+    };
+
+    let mut child = match Command::new(program)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        // Fail closed: cannot spawn the server → block everything.
+        Err(_) => {
+            eprintln!("agentshield: failed to spawn MCP server; blocking all calls");
+            return Ok(GUARD_BLOCK_EXIT);
+        }
+    };
+
+    let mut server_stdin = child.stdin.take().expect("server stdin piped");
+    let server_stdout = child.stdout.take().expect("server stdout piped");
+
+    // Pump the server's stdout straight to the client's stdout (responses).
+    // Lock stdout per-line (not for the thread's lifetime) so the main loop can
+    // also write block errors without deadlocking on the stdout lock.
+    let pump = thread::spawn(move || {
+        let mut reader = std::io::BufReader::new(server_stdout);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) => break, // server closed
+                Ok(_) => {
+                    let stdout = std::io::stdout();
+                    let mut out = stdout.lock();
+                    if out.write_all(line.as_bytes()).is_err() || out.flush().is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    let mut blocked_any = false;
+    let stdin = std::io::stdin();
+    let mut reader = stdin.lock();
+    let mut raw = Vec::new();
+
+    loop {
+        raw.clear();
+        let n = match (&mut reader)
+            .take((GUARD_STDIN_MAX_BYTES + 1) as u64)
+            .read_until(b'\n', &mut raw)
+        {
+            Ok(0) => break, // client EOF
+            Ok(n) => n,
+            Err(_) => break,
+        };
+        let over_limit = n > GUARD_STDIN_MAX_BYTES;
+        let line = String::from_utf8_lossy(&raw);
+        let line = line.trim_end_matches(['\n', '\r']);
+        if !over_limit && line.trim().is_empty() {
+            continue;
+        }
+
+        let parsed = if over_limit {
+            Err(())
+        } else {
+            serde_json::from_str::<serde_json::Value>(line).map_err(|_| ())
+        };
+
+        match parsed {
+            Ok(request) => match decide_tool_call(&request, &policy) {
+                ProxyDecision::Forward => {
+                    // Forward the original request bytes to the server.
+                    if server_stdin.write_all(raw.as_slice()).is_err() {
+                        break;
+                    }
+                    let _ = server_stdin.flush();
+                }
+                ProxyDecision::ForwardSuppressed { rule_id } => {
+                    eprintln!(
+                        "agentshield: forwarded a {rule_id} block suppressed by a 'never' override"
+                    );
+                    if server_stdin.write_all(raw.as_slice()).is_err() {
+                        break;
+                    }
+                    let _ = server_stdin.flush();
+                }
+                ProxyDecision::Block(error) => {
+                    // The server never sees a blocked call; the proxy answers.
+                    blocked_any = true;
+                    if write_client_line(&error).is_err() {
+                        break;
+                    }
+                }
+            },
+            Err(()) => {
+                blocked_any = true;
+                let error = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": serde_json::Value::Null,
+                    "error": {
+                        "code": agentshield::runtime::mcp_proxy::BLOCKED_ERROR_CODE,
+                        "message": "Blocked by AgentShield runtime guard",
+                        "data": { "verdict": "block", "rule_id": "AGENTSHIELD-RUNTIME-INVALID-INPUT", "schema_version": "v1" }
+                    }
+                });
+                if write_client_line(&error).is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Close the server's stdin so it can finish, then drain its output.
+    drop(server_stdin);
+    let _ = pump.join();
+    let _ = child.wait();
+
+    Ok(if blocked_any { GUARD_BLOCK_EXIT } else { 0 })
+}
+
+/// Write one JSON line to the client's stdout. Returns Err on a write failure.
+#[cfg(feature = "runtime-guard")]
+fn write_client_line(value: &serde_json::Value) -> std::io::Result<()> {
+    use std::io::Write;
+    let rendered = serde_json::to_string(value).map_err(std::io::Error::other)?;
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+    writeln!(out, "{rendered}")?;
+    out.flush()
 }
 
 /// Serialize and print a guard result. Returns Err only on a serialization or
