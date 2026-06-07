@@ -9,13 +9,13 @@
 
 AgentShield scans AI agent extensions for security vulnerabilities before they reach production. It runs locally as a single Rust binary, shares no source code with a service, and emits console, JSON, SARIF, and HTML reports.
 
-AgentShield is currently aligned with the `0.8.4` release line.
+AgentShield is currently aligned with the `0.8.5` release line.
 
 ## What AgentShield is today
 
 AgentShield is an offline-first static security scanner for AI agent extensions. It analyzes MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, and related agent extension surfaces before they run, then reports findings through console, JSON, SARIF, and HTML outputs.
 
-AgentShield is not a hosted monitoring service, a runtime sandbox, or an allowlist marketplace. Runtime guard work is tracked as an experimental roadmap item; the current stable contract remains static scanning plus policy evaluation.
+AgentShield is not a hosted monitoring service, a runtime sandbox, or an allowlist marketplace. Experimental runtime guard entrypoints are available behind opt-in feature flags; the current stable contract remains static scanning plus policy evaluation.
 
 Runtime guard roadmap: see [docs/RUNTIME_GUARD.md](docs/RUNTIME_GUARD.md).
 
@@ -104,17 +104,17 @@ Download from the [latest release](https://github.com/limaronaldo/agentshield/re
 For container consumers, the release image tag is:
 
 ```text
-ghcr.io/aiconnai/agentshield:0.8.4
+ghcr.io/aiconnai/agentshield:0.8.5
 ```
 
 ### Docker
 
-The GHCR image is built with the `full` feature set, including runtime `wrap` support. The image is published for `linux/amd64` and `linux/arm64`.
+The GHCR image is built with the `full` feature set, including runtime `wrap` support and experimental runtime guard commands. The image is published for `linux/amd64` and `linux/arm64`.
 
 ```bash
-docker pull ghcr.io/aiconnai/agentshield:0.8.4
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.4 scan .
-docker run --rm ghcr.io/aiconnai/agentshield:0.8.4 --version
+docker pull ghcr.io/aiconnai/agentshield:0.8.5
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.5 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:0.8.5 --version
 ```
 
 If the GHCR package is private in your organization, authenticate first:
@@ -189,6 +189,8 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield list-suppressions` | Show suppressions configured in `.agentshield.toml`. |
 | `agentshield certify [path]` | Generate a DSSE attestation envelope for scan results. |
 | `agentshield wrap --policy <path> -- <command>` | Enforce an egress policy through a local HTTP proxy when built with the `runtime` feature. |
+| `agentshield guard --stdin` | Evaluate one runtime event JSON document when built with the `runtime-guard` feature. |
+| `agentshield guard --mcp-proxy` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages and emit forward markers or safe block errors when built with the `runtime-guard` feature. |
 
 Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
 
@@ -229,7 +231,7 @@ AgentShield includes trust workflow documentation for baselines, suppressions, c
 - `docs/CERTIFICATION.md`: generate unsigned or Ed25519-signed DSSE attestations.
 - `docs/EGRESS.md`: emit `agentshield.egress.toml` and enforce it with `agentshield wrap`.
 
-Release binaries are built with the `full` feature set, including Python parsing, TypeScript parsing, and runtime `wrap` support. If building from source, use `cargo build --features full --release` to include `agentshield wrap`.
+Release binaries are built with the `full` feature set, including Python parsing, TypeScript parsing, runtime `wrap` support, and experimental runtime guard commands. If building from source, use `cargo build --features full --release` to include `agentshield wrap` and `agentshield guard`.
 
 Create `.agentshield.toml` in your project root or run `agentshield init`:
 
@@ -248,6 +250,14 @@ ignore_rules = ["SHIELD-008"]
 [scan]
 # Skip test files before parsing
 ignore_tests = true
+
+[runtime.proxy]
+# Runtime MCP proxy guard blocking threshold: block, warn, or never.
+fail_on = "block"
+
+[[runtime.proxy.tool]]
+name = "calculator.add"
+fail_on = "never"
 ```
 
 Suppressions can be added through `agentshield suppress <fingerprint> --reason "..."` after obtaining finding fingerprints from JSON output.
@@ -261,6 +271,7 @@ Suppressions can be added through `agentshield suppress <fingerprint> --reason "
 | 0 | Scan passed with no findings above threshold |
 | 1 | Scan failed with findings above threshold |
 | 2 | Scan error, such as invalid config or no supported adapter found |
+| 3 | Runtime guard blocked or failed closed on invalid runtime input |
 
 ---
 
@@ -282,7 +293,7 @@ cargo build --features python
 cargo build --features full
 ```
 
-The `full` feature enables language parsers plus the runtime proxy used by `agentshield wrap`.
+The `full` feature enables language parsers plus the runtime proxy used by `agentshield wrap` and the experimental runtime guard commands.
 
 ---
 
@@ -318,4 +329,4 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- list-rules
 ```
 
-For release-specific notes, see `docs/releases/0.8.4.md` and `docs/RELEASE_CHECKLIST.md`.
+For release-specific notes, see `docs/releases/0.8.5.md` and `docs/RELEASE_CHECKLIST.md`.
