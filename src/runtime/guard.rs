@@ -1,12 +1,12 @@
+use crate::rules::builtin::metadata_ssrf::references_metadata_endpoint;
 use crate::runtime::{
-    redact_runtime_event, RuntimeAction, RuntimeEvent, RuntimeGuardFinding, RuntimeGuardResult,
+    redact_runtime_event, RuntimeEvent, RuntimeGuardFinding, RuntimeGuardResult,
     RuntimeSchemaVersion, RuntimeSeverity, RuntimeVerdict,
 };
 
 const SECRET_RULE_ID: &str = "AGENTSHIELD-RUNTIME-SECRET";
 const METADATA_SSRF_RULE_ID: &str = "AGENTSHIELD-RUNTIME-METADATA-SSRF";
 pub const INVALID_INPUT_RULE_ID: &str = "AGENTSHIELD-RUNTIME-INVALID-INPUT";
-const METADATA_ENDPOINT: &str = "169.254.169.254";
 
 pub fn evaluate_runtime_event(event: RuntimeEvent) -> RuntimeGuardResult {
     let (redacted_event, redactions) = redact_runtime_event(event);
@@ -21,29 +21,33 @@ pub fn evaluate_runtime_event(event: RuntimeEvent) -> RuntimeGuardResult {
         });
     }
 
-    if redacted_event.action == RuntimeAction::NetworkRequest
-        && redacted_event
-            .url
-            .as_deref()
-            .is_some_and(|url| url.contains(METADATA_ENDPOINT))
+    // Inspect every field that can carry a request target, regardless of the
+    // self-declared `action` (which is attacker-controlled). A metadata
+    // endpoint reachable via the url OR command field is blocked.
+    if let Some(evidence) = [
+        redacted_event.url.as_deref(),
+        redacted_event.command.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|text| references_metadata_endpoint(text))
     {
         findings.push(RuntimeGuardFinding {
             rule_id: METADATA_SSRF_RULE_ID.to_string(),
             severity: RuntimeSeverity::Critical,
-            message: "Runtime network request targets cloud metadata endpoint".to_string(),
-            evidence: redacted_event.url.clone(),
+            message: "Runtime event references a cloud metadata endpoint".to_string(),
+            evidence: Some(evidence.to_string()),
         });
     }
 
-    let verdict = if findings
-        .iter()
-        .any(|finding| finding.rule_id == METADATA_SSRF_RULE_ID)
-    {
-        RuntimeVerdict::Block
-    } else if !redactions.is_empty() {
-        RuntimeVerdict::Warn
-    } else {
-        RuntimeVerdict::Allow
+    // Derive the verdict from the highest finding severity so any future
+    // Critical/High detector blocks/warns by construction, rather than keying
+    // on a specific rule id that a new detector might forget to wire in.
+    let max_severity = findings.iter().map(|f| f.severity).max();
+    let verdict = match max_severity {
+        Some(RuntimeSeverity::Critical) => RuntimeVerdict::Block,
+        Some(RuntimeSeverity::High) | Some(RuntimeSeverity::Medium) => RuntimeVerdict::Warn,
+        _ => RuntimeVerdict::Allow,
     };
 
     RuntimeGuardResult {

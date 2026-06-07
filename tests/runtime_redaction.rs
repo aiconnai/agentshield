@@ -485,3 +485,92 @@ fn redaction_ranges_do_not_include_raw_secret_text() {
     assert!(serialized_redactions.contains("open_ai_api_key"));
     assert!(report.redactions[0].start < report.redactions[0].end);
 }
+
+fn event_with_arguments(arguments: serde_json::Value) -> RuntimeEvent {
+    RuntimeEvent {
+        schema_version: RuntimeSchemaVersion::V1,
+        source: RuntimeEventSource::Stdin,
+        action: RuntimeAction::ToolCall,
+        tool_name: None,
+        command: None,
+        url: None,
+        path: None,
+        arguments,
+        redacted: false,
+    }
+}
+
+#[test]
+fn secret_bearing_keys_authorization_cookie_bearer_session_are_redacted() {
+    for key in ["authorization", "cookie", "bearer", "session", "sessionId"] {
+        let event = event_with_arguments(json!({ key: "abc123rawvalue_no_vendor_match" }));
+        let (redacted, redactions) = redact_runtime_event(event);
+        let serialized = serde_json::to_string(&redacted.arguments).unwrap();
+
+        assert!(
+            !serialized.contains("abc123rawvalue_no_vendor_match"),
+            "key {key} should be redacted, got {serialized}"
+        );
+        assert!(!redactions.is_empty(), "key {key} produced no redaction");
+    }
+}
+
+#[test]
+fn numeric_value_under_secret_key_is_redacted() {
+    let event = event_with_arguments(json!({ "password": 1234567890123456_i64 }));
+    let (redacted, redactions) = redact_runtime_event(event);
+    let serialized = serde_json::to_string(&redacted.arguments).unwrap();
+
+    assert!(
+        !serialized.contains("1234567890123456"),
+        "numeric secret leaked: {serialized}"
+    );
+    assert!(!redactions.is_empty());
+    assert!(redacted.redacted);
+}
+
+#[test]
+fn attacker_set_redacted_flag_is_recomputed_not_trusted() {
+    // Caller claims redacted:true but the value is a real secret the redactor
+    // catches: the flag stays true AND the secret is scrubbed.
+    let mut event = event_with_arguments(json!({ "data": "ghp_EXAMPLEEXAMPLEEXAMPLEEXAMPLE00" }));
+    event.redacted = true;
+    let (redacted, _redactions) = redact_runtime_event(event);
+    assert!(redacted.redacted);
+    assert!(!serde_json::to_string(&redacted.arguments)
+        .unwrap()
+        .contains("ghp_EXAMPLE"));
+
+    // Caller claims redacted:true but there is nothing to redact: the flag is
+    // reset to false rather than laundered.
+    let mut benign = event_with_arguments(json!({ "note": "just a normal value" }));
+    benign.redacted = true;
+    let (redacted_benign, redactions) = redact_runtime_event(benign);
+    assert!(redactions.is_empty());
+    assert!(
+        !redacted_benign.redacted,
+        "redacted flag must be reset to false"
+    );
+}
+
+#[test]
+fn benign_dotted_strings_are_not_redacted_as_jwt() {
+    for benign in [
+        "longsegmentaaaa.longsegmentbbbb.longsegmentcccc",
+        "com.example.module.something-else-here.final",
+    ] {
+        let report = redact_text(benign);
+        assert_eq!(
+            report.redacted_text, benign,
+            "benign dotted string was wrongly redacted: {benign}"
+        );
+    }
+}
+
+#[test]
+fn real_jwt_is_still_redacted() {
+    let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    let report = redact_text(&format!("token {jwt}"));
+    assert_eq!(report.redactions[0].kind, RedactionKind::JwtToken);
+    assert!(!report.redacted_text.contains(jwt));
+}

@@ -428,6 +428,11 @@ mod integration_tests {
         assert!(!report.verdict.pass);
     }
 
+    // The safe_filesystem fixture is TypeScript-only; without the typescript
+    // parser feature the .ts files are not parsed, cross-file sanitization
+    // cannot see validatePath(), and the helper file ops surface as false
+    // positives. Gate the test on the feature its premise depends on.
+    #[cfg(feature = "typescript")]
     #[test]
     fn safe_filesystem_no_file_access_findings() {
         // This fixture has a handler that validates paths via validatePath()

@@ -296,19 +296,43 @@ fn cmd_guard(read_stdin: bool) -> agentshield::error::Result<i32> {
     };
 
     let result = evaluate_runtime_event(event);
-    println!("{}", serde_json::to_string_pretty(&result)?);
-
-    match result.verdict {
-        RuntimeVerdict::Allow | RuntimeVerdict::Warn => Ok(0),
-        RuntimeVerdict::Block => Ok(3),
+    let verdict = result.verdict;
+    // Emit without `?`: a serialization or broken-pipe error must not propagate
+    // to the generic exit code (2) and read as "not blocked". The guard fails
+    // closed — any output failure maps to the block code.
+    if emit_guard_result(&result).is_err() {
+        return Ok(GUARD_BLOCK_EXIT);
     }
+
+    match verdict {
+        RuntimeVerdict::Allow | RuntimeVerdict::Warn => Ok(0),
+        RuntimeVerdict::Block => Ok(GUARD_BLOCK_EXIT),
+    }
+}
+
+/// Exit code signalling a fail-closed block from the runtime guard.
+#[cfg(feature = "runtime-guard")]
+const GUARD_BLOCK_EXIT: i32 = 3;
+
+/// Serialize and print a guard result. Returns Err only on a serialization or
+/// stdout-write failure, which the caller maps to a fail-closed block.
+#[cfg(feature = "runtime-guard")]
+fn emit_guard_result(
+    result: &agentshield::runtime::RuntimeGuardResult,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rendered = serde_json::to_string_pretty(result)?;
+    use std::io::Write;
+    writeln!(std::io::stdout(), "{rendered}")?;
+    Ok(())
 }
 
 #[cfg(feature = "runtime-guard")]
 fn emit_invalid_guard_input(reason: &str, redacted: bool) -> agentshield::error::Result<i32> {
     let result = invalid_runtime_guard_input(reason, redacted);
-    println!("{}", serde_json::to_string_pretty(&result)?);
-    Ok(3)
+    // Ignore output errors: the verdict is already block, and a write failure
+    // must not downgrade the exit code away from the fail-closed block.
+    let _ = emit_guard_result(&result);
+    Ok(GUARD_BLOCK_EXIT)
 }
 
 /// Arguments for the scan subcommand, extracted to avoid too-many-arguments.

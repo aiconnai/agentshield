@@ -12,7 +12,8 @@ use crate::rules::{
 pub struct MetadataSsrfDetector;
 
 /// Cloud metadata endpoints that should never be accessible via user input.
-const METADATA_ENDPOINTS: &[&str] = &[
+/// Shared with the runtime guard so static and runtime detection stay aligned.
+pub(crate) const METADATA_ENDPOINTS: &[&str] = &[
     "169.254.169.254",          // AWS/Azure/GCP
     "metadata.google.internal", // GCP
     "metadata.google",          // GCP alternate
@@ -33,6 +34,13 @@ const PRIVATE_PATTERNS: &[&str] = &[
     "[fd",      // IPv6 private (fd00::/8)
     "[fe80:",   // IPv6 link-local
 ];
+
+/// Whether `text` references a known cloud metadata endpoint (case-insensitive).
+/// Shared with the runtime guard so both surfaces use the same endpoint list.
+pub(crate) fn references_metadata_endpoint(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    METADATA_ENDPOINTS.iter().any(|ep| lower.contains(ep))
+}
 
 /// Returns true if the URL string targets a metadata endpoint or private network.
 fn is_metadata_or_private(url: &str) -> Option<&'static str> {

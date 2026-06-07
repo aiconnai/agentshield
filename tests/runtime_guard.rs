@@ -67,8 +67,45 @@ fn metadata_endpoint_network_request_returns_block() {
     assert_eq!(result.findings[0].severity, RuntimeSeverity::Critical);
     assert_eq!(
         result.findings[0].message,
-        "Runtime network request targets cloud metadata endpoint"
+        "Runtime event references a cloud metadata endpoint"
     );
+}
+
+#[test]
+fn metadata_endpoint_blocks_regardless_of_declared_action() {
+    // `action` is attacker-controlled; a metadata URL under any action must
+    // still block (previously this fell through to Allow).
+    let mut event = runtime_event(RuntimeAction::ToolCall);
+    event.url = Some("http://169.254.169.254/latest/meta-data/".to_string());
+
+    let result = evaluate_runtime_event(event);
+
+    assert_eq!(result.verdict, RuntimeVerdict::Block);
+}
+
+#[test]
+fn metadata_endpoint_blocks_gcp_and_alibaba_endpoints() {
+    for endpoint in [
+        "http://metadata.google.internal/computeMetadata/v1/",
+        "http://100.100.100.200/latest/meta-data/",
+    ] {
+        let mut event = runtime_event(RuntimeAction::NetworkRequest);
+        event.url = Some(endpoint.to_string());
+
+        let result = evaluate_runtime_event(event);
+
+        assert_eq!(result.verdict, RuntimeVerdict::Block, "endpoint {endpoint}");
+    }
+}
+
+#[test]
+fn metadata_endpoint_blocks_when_in_command_field() {
+    let mut event = runtime_event(RuntimeAction::Command);
+    event.command = Some("curl http://169.254.169.254/latest/meta-data/iam/".to_string());
+
+    let result = evaluate_runtime_event(event);
+
+    assert_eq!(result.verdict, RuntimeVerdict::Block);
 }
 
 #[test]

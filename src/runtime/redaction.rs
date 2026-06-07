@@ -60,7 +60,10 @@ static AWS_SECRET_ACCESS_KEY_VALUE_RE: Lazy<Regex> = Lazy::new(|| {
 static BEARER_TOKEN_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"Bearer [A-Za-z0-9._~+/=-]{20,}").expect("valid bearer token regex"));
 static JWT_TOKEN_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")
+    // Anchor the first segment to the JWT header prefix `eyJ` (base64url of the
+    // JSON `{"...`) so arbitrary three-part dotted strings (S3 keys, module
+    // paths, hostnames) are not redacted as JWTs.
+    Regex::new(r"\beyJ[A-Za-z0-9_-]{7,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")
         .expect("valid JWT token regex")
 });
 static PEM_PRIVATE_KEY_RE: Lazy<Regex> = Lazy::new(|| {
@@ -211,19 +214,43 @@ pub fn redact_text(input: &str) -> RedactionReport {
 }
 
 pub fn redact_runtime_event(
-    mut event: crate::runtime::RuntimeEvent,
+    event: crate::runtime::RuntimeEvent,
 ) -> (crate::runtime::RuntimeEvent, Vec<Redaction>) {
+    // Destructure exhaustively so a newly-added field is a compile error here
+    // rather than a silent redaction bypass (deny-by-default). Non-secret
+    // fields are listed explicitly to acknowledge they carry no secrets.
+    let crate::runtime::RuntimeEvent {
+        schema_version,
+        source,
+        action,
+        mut tool_name,
+        mut command,
+        mut url,
+        mut path,
+        mut arguments,
+        redacted: _, // never trust the caller-supplied flag; recomputed below.
+    } = event;
+
     let mut redactions = Vec::new();
+    redact_optional_string(&mut tool_name, &mut redactions);
+    redact_optional_string(&mut command, &mut redactions);
+    redact_optional_string(&mut url, &mut redactions);
+    redact_optional_string(&mut path, &mut redactions);
+    redact_json_strings(&mut arguments, &mut redactions);
 
-    redact_optional_string(&mut event.tool_name, &mut redactions);
-    redact_optional_string(&mut event.command, &mut redactions);
-    redact_optional_string(&mut event.url, &mut redactions);
-    redact_optional_string(&mut event.path, &mut redactions);
-    redact_json_strings(&mut event.arguments, &mut redactions);
-
-    if !redactions.is_empty() {
-        event.redacted = true;
-    }
+    let event = crate::runtime::RuntimeEvent {
+        schema_version,
+        source,
+        action,
+        tool_name,
+        command,
+        url,
+        path,
+        arguments,
+        // Authoritative: reflects what redaction actually did, ignoring any
+        // attacker-set input value.
+        redacted: !redactions.is_empty(),
+    };
 
     (event, redactions)
 }
@@ -437,7 +464,28 @@ fn redact_json_value(
                 redact_json_value(entry, secret_kind, depth + 1, redactions);
             }
         }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+        // A numeric value under a secret-like key (e.g. {"pin": 1234}) is still
+        // a secret — replace it with a redacted string so it does not leak.
+        Value::Number(_) => redact_secret_scalar(value, inherited_secret_kind, redactions),
+        Value::Null | Value::Bool(_) => {}
+    }
+}
+
+/// Replace a non-string scalar that sits under a secret-like key with a redacted
+/// string placeholder. No-op when there is no inherited secret context.
+fn redact_secret_scalar(
+    value: &mut Value,
+    inherited_secret_kind: Option<RedactionKind>,
+    redactions: &mut Vec<Redaction>,
+) {
+    if let Some(kind) = inherited_secret_kind {
+        let original_len = value.to_string().len();
+        *value = Value::String(replacement_for_key_redacted_value(kind).to_string());
+        redactions.push(Redaction {
+            kind,
+            start: 0,
+            end: original_len,
+        });
     }
 }
 
@@ -485,7 +533,8 @@ fn redact_overflowed_subtree(
                     stack.push((entry, kind));
                 }
             }
-            Value::Null | Value::Bool(_) | Value::Number(_) => {}
+            Value::Number(_) => redact_secret_scalar(node, secret_kind, redactions),
+            Value::Null | Value::Bool(_) => {}
         }
     }
 }
@@ -547,6 +596,11 @@ fn secret_kind_for_json_key(key: &str) -> Option<RedactionKind> {
                 | "credential"
                 | "credentials"
                 | "auth"
+                | "authorization"
+                | "bearer"
+                | "cookie"
+                | "session"
+                | "sessionid"
         )
     }) {
         return Some(RedactionKind::GenericSecret);
