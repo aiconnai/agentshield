@@ -279,3 +279,106 @@ fn mcp_proxy_fails_closed_on_malformed_line() {
     );
     assert_eq!(output.status.code(), Some(3));
 }
+
+fn run_mcp_proxy_transport(input: &[u8]) -> Output {
+    // The proxy spawns python3 running the fake echo MCP server.
+    let mut child = Command::new(env!("CARGO_BIN_EXE_agentshield"))
+        .args([
+            "guard",
+            "--mcp-proxy",
+            "--",
+            "python3",
+            "tests/fixtures/fake_mcp_server.py",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn agentshield guard --mcp-proxy server");
+    child
+        .stdin
+        .as_mut()
+        .expect("child stdin")
+        .write_all(input)
+        .expect("write proxy stdin");
+    child.wait_with_output().expect("wait for proxy output")
+}
+
+#[test]
+fn mcp_proxy_transport_forwards_allowed_and_blocks_ssrf_at_the_server() {
+    let input = concat!(
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+        "\n",
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"calc.add","arguments":{"a":1}}}"#,
+        "\n",
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"http.get","arguments":{"url":"http://169.254.169.254/latest/meta-data/"}}}"#,
+        "\n"
+    );
+    let output = run_mcp_proxy_transport(input.as_bytes());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let responses: Vec<serde_json::Value> = stdout
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("each line is JSON"))
+        .collect();
+
+    // id 1 (pass-through) and id 2 (allowed) reach the server → it returns a
+    // `result.served` echo for each.
+    let served: Vec<i64> = responses
+        .iter()
+        .filter(|r| r.get("result").and_then(|x| x.get("served")).is_some())
+        .filter_map(|r| r["id"].as_i64())
+        .collect();
+    assert!(
+        served.contains(&1),
+        "tools/list should reach the server: {stdout}"
+    );
+    assert!(
+        served.contains(&2),
+        "allowed tool call should reach the server: {stdout}"
+    );
+
+    // id 3 (SSRF) is blocked by the proxy: an error response with -32001, and
+    // the server NEVER served id 3.
+    let blocked: Vec<&serde_json::Value> = responses
+        .iter()
+        .filter(|r| r.get("error").is_some())
+        .collect();
+    assert_eq!(blocked.len(), 1, "exactly one block expected: {stdout}");
+    assert_eq!(blocked[0]["id"], 3);
+    assert_eq!(blocked[0]["error"]["code"], -32001);
+    assert!(
+        !served.contains(&3),
+        "blocked call must NOT reach the server"
+    );
+    // The raw metadata IP must not leak in the block error.
+    assert!(!stdout.contains("169.254.169.254"));
+
+    assert_eq!(output.status.code(), Some(3));
+}
+
+#[test]
+fn mcp_proxy_transport_fails_closed_when_server_missing() {
+    // A server command that cannot be spawned → block all, exit 3, no panic.
+    let mut child = Command::new(env!("CARGO_BIN_EXE_agentshield"))
+        .args([
+            "guard",
+            "--mcp-proxy",
+            "--",
+            "definitely-not-a-real-binary-xyz",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#)
+        .ok();
+    let output = child.wait_with_output().expect("wait");
+    assert_eq!(output.status.code(), Some(3), "missing server fails closed");
+}
