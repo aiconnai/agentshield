@@ -9,7 +9,7 @@
 
 AgentShield scans AI agent extensions for security vulnerabilities before they reach production. It runs locally as a single Rust binary, shares no source code with a service, and emits console, JSON, SARIF, and HTML reports.
 
-AgentShield is currently aligned with the `0.8.5` release line.
+AgentShield is currently aligned with the `0.8.6` release line.
 
 ## What AgentShield is today
 
@@ -104,7 +104,7 @@ Download from the [latest release](https://github.com/limaronaldo/agentshield/re
 For container consumers, the release image tag is:
 
 ```text
-ghcr.io/aiconnai/agentshield:0.8.5
+ghcr.io/aiconnai/agentshield:0.8.6
 ```
 
 ### Docker
@@ -112,9 +112,9 @@ ghcr.io/aiconnai/agentshield:0.8.5
 The GHCR image is built with the `full` feature set, including runtime `wrap` support and experimental runtime guard commands. The image is published for `linux/amd64` and `linux/arm64`.
 
 ```bash
-docker pull ghcr.io/aiconnai/agentshield:0.8.5
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.5 scan .
-docker run --rm ghcr.io/aiconnai/agentshield:0.8.5 --version
+docker pull ghcr.io/aiconnai/agentshield:0.8.6
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.6 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:0.8.6 --version
 ```
 
 If the GHCR package is private in your organization, authenticate first:
@@ -190,7 +190,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield certify [path]` | Generate a DSSE attestation envelope for scan results. |
 | `agentshield wrap --policy <path> -- <command>` | Enforce an egress policy through a local HTTP proxy when built with the `runtime` feature. |
 | `agentshield guard --stdin` | Evaluate one runtime event JSON document when built with the `runtime-guard` feature. |
-| `agentshield guard --mcp-proxy` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages and emit forward markers or safe block errors when built with the `runtime-guard` feature. |
+| `agentshield guard --mcp-proxy [-- <server cmd...>]` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages, block unsafe calls, and either emit forward markers or bridge stdio to a spawned downstream MCP server when built with the `runtime-guard` feature. |
 
 Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
 
@@ -329,4 +329,4 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- list-rules
 ```
 
-For release-specific notes, see `docs/releases/0.8.5.md` and `docs/RELEASE_CHECKLIST.md`.
+For release-specific notes, see `docs/releases/0.8.6.md` and `docs/RELEASE_CHECKLIST.md`.
