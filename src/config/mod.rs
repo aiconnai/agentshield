@@ -12,6 +12,8 @@ pub struct Config {
     pub policy: Policy,
     #[serde(default)]
     pub scan: ScanConfig,
+    #[serde(default)]
+    pub runtime: RuntimeConfig,
 }
 
 /// `[scan]` section of the config file.
@@ -20,6 +22,43 @@ pub struct ScanConfig {
     /// Skip test files when true.
     #[serde(default)]
     pub ignore_tests: bool,
+}
+
+/// `[runtime]` section of the config file.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RuntimeConfig {
+    #[serde(default)]
+    pub proxy: RuntimeProxyConfig,
+}
+
+/// Blocking threshold for the MCP proxy guard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProxyFailOn {
+    /// Block only `block` verdicts (default).
+    #[default]
+    Block,
+    /// Block `warn` and `block` verdicts.
+    Warn,
+    /// Never block; still evaluated and audited.
+    Never,
+}
+
+/// Per-tool proxy policy override.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyToolOverride {
+    pub name: String,
+    #[serde(default)]
+    pub fail_on: ProxyFailOn,
+}
+
+/// `[runtime.proxy]` section: MCP proxy guard policy.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RuntimeProxyConfig {
+    #[serde(default)]
+    pub fail_on: ProxyFailOn,
+    #[serde(default, rename = "tool")]
+    pub tool_overrides: Vec<ProxyToolOverride>,
 }
 
 impl Config {
