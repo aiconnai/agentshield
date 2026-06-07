@@ -19,6 +19,9 @@ pub const BLOCKED_ERROR_CODE: i64 = -32001;
 pub enum ProxyDecision {
     /// Forward the original request unchanged (pass-through, allow, or warn).
     Forward,
+    /// Forward, but a block was suppressed by a `never` override. Carries the
+    /// rule id that would have blocked, so the caller can audit it.
+    ForwardSuppressed { rule_id: String },
     /// Do not forward; return this JSON-RPC error response to the client.
     Block(Value),
 }
@@ -82,28 +85,35 @@ pub fn decide(request: &Value, policy: &ProxyPolicy) -> ProxyDecision {
     let result = evaluate_runtime_event(event);
     let fail_on = policy.fail_on_for(&tool_name);
 
-    let blocked = match (result.verdict, fail_on) {
-        (_, FailOn::Never) => false,
-        (RuntimeVerdict::Block, _) => true,
-        (RuntimeVerdict::Warn, FailOn::Warn) => true,
-        _ => false,
-    };
-
-    if blocked {
-        let rule_id = result
+    let rule_id = || {
+        result
             .findings
             .iter()
-            .map(|finding| finding.rule_id.as_str())
+            .map(|finding| finding.rule_id.clone())
             .next_back()
-            .unwrap_or("AGENTSHIELD-RUNTIME-BLOCK");
-        let verdict = match result.verdict {
-            RuntimeVerdict::Block => "block",
-            RuntimeVerdict::Warn => "warn",
-            RuntimeVerdict::Allow => "allow",
-        };
-        ProxyDecision::Block(blocked_error(&id, verdict, rule_id))
-    } else {
-        ProxyDecision::Forward
+            .unwrap_or_else(|| "AGENTSHIELD-RUNTIME-BLOCK".to_string())
+    };
+
+    // Would this verdict block if `fail_on` were not `never`?
+    let would_block = matches!(result.verdict, RuntimeVerdict::Block)
+        || matches!(
+            (result.verdict, fail_on),
+            (RuntimeVerdict::Warn, FailOn::Warn)
+        );
+
+    match (would_block, fail_on) {
+        // A `never` override suppresses an otherwise-blocking verdict: forward,
+        // but surface the suppressed rule id so the caller can audit it.
+        (true, FailOn::Never) => ProxyDecision::ForwardSuppressed { rule_id: rule_id() },
+        (true, _) => {
+            let verdict = match result.verdict {
+                RuntimeVerdict::Block => "block",
+                RuntimeVerdict::Warn => "warn",
+                RuntimeVerdict::Allow => "allow",
+            };
+            ProxyDecision::Block(blocked_error(&id, verdict, &rule_id()))
+        }
+        (false, _) => ProxyDecision::Forward,
     }
 }
 
@@ -127,17 +137,46 @@ fn tool_call_to_event(request: &Value) -> Option<RuntimeEvent> {
             .map(str::to_string)
     };
 
+    // The metadata-SSRF check inspects only `url`/`command`. An attacker can
+    // hide a metadata endpoint in a nested argument or pass `arguments` as a
+    // bare string, which top-level hoisting misses. Walk the whole arguments
+    // subtree and, if any string references a metadata endpoint, hoist it into
+    // `url` so the guard blocks it. Fail-closed against nested/odd shapes.
+    let url = string_arg("url").or_else(|| first_metadata_string(&arguments));
+
     Some(RuntimeEvent {
         schema_version: RuntimeSchemaVersion::V1,
         source: RuntimeEventSource::Mcp,
         action: RuntimeAction::ToolCall,
         tool_name: Some(name),
         command: string_arg("command"),
-        url: string_arg("url"),
+        url,
         path: string_arg("path"),
         arguments,
         redacted: false,
     })
+}
+
+/// Walk a JSON value (iteratively, so a deeply nested payload cannot overflow
+/// the stack) and return the first string that references a cloud metadata
+/// endpoint, anywhere in the tree.
+fn first_metadata_string(value: &Value) -> Option<String> {
+    use crate::rules::builtin::metadata_ssrf::references_metadata_endpoint;
+
+    let mut stack = vec![value];
+    while let Some(node) = stack.pop() {
+        match node {
+            Value::String(text) => {
+                if references_metadata_endpoint(text) {
+                    return Some(text.clone());
+                }
+            }
+            Value::Array(items) => stack.extend(items.iter()),
+            Value::Object(entries) => stack.extend(entries.values()),
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Build the safe JSON-RPC error response for a blocked call. Carries only the
@@ -254,12 +293,61 @@ mod tests {
     }
 
     #[test]
-    fn never_override_forwards_even_on_block() {
+    fn never_override_forwards_but_audits_suppressed_block() {
         let req = tools_call("trusted.fetch", json!({"url": "http://169.254.169.254/"}));
         let policy = ProxyPolicy {
             fail_on: FailOn::Block,
             tool_overrides: vec![("trusted.fetch".to_string(), FailOn::Never)],
         };
-        assert_eq!(decide(&req, &policy), ProxyDecision::Forward);
+        match decide(&req, &policy) {
+            ProxyDecision::ForwardSuppressed { rule_id } => {
+                assert_eq!(rule_id, "AGENTSHIELD-RUNTIME-METADATA-SSRF");
+            }
+            other => panic!("expected forward-suppressed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn metadata_endpoint_in_nested_argument_is_blocked() {
+        // The endpoint is hidden in a nested object, not a top-level url string.
+        let req = tools_call(
+            "http.get",
+            json!({"req": {"target": {"url": "http://169.254.169.254/latest/meta-data/"}}}),
+        );
+        match decide(&req, &ProxyPolicy::default()) {
+            ProxyDecision::Block(err) => {
+                assert_eq!(
+                    err["error"]["data"]["rule_id"],
+                    "AGENTSHIELD-RUNTIME-METADATA-SSRF"
+                );
+                assert!(!err.to_string().contains("169.254.169.254"));
+            }
+            other => panic!("expected nested metadata to block, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn metadata_endpoint_in_string_arguments_is_blocked() {
+        // `arguments` is a bare string, not an object — must still block.
+        let req = json!({
+            "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+            "params": { "name": "fetch", "arguments": "http://169.254.169.254/" }
+        });
+        match decide(&req, &ProxyPolicy::default()) {
+            ProxyDecision::Block(_) => {}
+            other => panic!("expected string-arguments metadata to block, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn metadata_in_array_argument_is_blocked() {
+        let req = tools_call(
+            "batch",
+            json!({"urls": ["https://ok.example.com", "http://169.254.169.254/"]}),
+        );
+        match decide(&req, &ProxyPolicy::default()) {
+            ProxyDecision::Block(_) => {}
+            other => panic!("expected array metadata to block, got {other:?}"),
+        }
     }
 }
