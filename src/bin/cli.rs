@@ -567,8 +567,11 @@ fn cmd_mcp_proxy_transport(
         match parsed {
             Ok(request) => match decide_tool_call(&request, &policy) {
                 ProxyDecision::Forward => {
-                    // Forward the original request bytes to the server.
+                    // Forward the original request bytes to the server. If the
+                    // server is gone, tell the client instead of dropping the
+                    // request silently, then stop.
                     if server_stdin.write_all(raw.as_slice()).is_err() {
+                        let _ = write_client_line(&downstream_unavailable_error(&request));
                         break;
                     }
                     let _ = server_stdin.flush();
@@ -578,6 +581,7 @@ fn cmd_mcp_proxy_transport(
                         "agentshield: forwarded a {rule_id} block suppressed by a 'never' override"
                     );
                     if server_stdin.write_all(raw.as_slice()).is_err() {
+                        let _ = write_client_line(&downstream_unavailable_error(&request));
                         break;
                     }
                     let _ = server_stdin.flush();
@@ -614,6 +618,24 @@ fn cmd_mcp_proxy_transport(
     let _ = child.wait();
 
     Ok(if blocked_any { GUARD_BLOCK_EXIT } else { 0 })
+}
+
+/// JSON-RPC error returned to the client when the downstream MCP server is no
+/// longer writable, so an allowed request is not dropped silently.
+#[cfg(feature = "runtime-guard")]
+fn downstream_unavailable_error(request: &serde_json::Value) -> serde_json::Value {
+    let id = request
+        .get("id")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": {
+            "code": -32002,
+            "message": "Downstream MCP server unavailable"
+        }
+    })
 }
 
 /// Write one JSON line to the client's stdout. Returns Err on a write failure.
