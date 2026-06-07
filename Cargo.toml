@@ -29,8 +29,11 @@ typescript = ["dep:tree-sitter-typescript"]
 # Runtime proxy for `wrap` command (tokio + parking_lot)
 runtime = ["dep:tokio", "dep:parking_lot"]
 
+# Runtime guard CLI/library support for evaluating runtime events
+runtime-guard = []
+
 # All features
-full = ["python", "typescript", "runtime"]
+full = ["python", "typescript", "runtime", "runtime-guard"]
 
 [dependencies]
 # CLI
@@ -93,6 +96,26 @@ parking_lot = { version = "0.12", optional = true }
 tempfile = "3.9"
 pretty_assertions = "1.4"
 proptest = "1.4"
+
+[[test]]
+name = "runtime_event"
+path = "tests/runtime_event.rs"
+required-features = ["runtime-guard"]
+
+[[test]]
+name = "runtime_guard"
+path = "tests/runtime_guard.rs"
+required-features = ["runtime-guard"]
+
+[[test]]
+name = "runtime_redaction"
+path = "tests/runtime_redaction.rs"
+required-features = ["runtime-guard"]
+
+[[test]]
+name = "runtime_schema"
+path = "tests/runtime_schema.rs"
+required-features = ["runtime-guard"]
 
 [[bench]]
 name = "scan"

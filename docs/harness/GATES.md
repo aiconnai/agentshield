@@ -33,6 +33,26 @@ Optional sensor lanes are developer aids. They do not replace the no-argument `s
 | Fixture smoke | `bash docs/harness/bin/sensors.sh fixtures` |
 | SARIF smoke | `bash docs/harness/bin/sensors.sh sarif` |
 
+## Release Checklist Gate
+
+Release readiness is checked with:
+
+```bash
+bash docs/harness/bin/release-checklist.sh <version> [--allow-untagged]
+```
+
+The gate requires:
+
+- `vc-gate.sh release <version>` when `docs/harness/bin/vc-gate.sh` is available, or the local fallback version/tag gate when it is not.
+- `Cargo.toml` version equals `<version>`.
+- `.github/scripts/check-release-invariants.sh v<version>` passes, including the canonical Docker image `ghcr.io/aiconnai/agentshield:<version>`.
+- `cargo fmt --check`.
+- `cargo clippy -- -D warnings`.
+- `cargo test`.
+- `cargo publish --dry-run`.
+- `v<version>` points to `HEAD` before final publish.
+- final publish runs from a clean Git worktree.
+
 ## Fixture Smoke Gate
 
 The fixture smoke gate checks that representative supported targets can be scanned without scanner errors:

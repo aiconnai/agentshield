@@ -11,6 +11,14 @@ AgentShield scans AI agent extensions for security vulnerabilities before they r
 
 AgentShield is currently aligned with the `0.8.4` release line.
 
+## What AgentShield is today
+
+AgentShield is an offline-first static security scanner for AI agent extensions. It analyzes MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, and related agent extension surfaces before they run, then reports findings through console, JSON, SARIF, and HTML outputs.
+
+AgentShield is not a hosted monitoring service, a runtime sandbox, or an allowlist marketplace. Runtime guard work is tracked as an experimental roadmap item; the current stable contract remains static scanning plus policy evaluation.
+
+Runtime guard roadmap: see [docs/RUNTIME_GUARD.md](docs/RUNTIME_GUARD.md).
+
 ---
 
 ## Why AgentShield?
