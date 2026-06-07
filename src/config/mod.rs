@@ -121,6 +121,14 @@ fail_on = "high"
 # [scan]
 # Skip test files (test/, tests/, __tests__/, *.test.ts, *.spec.ts, etc.).
 # ignore_tests = false
+
+# [runtime.proxy]
+# Runtime MCP proxy guard blocking threshold: block, warn, or never.
+# fail_on = "block"
+
+# [[runtime.proxy.tool]]
+# name = "calculator.add"
+# fail_on = "never"
 "#
     }
 }

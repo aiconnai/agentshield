@@ -2,17 +2,17 @@
 
 ## Status
 
-Runtime guard support is experimental roadmap work. AgentShield's stable contract remains offline static scanning and policy evaluation for AI agent extensions before they run.
+Runtime guard support is experimental. AgentShield's stable contract remains offline static scanning and policy evaluation for AI agent extensions before they run.
 
-The current scanner analyzes MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, and related agent extension surfaces, then reports findings through console, JSON, SARIF, and HTML outputs. Runtime guard work should extend that model incrementally; it should not redefine AgentShield as a hosted monitoring service, marketplace, or runtime sandbox.
+The current scanner analyzes MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, and related agent extension surfaces, then reports findings through console, JSON, SARIF, and HTML outputs. Runtime guard work extends that model incrementally; it does not redefine AgentShield as a hosted monitoring service, marketplace, or runtime sandbox.
 
 ## Shared policy event model
 
-Runtime guard work should start with one shared JSON event shape that can represent:
+Runtime guard work uses one shared JSON event shape that can represent:
 
 - Static scanner findings.
 - Runtime guard observations.
-- Future MCP proxy guard decisions.
+- MCP proxy guard decisions.
 
 The event model should carry common policy fields such as rule ID, severity, confidence, target, location or runtime context, evidence summary, remediation, and verdict. Static detection and runtime decisions should use the same policy concepts so users do not need separate mental models for scan-time and run-time enforcement.
 
@@ -52,7 +52,8 @@ not enabled by default.
 
 Use `cargo run --features runtime-guard -- guard --stdin` during development, or
 build/install AgentShield with `--features runtime-guard` if the guard CLI should
-be available.
+be available. Release builds use `--features full`, which includes
+`runtime-guard`.
 
 ## CLI
 
@@ -82,14 +83,14 @@ scanner output contracts for console, JSON, SARIF, or HTML reports.
 MCP proxy guard mode (`agentshield guard --mcp-proxy`) is a local, offline proxy
 that sits between an MCP client (the agent host) and an MCP server (the tool
 provider). It observes each tool call, evaluates it against runtime policy, and
-forwards, annotates, or blocks it before the underlying server runs. The design
+forwards or blocks it before the underlying server runs. The design
 goal is to make tool-call risk visible at the one boundary where arguments, tool
 metadata, and policy can be evaluated together — without hosted telemetry.
 
-> Status: design. This section is the AGENT-18 technical design; the command is
-> not yet implemented. It is intentionally aligned with the existing
-> `guard --stdin` evaluation core (`evaluate_runtime_event`) so the proxy reuses,
-> rather than re-implements, policy and redaction.
+> Status: experimental implementation. AgentShield 0.8.5 implements the pure
+> decision core and a line-delimited stdio JSON-RPC loop. It intentionally reuses
+> the existing `guard --stdin` evaluation core (`evaluate_runtime_event`) so the
+> proxy reuses, rather than re-implements, policy and redaction.
 
 ### Request/response flow
 
@@ -104,17 +105,17 @@ agent host ──tools/call──▶ agentshield proxy ──(allow)──▶ MC
                             allow / warn / block ◀──forward result──
 ```
 
-1. The proxy accepts an MCP session (stdio or a local socket) and forwards
+1. The current stdio guard loop reads one JSON-RPC message per line. It forwards
    `initialize`, `tools/list`, `resources/*`, `prompts/*`, and any non-call
-   traffic verbatim — it is a pass-through for capability negotiation.
+   traffic by emitting `{"forward": <request>}` for a downstream transport.
 2. On a `tools/call` request it pauses forwarding and builds a `RuntimeEvent`
    from the JSON-RPC `params` (`name` → `tool_name`, `arguments` → `arguments`,
    plus any `command`/`url`/`path` extractable from the arguments).
 3. It evaluates the event with the shared `evaluate_runtime_event` core, getting
    a `RuntimeGuardResult` (`allow` / `warn` / `block`) and a redacted event.
-4. **Allow / warn**: the original (unmodified) request is forwarded to the MCP
-   server; the server's response is returned to the host verbatim. The decision
-   and any findings are written to the audit log (using the redacted event).
+4. **Allow / warn**: the original (unmodified) request is emitted as
+   `{"forward": <request>}`. A downstream transport can consume that marker and
+   forward the request to the MCP server.
 5. **Block**: the request is NOT forwarded. The proxy synthesizes a JSON-RPC
    error response (see "Safe error response") and returns it to the host as if
    it came from the server. The server never sees the call.
@@ -133,14 +134,19 @@ agent host ──tools/call──▶ agentshield proxy ──(allow)──▶ MC
 
 ### Allow / warn / block behavior
 
-| Verdict | Forwarded? | Returned to host | Audit |
+| Verdict | Forward marker? | Returned to host | Audit |
 |---|---|---|---|
-| `allow` | yes | server's real response | logged at info |
-| `warn`  | yes | server's real response | logged with findings (e.g. a secret was observed) |
-| `block` | no  | synthetic JSON-RPC error | logged with the blocking finding |
+| `allow` | yes | downstream transport handles server response | no stderr audit |
+| `warn`  | yes | downstream transport handles server response | no stderr audit |
+| `block` | no  | synthetic JSON-RPC error | rule id in safe error data |
 
 `warn` deliberately does not alter the response — it surfaces risk without
 breaking a working tool. Only `block` changes observable behavior.
+
+The stdio loop exits `3` if any line is blocked. Malformed JSON lines and lines
+larger than 1 MiB fail closed with a safe JSON-RPC block error. A
+`fail_on = "never"` override forwards the request but writes the suppressed rule
+ID to stderr so the suppression remains auditable.
 
 ### Proxy policy config format
 
@@ -194,8 +200,9 @@ gracefully instead of hanging or crashing:
   arguments, and never an un-redacted secret. It is the `RuntimeGuardResult`
   contract minus any payload.
 
-Proxy guard mode remains experimental until stable configuration, integration
-tests, failure-mode behavior, and compatibility guarantees are in place.
+Proxy guard mode remains experimental until a full bidirectional downstream
+transport, broader compatibility testing, and stable runtime compatibility
+guarantees are in place.
 
 ## Non-goals
 
