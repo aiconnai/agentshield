@@ -211,3 +211,71 @@ fn assert_invalid_input_block(output: Output, expected_evidence: &str, expected_
         Some(expected_evidence)
     );
 }
+
+fn run_mcp_proxy(input: &[u8]) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_agentshield"))
+        .args(["guard", "--mcp-proxy"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn agentshield guard --mcp-proxy");
+    child
+        .stdin
+        .as_mut()
+        .expect("child stdin")
+        .write_all(input)
+        .expect("write proxy stdin");
+    child.wait_with_output().expect("wait for proxy output")
+}
+
+#[test]
+fn mcp_proxy_forwards_pass_through_and_benign_blocks_ssrf() {
+    let input = concat!(
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+        "\n",
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"calc.add","arguments":{"a":1}}}"#,
+        "\n",
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"http.get","arguments":{"url":"http://169.254.169.254/latest/meta-data/"}}}"#,
+        "\n"
+    );
+    let output = run_mcp_proxy(input.as_bytes());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 3, "one response per request: {stdout}");
+
+    let l1: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    assert!(l1.get("forward").is_some(), "tools/list should forward");
+
+    let l2: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+    assert!(
+        l2.get("forward").is_some(),
+        "benign tool call should forward"
+    );
+
+    let l3: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
+    assert_eq!(l3["error"]["code"], -32001, "ssrf call should block");
+    assert_eq!(l3["id"], 3);
+    assert_eq!(
+        l3["error"]["data"]["rule_id"],
+        "AGENTSHIELD-RUNTIME-METADATA-SSRF"
+    );
+    // The raw metadata IP must not leak into the error.
+    assert!(!lines[2].contains("169.254.169.254"));
+
+    // Exit code is 3 because at least one call was blocked.
+    assert_eq!(output.status.code(), Some(3));
+}
+
+#[test]
+fn mcp_proxy_fails_closed_on_malformed_line() {
+    let output = run_mcp_proxy(b"not json{\n");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let line: serde_json::Value = serde_json::from_str(stdout.lines().next().unwrap()).unwrap();
+    assert_eq!(line["error"]["code"], -32001);
+    assert_eq!(
+        line["error"]["data"]["rule_id"],
+        "AGENTSHIELD-RUNTIME-INVALID-INPUT"
+    );
+    assert_eq!(output.status.code(), Some(3));
+}
