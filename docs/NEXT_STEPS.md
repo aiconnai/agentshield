@@ -4,6 +4,18 @@ Status: v0.8.0 complete plus Hermes Agent support. 7 framework/client adapters (
 
 ---
 
+## Runtime guard roadmap
+
+Runtime guard work is planned as an experimental extension to AgentShield's current offline static scanner and policy evaluation contract. The staged roadmap is:
+
+- **Shared policy event model:** define one JSON event shape for static scanner findings, runtime guard observations, and future MCP proxy decisions.
+- **Secret redaction helpers:** detect and redact common credentials before runtime events are written to logs or JSON output.
+- **Experimental `agentshield guard --stdin`:** accept one runtime event from standard input and emit a machine-readable allow, warn, or block result.
+- **MCP proxy guard mode:** design a local proxy that can observe tool calls and apply policy before tool execution.
+- **Production hardening:** add stable policy configuration, integration tests, and compatibility guarantees before runtime mode is considered stable.
+
+---
+
 ## ~~1. Real-World Validation~~ — Done
 
 Completed Feb 20, 2026. Scanned 7 Anthropic reference MCP servers. See `docs/VALIDATION_REPORT.md` for full results.

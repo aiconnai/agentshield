@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use super::{CallSite, FunctionDef, FunctionParam, LanguageParser, ParsedFile};
-use crate::analysis::cross_file::is_sanitizer;
+use crate::analysis::cross_file::{sanitizer_category, sanitizer_label, SanitizerCategory};
 use crate::error::Result;
 use crate::ir::execution_surface::*;
 use crate::ir::{ArgumentSource, Language, SourceLocation};
@@ -610,10 +610,37 @@ fn detect_sanitizer_assignments(content: &str, sanitized_vars: &mut HashSet<Stri
     for cap in SANITIZER_ASSIGN_RE.captures_iter(content) {
         let var_name = &cap[1];
         let func_name = &cap[2];
-        if is_sanitizer(func_name) {
+        if sanitizer_category(func_name)
+            .is_some_and(|category| !matches!(category, SanitizerCategory::Redaction))
+        {
             sanitized_vars.insert(var_name.to_string());
+            if let Some(label) = sanitizer_label(func_name) {
+                sanitized_vars.insert(sanitized_var_marker(var_name, &label));
+            }
         }
     }
+}
+
+fn sanitized_var_marker(var_name: &str, sanitizer_label: &str) -> String {
+    format!("{var_name}::{sanitizer_label}")
+}
+
+fn sanitized_label_for_var(ident: &str, sanitized_vars: &HashSet<String>) -> Option<String> {
+    for category in [
+        SanitizerCategory::Path,
+        SanitizerCategory::Network,
+        SanitizerCategory::TypeCoercion,
+    ] {
+        let prefix = format!("{}:", category.as_str());
+        if let Some(marker) = sanitized_vars
+            .iter()
+            .find(|value| value.starts_with(&format!("{ident}::{prefix}")))
+        {
+            return marker.split_once("::").map(|(_, label)| label.to_string());
+        }
+    }
+
+    sanitized_vars.contains(ident).then(|| ident.to_string())
 }
 
 /// Classify an argument, considering sanitized variables.
@@ -631,10 +658,8 @@ fn classify_argument_with_sanitizers(
     // Check if this is a sanitized variable (before other checks)
     let ident = first_arg.split('.').next().unwrap_or(first_arg);
     let ident = ident.split('[').next().unwrap_or(ident);
-    if sanitized_vars.contains(ident) {
-        return ArgumentSource::Sanitized {
-            sanitizer: ident.to_string(),
-        };
+    if let Some(sanitizer) = sanitized_label_for_var(ident, sanitized_vars) {
+        return ArgumentSource::Sanitized { sanitizer };
     }
 
     // Delegate to existing classification
@@ -1272,5 +1297,49 @@ function processFile(rawPath: string) {
             .parse_file(Path::new("test.ts"), code)
             .unwrap();
         assert!(parsed.sanitized_vars.contains("safePath"));
+    }
+
+    #[test]
+    fn url_parse_assignment_is_not_sanitized_for_ssrf() {
+        let code = r#"
+async function handler(args: { url: string }) {
+    const parsedUrl = URL.parse(args.url);
+    return fetch(parsedUrl);
+}
+"#;
+        let parsed = TypeScriptParser
+            .parse_file(Path::new("test.ts"), code)
+            .unwrap();
+
+        assert!(!parsed.sanitized_vars.contains("parsedUrl"));
+        assert_eq!(parsed.network_operations.len(), 1);
+        assert!(
+            parsed.network_operations[0].url_arg.is_tainted(),
+            "URL.parse output must remain tainted for network sinks"
+        );
+    }
+
+    #[test]
+    fn redaction_assignment_is_not_sanitized_for_file_paths() {
+        let code = r#"
+function redactSecret(value: string): string {
+    return value.replace(/secret/g, "[REDACTED]");
+}
+
+function handler(args: { path: string }) {
+    const redactedPath = redactSecret(args.path);
+    return fs.readFileSync(redactedPath, "utf-8");
+}
+"#;
+        let parsed = TypeScriptParser
+            .parse_file(Path::new("test.ts"), code)
+            .unwrap();
+
+        assert!(!parsed.sanitized_vars.contains("redactedPath"));
+        assert_eq!(parsed.file_operations.len(), 1);
+        assert!(
+            parsed.file_operations[0].path_arg.is_tainted(),
+            "redaction output must remain tainted for file path sinks"
+        );
     }
 }

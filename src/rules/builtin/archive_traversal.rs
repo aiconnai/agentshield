@@ -1,4 +1,4 @@
-use crate::ir::ScanTarget;
+use crate::ir::{ScanTarget, SinkClass};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
 };
@@ -73,7 +73,9 @@ impl Detector for ArchiveTraversalDetector {
 
         // Phase 1: Check dynamic_exec and commands for archive extraction functions
         for dyn_exec in &target.execution.dynamic_exec {
-            if is_archive_extract(&dyn_exec.function) && dyn_exec.code_arg.is_tainted() {
+            if is_archive_extract(&dyn_exec.function)
+                && dyn_exec.code_arg.is_tainted_for_sink(SinkClass::FilePath)
+            {
                 findings.push(Finding {
                     rule_id: "SHIELD-017".into(),
                     rule_name: "Archive Traversal (Zip Slip)".into(),
@@ -108,7 +110,9 @@ impl Detector for ArchiveTraversalDetector {
         }
 
         for cmd in &target.execution.commands {
-            if is_archive_extract(&cmd.function) && cmd.command_arg.is_tainted() {
+            if is_archive_extract(&cmd.function)
+                && cmd.command_arg.is_tainted_for_sink(SinkClass::FilePath)
+            {
                 findings.push(Finding {
                     rule_id: "SHIELD-017".into(),
                     rule_name: "Archive Traversal (Zip Slip)".into(),

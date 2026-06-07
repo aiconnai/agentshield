@@ -143,9 +143,48 @@ pub enum ArgumentSource {
     Sanitized { sanitizer: String },
 }
 
+/// The family of sink an argument flows into.
+///
+/// A sanitizer only neutralizes taint for the sink family it actually protects:
+/// a path validator makes a value safe for a file sink but not for a network
+/// sink, and a type coercion (`str()`/`Number()`) does not sanitize any
+/// injection sink. Detectors pass the sink they guard so a `Sanitized` argument
+/// is only treated as safe when its sanitizer category matches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SinkClass {
+    /// Shell/command execution.
+    Command,
+    /// Filesystem path.
+    FilePath,
+    /// Network URL/host.
+    NetworkUrl,
+    /// Dynamic code execution (eval and friends).
+    DynamicExec,
+}
+
 impl ArgumentSource {
-    /// Whether this source is potentially attacker-controlled.
+    /// Whether this source is potentially attacker-controlled, ignoring sink
+    /// category. Treats any `Sanitized` value as safe.
+    ///
+    /// Prefer [`ArgumentSource::is_tainted_for_sink`] in sink detectors: a
+    /// sanitizer of the wrong category (e.g. a URL validator guarding a file
+    /// path) must not suppress the finding.
     pub fn is_tainted(&self) -> bool {
         !matches!(self, Self::Literal(_) | Self::Sanitized { .. })
+    }
+
+    /// Whether this source is tainted for a specific sink family.
+    ///
+    /// A `Sanitized` value is safe only when its sanitizer category protects
+    /// `sink`; otherwise it stays tainted. `Literal` is always safe; every
+    /// other source is always tainted.
+    pub fn is_tainted_for_sink(&self, sink: SinkClass) -> bool {
+        match self {
+            Self::Literal(_) => false,
+            Self::Sanitized { sanitizer } => {
+                !crate::analysis::cross_file::sanitizer_allows_sink(sanitizer, sink)
+            }
+            _ => true,
+        }
     }
 }

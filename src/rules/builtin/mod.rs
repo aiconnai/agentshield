@@ -5,7 +5,7 @@ mod credential_exfil;
 mod download_exec;
 mod dynamic_exec;
 mod excessive_permissions;
-mod metadata_ssrf;
+pub(crate) mod metadata_ssrf;
 mod no_lockfile;
 mod overbroad_fs;
 mod prompt_injection;

@@ -224,6 +224,7 @@ impl CredentialExfilDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter::auto_detect_and_load;
     use crate::ir::data_surface::*;
     use crate::ir::execution_surface::*;
     use crate::ir::*;
@@ -237,6 +238,15 @@ mod tests {
             end_line: None,
             end_column: None,
         }
+    }
+
+    fn fixture_findings(name: &str) -> Vec<Finding> {
+        let fixture_path = PathBuf::from("tests/fixtures/mcp_servers").join(name);
+        auto_detect_and_load(&fixture_path, false)
+            .unwrap_or_else(|err| panic!("failed to load fixture {name}: {err}"))
+            .iter()
+            .flat_map(|target| CredentialExfilDetector.run(target))
+            .collect()
     }
 
     #[test]
@@ -584,6 +594,28 @@ mod tests {
         assert!(
             findings.is_empty(),
             "ToolArgument->ProcessExec should not trigger credential exfil"
+        );
+    }
+
+    #[test]
+    fn safe_redacted_logging_has_no_credential_exfiltration_finding() {
+        let findings = fixture_findings("safe_redacted_logging");
+
+        assert!(
+            findings.is_empty(),
+            "redacted logging fixture should not trigger credential exfiltration: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn vuln_cred_exfil_still_has_credential_exfiltration_finding() {
+        let findings = fixture_findings("vuln_cred_exfil");
+
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.rule_id == "SHIELD-002"),
+            "vulnerable credential exfiltration fixture should still trigger SHIELD-002"
         );
     }
 }

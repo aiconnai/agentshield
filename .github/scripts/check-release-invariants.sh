@@ -36,9 +36,36 @@ if ! grep -Fq "$version" README.md; then
   exit 1
 fi
 
-docker_tag="ghcr.io/aiconnai/agentshield:${version}"
+docker_image="ghcr.io/aiconnai/agentshield"
+docker_tag="${docker_image}:${version}"
 if ! grep -Fq "$docker_tag" README.md; then
   echo "README.md does not document Docker tag $docker_tag"
+  exit 1
+fi
+
+release_workflow=".github/workflows/release.yml"
+if ! grep -Fq 'version="${GITHUB_REF_NAME#v}"' "$release_workflow"; then
+  echo "Release workflow must strip the leading v from Docker version tags"
+  exit 1
+fi
+
+if ! grep -Fq 'ghcr.io/aiconnai/agentshield:${{ steps.docker-version.outputs.version }}' "$release_workflow"; then
+  echo "Release workflow must publish ${docker_image}:<version>"
+  exit 1
+fi
+
+if ! grep -Fq 'ghcr.io/aiconnai/agentshield:latest' "$release_workflow"; then
+  echo "Release workflow must publish ${docker_image}:latest"
+  exit 1
+fi
+
+if grep -Fq 'ghcr.io/${{ github.repository_owner }}/agentshield:${{ github.ref_name }}' "$release_workflow"; then
+  echo "Release workflow must not publish GHCR tags with repository_owner/ref_name"
+  exit 1
+fi
+
+if grep -Fq 'ghcr.io/${{ github.repository_owner }}/agentshield:latest' "$release_workflow"; then
+  echo "Release workflow must not publish latest under repository_owner"
   exit 1
 fi
 

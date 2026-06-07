@@ -1,3 +1,5 @@
+#[cfg(feature = "runtime-guard")]
+use std::io::Read;
 use std::path::PathBuf;
 use std::process;
 
@@ -11,7 +13,14 @@ use agentshield::egress::policy::EgressPolicy;
 use agentshield::egress::proxy::EgressProxy;
 use agentshield::output::OutputFormat;
 use agentshield::rules::{RuleEngine, Severity};
+#[cfg(feature = "runtime-guard")]
+use agentshield::runtime::{
+    evaluate_runtime_event, invalid_runtime_guard_input, RuntimeEvent, RuntimeVerdict,
+};
 use agentshield::ScanOptions;
+
+#[cfg(feature = "runtime-guard")]
+const GUARD_STDIN_MAX_BYTES: usize = 1024 * 1024;
 
 #[derive(Parser)]
 #[command(
@@ -128,6 +137,14 @@ enum Commands {
         ignore_tests: bool,
     },
 
+    /// Evaluate one runtime event from stdin as JSON
+    #[cfg(feature = "runtime-guard")]
+    Guard {
+        /// Read a RuntimeEvent JSON document from stdin
+        #[arg(long)]
+        stdin: bool,
+    },
+
     /// Generate a DSSE attestation envelope for scan results
     Certify {
         /// Path to the extension directory
@@ -212,6 +229,8 @@ fn main() {
             json,
             ignore_tests,
         } => cmd_doctor(path, config, json, ignore_tests),
+        #[cfg(feature = "runtime-guard")]
+        Commands::Guard { stdin } => cmd_guard(stdin),
         Commands::Certify {
             path,
             sign_key,
@@ -235,6 +254,85 @@ fn main() {
             process::exit(e.exit_code());
         }
     }
+}
+
+#[cfg(feature = "runtime-guard")]
+fn cmd_guard(read_stdin: bool) -> agentshield::error::Result<i32> {
+    if !read_stdin {
+        return emit_invalid_guard_input("unsupported runtime guard invocation", false);
+    }
+
+    let mut input = Vec::new();
+    let read_result = std::io::stdin()
+        .lock()
+        .take((GUARD_STDIN_MAX_BYTES + 1) as u64)
+        .read_to_end(&mut input);
+
+    if read_result.is_err() {
+        return emit_invalid_guard_input("runtime guard stdin read failed", true);
+    }
+
+    if input.len() > GUARD_STDIN_MAX_BYTES {
+        return emit_invalid_guard_input("runtime guard stdin exceeds 1048576 byte limit", true);
+    }
+
+    let input = match String::from_utf8(input) {
+        Ok(input) => input,
+        Err(_) => return emit_invalid_guard_input("non-UTF-8 runtime guard input", true),
+    };
+
+    let event: RuntimeEvent = match serde_json::from_str(&input) {
+        Ok(event) => event,
+        Err(err) => {
+            let reason = match err.classify() {
+                serde_json::error::Category::Eof => "truncated JSON runtime guard input",
+                serde_json::error::Category::Syntax | serde_json::error::Category::Data => {
+                    "malformed JSON runtime guard input"
+                }
+                serde_json::error::Category::Io => "runtime guard JSON read failed",
+            };
+            return emit_invalid_guard_input(reason, true);
+        }
+    };
+
+    let result = evaluate_runtime_event(event);
+    let verdict = result.verdict;
+    // Emit without `?`: a serialization or broken-pipe error must not propagate
+    // to the generic exit code (2) and read as "not blocked". The guard fails
+    // closed — any output failure maps to the block code.
+    if emit_guard_result(&result).is_err() {
+        return Ok(GUARD_BLOCK_EXIT);
+    }
+
+    match verdict {
+        RuntimeVerdict::Allow | RuntimeVerdict::Warn => Ok(0),
+        RuntimeVerdict::Block => Ok(GUARD_BLOCK_EXIT),
+    }
+}
+
+/// Exit code signalling a fail-closed block from the runtime guard.
+#[cfg(feature = "runtime-guard")]
+const GUARD_BLOCK_EXIT: i32 = 3;
+
+/// Serialize and print a guard result. Returns Err only on a serialization or
+/// stdout-write failure, which the caller maps to a fail-closed block.
+#[cfg(feature = "runtime-guard")]
+fn emit_guard_result(
+    result: &agentshield::runtime::RuntimeGuardResult,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rendered = serde_json::to_string_pretty(result)?;
+    use std::io::Write;
+    writeln!(std::io::stdout(), "{rendered}")?;
+    Ok(())
+}
+
+#[cfg(feature = "runtime-guard")]
+fn emit_invalid_guard_input(reason: &str, redacted: bool) -> agentshield::error::Result<i32> {
+    let result = invalid_runtime_guard_input(reason, redacted);
+    // Ignore output errors: the verdict is already block, and a write failure
+    // must not downgrade the exit code away from the fail-closed block.
+    let _ = emit_guard_result(&result);
+    Ok(GUARD_BLOCK_EXIT)
 }
 
 /// Arguments for the scan subcommand, extracted to avoid too-many-arguments.

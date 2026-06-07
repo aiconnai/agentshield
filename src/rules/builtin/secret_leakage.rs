@@ -186,9 +186,12 @@ impl Detector for SecretLeakageDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter::auto_detect_and_load;
+    use crate::analysis::cross_file::is_redaction_sanitizer;
     use crate::ir::data_surface::*;
     use crate::ir::execution_surface::*;
     use crate::ir::*;
+    use crate::rules::RuleEngine;
     use std::path::PathBuf;
 
     fn loc() -> SourceLocation {
@@ -213,6 +216,17 @@ mod tests {
             provenance: Default::default(),
             source_files: vec![],
         }
+    }
+
+    fn fixture_findings(name: &str) -> Vec<Finding> {
+        let fixture_path = PathBuf::from("tests/fixtures/mcp_servers").join(name);
+        let engine = RuleEngine::new();
+
+        auto_detect_and_load(&fixture_path, false)
+            .unwrap_or_else(|err| panic!("failed to load fixture {name}: {err}"))
+            .iter()
+            .flat_map(|target| engine.run(target))
+            .collect()
     }
 
     #[test]
@@ -325,5 +339,24 @@ mod tests {
 
         let findings = SecretLeakageDetector.run(&target);
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn redaction_helpers_are_sanitizers_for_secret_leakage_analysis() {
+        assert!(is_redaction_sanitizer("redactSecret"));
+        assert!(is_redaction_sanitizer("maskToken"));
+        assert!(is_redaction_sanitizer("scrubCredentials"));
+    }
+
+    #[test]
+    fn safe_redacted_logging_has_no_secret_leakage_finding() {
+        let findings = fixture_findings("safe_redacted_logging");
+
+        assert!(
+            findings
+                .iter()
+                .all(|finding| finding.rule_id != "SHIELD-018"),
+            "redacted logging fixture should not trigger secret leakage: {findings:?}"
+        );
     }
 }

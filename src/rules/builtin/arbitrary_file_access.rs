@@ -1,4 +1,4 @@
-use crate::ir::{ArgumentSource, ScanTarget};
+use crate::ir::{ArgumentSource, ScanTarget, SinkClass};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
 };
@@ -25,13 +25,19 @@ impl Detector for ArbitraryFileAccessDetector {
         let mut findings = Vec::new();
 
         for file_op in &target.execution.file_operations {
-            if file_op.path_arg.is_tainted() {
+            if file_op.path_arg.is_tainted_for_sink(SinkClass::FilePath) {
                 let source_desc = match &file_op.path_arg {
                     ArgumentSource::Parameter { name } => format!("parameter '{name}'"),
                     ArgumentSource::Interpolated => "interpolated string".into(),
                     ArgumentSource::Unknown => "unknown source".into(),
                     ArgumentSource::EnvVar { name } => format!("env var '{name}'"),
-                    ArgumentSource::Literal(_) | ArgumentSource::Sanitized { .. } => continue,
+                    // A sanitizer that reached here cleared the FilePath gate
+                    // check only by being the wrong category (e.g. a URL
+                    // validator guarding a file path).
+                    ArgumentSource::Sanitized { sanitizer } => {
+                        format!("value from wrong-category sanitizer '{sanitizer}'")
+                    }
+                    ArgumentSource::Literal(_) => continue,
                 };
 
                 let confidence = match &file_op.path_arg {

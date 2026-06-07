@@ -37,6 +37,8 @@ We selected 12 of the most popular MCP server repositories on GitHub, representi
 
 We ran AgentShield against each, scanning for 12 categories of vulnerabilities including command injection, SSRF, credential exfiltration, arbitrary file access, and supply chain issues.
 
+AgentShield starts with static analysis because much of the extension risk surface is visible before execution: code, manifests, schemas, dependencies, tool definitions, and client configuration all reveal what an agent extension can do. Runtime guard work is planned as an incremental extension to that static scanner, not a replacement for it.
+
 ## Results at a Glance
 
 | Severity | Findings |
@@ -199,6 +201,8 @@ Run MCP servers in containers or with restricted filesystem access. Don't give a
 - **4 output formats:** console, JSON, SARIF (GitHub Code Scanning), HTML
 - **GitHub Action** with PR inline annotations
 - **VS Code extension** with inline diagnostics
+
+Today, AgentShield's stable capability is local static scanning plus policy evaluation. It is not a hosted monitoring service, runtime sandbox, or allowlist marketplace. Runtime guard and MCP proxy guard ideas are roadmap work intended to build on the same policy model after the static scanner contract remains clear and stable.
 
 Install it:
 

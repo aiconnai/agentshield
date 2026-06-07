@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -136,3 +137,49 @@ jobs:
             artifacts/agentshield-*.tar.gz
             artifacts/agentshield-*.zip
             artifacts/agentshield-*.sha256
+
+  docker:
+    name: Publish Docker image
+    needs: version-check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive Docker version tag
+        id: docker-version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [ "$version" = "$GITHUB_REF_NAME" ]; then
+            echo "Release tag must start with v; got $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/aiconnai/agentshield:${{ steps.docker-version.outputs.version }}
+            ghcr.io/aiconnai/agentshield:latest
+          cache-from: type=gha,scope=agentshield-docker
+          cache-to: type=gha,mode=max,scope=agentshield-docker

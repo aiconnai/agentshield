@@ -1,4 +1,4 @@
-use crate::ir::{ArgumentSource, ScanTarget};
+use crate::ir::{ArgumentSource, ScanTarget, SinkClass};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
 };
@@ -29,9 +29,16 @@ impl Detector for SsrfDetector {
                 ArgumentSource::Parameter { .. } => (true, Confidence::High),
                 ArgumentSource::Interpolated => (true, Confidence::Medium),
                 ArgumentSource::Unknown => (true, Confidence::Medium),
-                ArgumentSource::Literal(_)
-                | ArgumentSource::EnvVar { .. }
-                | ArgumentSource::Sanitized { .. } => (false, Confidence::Low),
+                ArgumentSource::Literal(_) | ArgumentSource::EnvVar { .. } => {
+                    (false, Confidence::Low)
+                }
+                // A sanitizer only clears taint when it actually guards a
+                // network sink (an allowlist validator). A path/type/redaction
+                // sanitizer on a URL sink does not, so it stays flagged.
+                ArgumentSource::Sanitized { .. } => (
+                    net_op.url_arg.is_tainted_for_sink(SinkClass::NetworkUrl),
+                    Confidence::Medium,
+                ),
             };
 
             if should_flag {
