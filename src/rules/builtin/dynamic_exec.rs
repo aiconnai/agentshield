@@ -1,4 +1,4 @@
-use crate::ir::ScanTarget;
+use crate::ir::{ScanTarget, SinkClass};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
 };
@@ -26,7 +26,7 @@ impl Detector for DynamicExecDetector {
         let mut findings = Vec::new();
 
         for exec in &target.execution.dynamic_exec {
-            if !exec.code_arg.is_tainted() {
+            if !exec.code_arg.is_tainted_for_sink(SinkClass::DynamicExec) {
                 continue; // Literal eval("1+1") is safe
             }
 

@@ -1,4 +1,4 @@
-use crate::ir::{ArgumentSource, ScanTarget};
+use crate::ir::{ArgumentSource, ScanTarget, SinkClass};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
 };
@@ -36,7 +36,14 @@ impl Detector for CommandInjectionDetector {
                     (has_expansion, Confidence::Medium)
                 }
                 ArgumentSource::EnvVar { .. } => (true, Confidence::Medium),
-                ArgumentSource::Sanitized { .. } => (false, Confidence::High),
+                // A sanitizer clears command taint only if it guards a command
+                // sink. No sanitizer category currently does (type coercion is
+                // not shell-escaping), so a wrong-category sanitizer stays
+                // flagged rather than silently suppressing the finding.
+                ArgumentSource::Sanitized { .. } => (
+                    cmd.command_arg.is_tainted_for_sink(SinkClass::Command),
+                    Confidence::High,
+                ),
             };
 
             if should_flag {

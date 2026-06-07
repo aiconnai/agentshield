@@ -31,13 +31,7 @@ impl SanitizerCategory {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SinkCategory {
-    Command,
-    FilePath,
-    NetworkUrl,
-    DynamicExec,
-}
+use crate::ir::SinkClass;
 
 /// Path/file sanitizers. These are safe for file/path sinks only.
 static PATH_SANITIZER_NAMES: &[&str] = &[
@@ -188,31 +182,64 @@ pub fn sanitizer_label(name: &str) -> Option<String> {
     sanitizer_category(name).map(|category| format!("{}:{name}", category.as_str()))
 }
 
-fn sanitizer_allows_sink(sanitizer: &str, sink: SinkCategory) -> bool {
+/// Whether `sanitizer` neutralizes taint for `sink`.
+///
+/// Each sanitizer category protects only its own sink family. Type coercion
+/// (`str()`/`Number()`) is identity on a string and is NOT accepted for any
+/// injection sink — it neither escapes shell metacharacters nor constrains a
+/// path or URL. Redaction sanitizers protect no input sink (only credential/log
+/// leakage analysis), so they are absent here.
+pub(crate) fn sanitizer_allows_sink(sanitizer: &str, sink: SinkClass) -> bool {
+    // A cross-file downgrade is proven safe for exactly one sink.
+    if let Some(downgraded_sink) = cross_file_sink(sanitizer) {
+        return downgraded_sink == sink;
+    }
+
     matches!(
         (sanitizer_category(sanitizer), sink),
-        (Some(SanitizerCategory::Path), SinkCategory::FilePath)
-            | (Some(SanitizerCategory::Network), SinkCategory::NetworkUrl)
-            | (Some(SanitizerCategory::TypeCoercion), SinkCategory::Command)
-            | (
-                Some(SanitizerCategory::TypeCoercion),
-                SinkCategory::DynamicExec
-            )
+        (Some(SanitizerCategory::Path), SinkClass::FilePath)
+            | (Some(SanitizerCategory::Network), SinkClass::NetworkUrl)
     )
 }
 
-fn arg_safe_for_sink(arg: &ArgumentSource, sink: SinkCategory) -> bool {
-    match arg {
-        ArgumentSource::Literal(_) => true,
-        ArgumentSource::Sanitized { sanitizer } => sanitizer_allows_sink(sanitizer, sink),
-        _ => false,
+fn arg_safe_for_sink(arg: &ArgumentSource, sink: SinkClass) -> bool {
+    !arg.is_tainted_for_sink(sink)
+}
+
+/// Prefix marking a cross-file downgrade label, followed by the exact sink it
+/// was proven safe for. Unlike a named sanitizer (which protects a whole
+/// category), a cross-file downgrade is proven safe for precisely one sink, so
+/// the sink is encoded directly and matched back in [`sanitizer_allows_sink`].
+const CROSS_FILE_SANITIZER_PREFIX: &str = "crossfile";
+
+fn cross_file_sanitizer_label(sink: SinkClass, func_name: &str) -> String {
+    let sink_tag = match sink {
+        SinkClass::Command => "command",
+        SinkClass::FilePath => "filepath",
+        SinkClass::NetworkUrl => "networkurl",
+        SinkClass::DynamicExec => "dynamicexec",
+    };
+    format!("{CROSS_FILE_SANITIZER_PREFIX}:{sink_tag}:caller passes sanitized value to {func_name}")
+}
+
+fn cross_file_sink(sanitizer: &str) -> Option<SinkClass> {
+    let rest = sanitizer
+        .strip_prefix(CROSS_FILE_SANITIZER_PREFIX)?
+        .strip_prefix(':')?;
+    let tag = rest.split(':').next()?;
+    match tag {
+        "command" => Some(SinkClass::Command),
+        "filepath" => Some(SinkClass::FilePath),
+        "networkurl" => Some(SinkClass::NetworkUrl),
+        "dynamicexec" => Some(SinkClass::DynamicExec),
+        _ => None,
     }
 }
 
 fn all_call_sites_safe_for_sink(
     sites: &[Vec<ArgumentSource>],
     param_idx: usize,
-    sink: SinkCategory,
+    sink: SinkClass,
 ) -> bool {
     sites.iter().all(|args| {
         args.get(param_idx)
@@ -271,7 +298,7 @@ pub fn apply_cross_file_sanitization(
     // Phase 3: Determine which functions have all-sanitized parameters per sink.
     // For each function with a definition AND call sites, check if every
     // call site passes values safe for each sink category.
-    let mut params_to_downgrade: Vec<(usize, String, String, SinkCategory)> = Vec::new();
+    let mut params_to_downgrade: Vec<(usize, String, String, SinkClass)> = Vec::new();
 
     for (func_name, defs) in &func_defs {
         let sites = match call_sites.get(func_name) {
@@ -286,10 +313,10 @@ pub fn apply_cross_file_sanitization(
             // Check each parameter position
             for (param_idx, param_name) in params.iter().enumerate() {
                 for sink in [
-                    SinkCategory::Command,
-                    SinkCategory::FilePath,
-                    SinkCategory::NetworkUrl,
-                    SinkCategory::DynamicExec,
+                    SinkClass::Command,
+                    SinkClass::FilePath,
+                    SinkClass::NetworkUrl,
+                    SinkClass::DynamicExec,
                 ] {
                     if all_call_sites_safe_for_sink(sites, param_idx, sink) {
                         params_to_downgrade.push((
@@ -307,7 +334,11 @@ pub fn apply_cross_file_sanitization(
     // Phase 4: Downgrade operations in the target functions.
     for (file_idx, param_name, func_name, sink) in &params_to_downgrade {
         let (_, parsed) = &mut parsed_files[*file_idx];
-        let sanitizer_label = format!("caller passes {sink:?}-sanitized value to {func_name}");
+        // Encode the exact sink this downgrade was proven safe for, so the
+        // label round-trips through `sanitizer_allows_sink` and clears taint
+        // for THIS sink only. A bare description would parse to no category and
+        // resurface as a false positive now that detectors are sink-aware.
+        let sanitizer_label = cross_file_sanitizer_label(*sink, func_name);
 
         let sanitized = ArgumentSource::Sanitized {
             sanitizer: sanitizer_label.clone(),
@@ -315,7 +346,7 @@ pub fn apply_cross_file_sanitization(
         let mut local_downgraded = 0;
 
         match sink {
-            SinkCategory::Command => {
+            SinkClass::Command => {
                 for cmd in &mut parsed.commands {
                     if matches!(&cmd.command_arg, ArgumentSource::Parameter { name } if name == param_name)
                     {
@@ -325,7 +356,7 @@ pub fn apply_cross_file_sanitization(
                     }
                 }
             }
-            SinkCategory::FilePath => {
+            SinkClass::FilePath => {
                 for op in &mut parsed.file_operations {
                     if matches!(&op.path_arg, ArgumentSource::Parameter { name } if name == param_name)
                     {
@@ -335,7 +366,7 @@ pub fn apply_cross_file_sanitization(
                     }
                 }
             }
-            SinkCategory::NetworkUrl => {
+            SinkClass::NetworkUrl => {
                 for op in &mut parsed.network_operations {
                     if matches!(&op.url_arg, ArgumentSource::Parameter { name } if name == param_name)
                     {
@@ -345,7 +376,7 @@ pub fn apply_cross_file_sanitization(
                     }
                 }
             }
-            SinkCategory::DynamicExec => {
+            SinkClass::DynamicExec => {
                 for op in &mut parsed.dynamic_exec {
                     if matches!(&op.code_arg, ArgumentSource::Parameter { name } if name == param_name)
                     {
@@ -610,6 +641,55 @@ mod tests {
                 .any(|finding| finding.rule_id == "SHIELD-004"),
             "redacted file path fixture should still trigger arbitrary file access: {findings:?}"
         );
+    }
+
+    #[test]
+    fn wrong_category_sanitizer_does_not_suppress_file_sink() {
+        // A network-category validator (validateUrl) applied to a value used as
+        // a FILE PATH within the same function must NOT suppress SHIELD-004.
+        let findings = fixture_findings("vuln_wrong_category_sanitizer");
+
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.rule_id == "SHIELD-004"),
+            "a network validator on a file-path sink must still trigger arbitrary file access: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn type_coercion_is_not_a_command_sanitizer() {
+        // str()/String() coercion is identity on a string and does not
+        // neutralize shell metacharacters, so it must not be accepted as a
+        // sanitizer for command or dynamic-exec sinks.
+        let coerced = ArgumentSource::Sanitized {
+            sanitizer: "type:str".into(),
+        };
+        assert!(
+            !arg_safe_for_sink(&coerced, SinkClass::Command),
+            "type coercion must not sanitize a command sink"
+        );
+        assert!(
+            !arg_safe_for_sink(&coerced, SinkClass::DynamicExec),
+            "type coercion must not sanitize a dynamic-exec sink"
+        );
+    }
+
+    #[test]
+    fn argument_source_is_tainted_for_sink_respects_category() {
+        // A network-category sanitizer is safe for a network sink but tainted
+        // for a file-path sink.
+        let net = ArgumentSource::Sanitized {
+            sanitizer: "network:validateUrl".into(),
+        };
+        assert!(!net.is_tainted_for_sink(SinkClass::NetworkUrl));
+        assert!(net.is_tainted_for_sink(SinkClass::FilePath));
+
+        let path = ArgumentSource::Sanitized {
+            sanitizer: "path:validatePath".into(),
+        };
+        assert!(!path.is_tainted_for_sink(SinkClass::FilePath));
+        assert!(path.is_tainted_for_sink(SinkClass::NetworkUrl));
     }
 
     #[test]
