@@ -5,6 +5,31 @@ All notable changes to AgentShield will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.6] - 2026-06-07
+
+### Added
+
+- Experimental bidirectional stdio transport for
+  `agentshield guard --mcp-proxy -- <server cmd...>` behind the `runtime-guard`
+  feature. The proxy now spawns a downstream MCP server, forwards allowed and
+  warning `tools/call` requests as original JSON-RPC bytes, and streams server
+  responses back to the host.
+- Transport integration coverage with a fake MCP server fixture, proving that
+  blocked calls are answered by the proxy and never reach the downstream server.
+
+### Fixed
+
+- Blocked MCP tool calls continue to return safe JSON-RPC error `-32001`, while
+  downstream write failures now return `-32002` (`Downstream MCP server
+  unavailable`) instead of dropping allowed requests silently.
+- Avoided a stdout locking deadlock in the transport pump by locking per
+  response line.
+
+### Changed
+
+- `agentshield guard --mcp-proxy` without a server command keeps the 0.8.5
+  line-protocol mode that emits `{"forward": <request>}` for allowed traffic.
+
 ## [0.8.5] - 2026-06-07
 
 ### Added
