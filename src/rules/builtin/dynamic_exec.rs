@@ -43,7 +43,14 @@ impl Detector for DynamicExecDetector {
                 crate::ir::ArgumentSource::EnvVar { name } => {
                     (Confidence::Medium, format!("from env var '{}'", name))
                 }
-                _ => continue,
+                // Reached only past the is_tainted_for_sink(DynamicExec) gate
+                // above, i.e. a sanitizer of the wrong category (e.g. a type
+                // coercion or path validator guarding an eval sink).
+                crate::ir::ArgumentSource::Sanitized { sanitizer } => (
+                    Confidence::High,
+                    format!("from wrong-category sanitizer '{sanitizer}'"),
+                ),
+                crate::ir::ArgumentSource::Literal(_) => continue,
             };
 
             findings.push(Finding {

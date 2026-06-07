@@ -658,6 +658,21 @@ mod tests {
     }
 
     #[test]
+    fn type_coercion_does_not_suppress_eval_sink() {
+        // String()/str() coercion on an attacker value passed to eval must
+        // still fire SHIELD-011 — coercion is the wrong sanitizer category for
+        // a dynamic-exec sink and escapes nothing.
+        let findings = fixture_findings("vuln_coercion_eval");
+
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.rule_id == "SHIELD-011"),
+            "type coercion on an eval sink must still trigger dynamic exec: {findings:?}"
+        );
+    }
+
+    #[test]
     fn type_coercion_is_not_a_command_sanitizer() {
         // str()/String() coercion is identity on a string and does not
         // neutralize shell metacharacters, so it must not be accepted as a
