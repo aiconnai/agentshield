@@ -143,6 +143,17 @@ enum Commands {
         /// Read a RuntimeEvent JSON document from stdin
         #[arg(long)]
         stdin: bool,
+
+        /// EXPERIMENTAL: run an MCP JSON-RPC proxy guard. Reads JSON-RPC
+        /// messages (one per line) on stdin, evaluates `tools/call` against
+        /// runtime policy, and emits a forward marker or a block error.
+        #[arg(long)]
+        mcp_proxy: bool,
+
+        /// Path to .agentshield.toml for the `[runtime.proxy]` policy
+        /// (defaults to ./.agentshield.toml).
+        #[arg(long)]
+        config: Option<std::path::PathBuf>,
     },
 
     /// Generate a DSSE attestation envelope for scan results
@@ -230,7 +241,17 @@ fn main() {
             ignore_tests,
         } => cmd_doctor(path, config, json, ignore_tests),
         #[cfg(feature = "runtime-guard")]
-        Commands::Guard { stdin } => cmd_guard(stdin),
+        Commands::Guard {
+            stdin,
+            mcp_proxy,
+            config,
+        } => {
+            if mcp_proxy {
+                cmd_mcp_proxy(config)
+            } else {
+                cmd_guard(stdin)
+            }
+        }
         Commands::Certify {
             path,
             sign_key,
@@ -313,6 +334,131 @@ fn cmd_guard(read_stdin: bool) -> agentshield::error::Result<i32> {
 /// Exit code signalling a fail-closed block from the runtime guard.
 #[cfg(feature = "runtime-guard")]
 const GUARD_BLOCK_EXIT: i32 = 3;
+
+/// Run the experimental MCP JSON-RPC proxy guard.
+///
+/// Reads JSON-RPC messages one per line from stdin. Each is evaluated by the
+/// shared decision core: `tools/call` requests are checked against
+/// `[runtime.proxy]` policy and either forwarded or blocked; everything else
+/// passes through. For a forwarded message the proxy emits a `{"forward": ...}`
+/// envelope carrying the original request (a downstream MCP server transport
+/// would consume this); for a blocked message it emits the JSON-RPC error.
+/// Fails closed: a line that is not valid JSON is blocked.
+#[cfg(feature = "runtime-guard")]
+fn cmd_mcp_proxy(config_path: Option<std::path::PathBuf>) -> agentshield::error::Result<i32> {
+    use agentshield::runtime::{decide_tool_call, ProxyDecision};
+    use std::io::{BufRead, Write};
+
+    let policy = load_proxy_policy(config_path);
+    let mut blocked_any = false;
+
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+
+    let mut reader = stdin.lock();
+    let mut raw = Vec::new();
+    loop {
+        // Read one line with a hard byte cap so a single huge line cannot
+        // exhaust memory (mirrors the stdin guard's 1 MiB limit). A line that
+        // exceeds the cap is treated as malformed and blocked (fail closed).
+        raw.clear();
+        let read = (&mut reader)
+            .take((GUARD_STDIN_MAX_BYTES + 1) as u64)
+            .read_until(b'\n', &mut raw);
+        let n = match read {
+            Ok(0) => break, // EOF
+            Ok(n) => n,
+            Err(_) => break,
+        };
+        let over_limit = n > GUARD_STDIN_MAX_BYTES;
+        let line = String::from_utf8_lossy(&raw);
+        let line = line.trim_end_matches(['\n', '\r']);
+        if !over_limit && line.trim().is_empty() {
+            continue;
+        }
+
+        let parsed = if over_limit {
+            // Force the fail-closed branch below without parsing a truncated line.
+            Err(())
+        } else {
+            serde_json::from_str::<serde_json::Value>(line).map_err(|_| ())
+        };
+
+        let response = match parsed {
+            Ok(request) => {
+                match decide_tool_call(&request, &policy) {
+                    ProxyDecision::Forward => serde_json::json!({ "forward": request }),
+                    ProxyDecision::ForwardSuppressed { rule_id } => {
+                        // Audit: a block was suppressed by a `never` override.
+                        eprintln!("agentshield: forwarded a {rule_id} block suppressed by a 'never' override");
+                        serde_json::json!({ "forward": request })
+                    }
+                    ProxyDecision::Block(error) => {
+                        blocked_any = true;
+                        error
+                    }
+                }
+            }
+            // Fail closed: an unparseable line is blocked with a synthetic error.
+            Err(_) => {
+                blocked_any = true;
+                serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": serde_json::Value::Null,
+                    "error": {
+                        "code": agentshield::runtime::mcp_proxy::BLOCKED_ERROR_CODE,
+                        "message": "Blocked by AgentShield runtime guard",
+                        "data": { "verdict": "block", "rule_id": "AGENTSHIELD-RUNTIME-INVALID-INPUT", "schema_version": "v1" }
+                    }
+                })
+            }
+        };
+
+        // Best-effort line-delimited output; a write failure ends the loop.
+        match serde_json::to_string(&response) {
+            Ok(rendered) => {
+                if writeln!(out, "{rendered}").is_err() {
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+
+    // Non-zero exit if any call was blocked, so a wrapper can detect it.
+    Ok(if blocked_any { GUARD_BLOCK_EXIT } else { 0 })
+}
+
+/// Build a `ProxyPolicy` from the `[runtime.proxy]` config section.
+#[cfg(feature = "runtime-guard")]
+fn load_proxy_policy(config_path: Option<std::path::PathBuf>) -> agentshield::runtime::ProxyPolicy {
+    use agentshield::config::{Config, ProxyFailOn};
+    use agentshield::runtime::{FailOn, ProxyPolicy};
+
+    fn map_fail_on(value: ProxyFailOn) -> FailOn {
+        match value {
+            ProxyFailOn::Block => FailOn::Block,
+            ProxyFailOn::Warn => FailOn::Warn,
+            ProxyFailOn::Never => FailOn::Never,
+        }
+    }
+
+    let path = config_path.unwrap_or_else(|| std::path::PathBuf::from(".agentshield.toml"));
+    // A missing/invalid config falls back to defaults (block-on-block).
+    let config = Config::load(&path).unwrap_or_default();
+
+    ProxyPolicy {
+        fail_on: map_fail_on(config.runtime.proxy.fail_on),
+        tool_overrides: config
+            .runtime
+            .proxy
+            .tool_overrides
+            .into_iter()
+            .map(|override_entry| (override_entry.name, map_fail_on(override_entry.fail_on)))
+            .collect(),
+    }
+}
 
 /// Serialize and print a guard result. Returns Err only on a serialization or
 /// stdout-write failure, which the caller maps to a fail-closed block.
