@@ -87,10 +87,12 @@ forwards or blocks it before the underlying server runs. The design
 goal is to make tool-call risk visible at the one boundary where arguments, tool
 metadata, and policy can be evaluated together — without hosted telemetry.
 
-> Status: experimental implementation. AgentShield 0.8.5 implements the pure
-> decision core and a line-delimited stdio JSON-RPC loop. It intentionally reuses
-> the existing `guard --stdin` evaluation core (`evaluate_runtime_event`) so the
-> proxy reuses, rather than re-implements, policy and redaction.
+> Status: experimental implementation. AgentShield 0.8.6 implements the pure
+> decision core, the 0.8.5 line-delimited stdio JSON-RPC loop, and a
+> bidirectional stdio bridge that can spawn a downstream MCP server. It
+> intentionally reuses the existing `guard --stdin` evaluation core
+> (`evaluate_runtime_event`) so the proxy reuses, rather than re-implements,
+> policy and redaction.
 
 ### Request/response flow
 
@@ -105,18 +107,23 @@ agent host ──tools/call──▶ agentshield proxy ──(allow)──▶ MC
                             allow / warn / block ◀──forward result──
 ```
 
-1. The current stdio guard loop reads one JSON-RPC message per line. It forwards
-   `initialize`, `tools/list`, `resources/*`, `prompts/*`, and any non-call
-   traffic by emitting `{"forward": <request>}` for a downstream transport.
-2. On a `tools/call` request it pauses forwarding and builds a `RuntimeEvent`
+1. In transport mode, `agentshield guard --mcp-proxy -- <server cmd...>` spawns
+   the downstream MCP server and bridges line-delimited stdio in both
+   directions.
+2. In line mode, `agentshield guard --mcp-proxy` keeps the 0.8.5 behavior: it
+   reads one JSON-RPC message per line and emits `{"forward": <request>}` for
+   allowed traffic so an external transport can forward it.
+3. The proxy forwards `initialize`, `tools/list`, `resources/*`, `prompts/*`,
+   and any non-call traffic without policy modification.
+4. On a `tools/call` request it pauses forwarding and builds a `RuntimeEvent`
    from the JSON-RPC `params` (`name` → `tool_name`, `arguments` → `arguments`,
    plus any `command`/`url`/`path` extractable from the arguments).
-3. It evaluates the event with the shared `evaluate_runtime_event` core, getting
+5. It evaluates the event with the shared `evaluate_runtime_event` core, getting
    a `RuntimeGuardResult` (`allow` / `warn` / `block`) and a redacted event.
-4. **Allow / warn**: the original (unmodified) request is emitted as
-   `{"forward": <request>}`. A downstream transport can consume that marker and
-   forward the request to the MCP server.
-5. **Block**: the request is NOT forwarded. The proxy synthesizes a JSON-RPC
+6. **Allow / warn**: the original (unmodified) request is forwarded to the
+   downstream MCP server in transport mode, or emitted as
+   `{"forward": <request>}` in line mode.
+7. **Block**: the request is NOT forwarded. The proxy synthesizes a JSON-RPC
    error response (see "Safe error response") and returns it to the host as if
    it came from the server. The server never sees the call.
 
@@ -134,10 +141,10 @@ agent host ──tools/call──▶ agentshield proxy ──(allow)──▶ MC
 
 ### Allow / warn / block behavior
 
-| Verdict | Forward marker? | Returned to host | Audit |
+| Verdict | Forwarded? | Returned to host | Audit |
 |---|---|---|---|
-| `allow` | yes | downstream transport handles server response | no stderr audit |
-| `warn`  | yes | downstream transport handles server response | no stderr audit |
+| `allow` | yes | downstream server response in transport mode; forward marker in line mode | no stderr audit |
+| `warn`  | yes | downstream server response in transport mode; forward marker in line mode | no stderr audit |
 | `block` | no  | synthetic JSON-RPC error | rule id in safe error data |
 
 `warn` deliberately does not alter the response — it surfaces risk without
@@ -147,6 +154,11 @@ The stdio loop exits `3` if any line is blocked. Malformed JSON lines and lines
 larger than 1 MiB fail closed with a safe JSON-RPC block error. A
 `fail_on = "never"` override forwards the request but writes the suppressed rule
 ID to stderr so the suppression remains auditable.
+
+In transport mode, if an allowed request cannot be written to the downstream MCP
+server, the proxy returns JSON-RPC error `-32002` with message
+`Downstream MCP server unavailable` for that request instead of dropping it
+silently.
 
 ### Proxy policy config format
 
@@ -200,9 +212,8 @@ gracefully instead of hanging or crashing:
   arguments, and never an un-redacted secret. It is the `RuntimeGuardResult`
   contract minus any payload.
 
-Proxy guard mode remains experimental until a full bidirectional downstream
-transport, broader compatibility testing, and stable runtime compatibility
-guarantees are in place.
+Proxy guard mode remains experimental until broader MCP client/server
+compatibility testing and stable runtime compatibility guarantees are in place.
 
 ## Non-goals
 
