@@ -79,17 +79,123 @@ scanner output contracts for console, JSON, SARIF, or HTML reports.
 
 ## MCP proxy guard mode
 
-MCP proxy guard mode should be a local proxy that observes MCP tool calls and applies policy before tool execution. The design goal is to make tool-call risk visible at the boundary where arguments, tool metadata, and policy can be evaluated together.
+MCP proxy guard mode (`agentshield guard --mcp-proxy`) is a local, offline proxy
+that sits between an MCP client (the agent host) and an MCP server (the tool
+provider). It observes each tool call, evaluates it against runtime policy, and
+forwards, annotates, or blocks it before the underlying server runs. The design
+goal is to make tool-call risk visible at the one boundary where arguments, tool
+metadata, and policy can be evaluated together — without hosted telemetry.
 
-The proxy should:
+> Status: design. This section is the AGENT-18 technical design; the command is
+> not yet implemented. It is intentionally aligned with the existing
+> `guard --stdin` evaluation core (`evaluate_runtime_event`) so the proxy reuses,
+> rather than re-implements, policy and redaction.
 
-- Observe tool calls without requiring hosted telemetry.
-- Redact secrets before logging or structured output.
-- Apply the same policy concepts used by static scanning.
-- Return explicit allow, warn, or block decisions.
-- Preserve static scanner output contracts.
+### Request/response flow
 
-Proxy guard mode should remain experimental until stable configuration, integration tests, failure-mode behavior, and compatibility guarantees are in place.
+The proxy speaks the MCP JSON-RPC wire protocol on both sides and is transparent
+for everything except `tools/call`:
+
+```
+agent host ──tools/call──▶ agentshield proxy ──(allow)──▶ MCP server
+                                  │                            │
+                                  │ evaluate (policy)          │ result
+                                  ▼                            ▼
+                            allow / warn / block ◀──forward result──
+```
+
+1. The proxy accepts an MCP session (stdio or a local socket) and forwards
+   `initialize`, `tools/list`, `resources/*`, `prompts/*`, and any non-call
+   traffic verbatim — it is a pass-through for capability negotiation.
+2. On a `tools/call` request it pauses forwarding and builds a `RuntimeEvent`
+   from the JSON-RPC `params` (`name` → `tool_name`, `arguments` → `arguments`,
+   plus any `command`/`url`/`path` extractable from the arguments).
+3. It evaluates the event with the shared `evaluate_runtime_event` core, getting
+   a `RuntimeGuardResult` (`allow` / `warn` / `block`) and a redacted event.
+4. **Allow / warn**: the original (unmodified) request is forwarded to the MCP
+   server; the server's response is returned to the host verbatim. The decision
+   and any findings are written to the audit log (using the redacted event).
+5. **Block**: the request is NOT forwarded. The proxy synthesizes a JSON-RPC
+   error response (see "Safe error response") and returns it to the host as if
+   it came from the server. The server never sees the call.
+
+### Tool-call inspection before forwarding
+
+- Inspection happens on the request, before the byte stream reaches the server,
+  so a blocked call has zero side effects on the tool provider.
+- The proxy only deserializes the `tools/call` envelope; it never executes tool
+  logic. Argument values flow through the same `ArgumentSource` taint model and
+  the same secret-redaction layer used elsewhere, so what is logged is already
+  redacted.
+- Inspection is fail-closed: if the `tools/call` params cannot be parsed into a
+  `RuntimeEvent`, the call is blocked (not forwarded), mirroring the stdin
+  guard's invalid-input handling.
+
+### Allow / warn / block behavior
+
+| Verdict | Forwarded? | Returned to host | Audit |
+|---|---|---|---|
+| `allow` | yes | server's real response | logged at info |
+| `warn`  | yes | server's real response | logged with findings (e.g. a secret was observed) |
+| `block` | no  | synthetic JSON-RPC error | logged with the blocking finding |
+
+`warn` deliberately does not alter the response — it surfaces risk without
+breaking a working tool. Only `block` changes observable behavior.
+
+### Proxy policy config format
+
+Proxy policy extends `.agentshield.toml` with a `[runtime.proxy]` section so
+static and runtime policy live in one file:
+
+```toml
+[runtime.proxy]
+# Verdict that causes the call to be blocked. "block" (default) blocks only
+# block verdicts; "warn" also blocks warn verdicts (strict mode).
+fail_on = "block"
+
+# Per-tool overrides, matched by MCP tool name.
+[[runtime.proxy.tool]]
+name = "shell.exec"
+fail_on = "warn"        # stricter for a dangerous tool
+
+[[runtime.proxy.tool]]
+name = "calculator.add"
+fail_on = "never"       # never block this tool, still audited
+```
+
+Defaults preserve the stdin guard's behavior (block only on `block`). The config
+is optional; with no `[runtime.proxy]` section the proxy uses defaults.
+
+### Safe error response for blocked tool calls
+
+A blocked `tools/call` returns a well-formed JSON-RPC error so the host degrades
+gracefully instead of hanging or crashing:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "<original request id>",
+  "error": {
+    "code": -32001,
+    "message": "Blocked by AgentShield runtime guard",
+    "data": {
+      "verdict": "block",
+      "rule_id": "AGENTSHIELD-RUNTIME-METADATA-SSRF",
+      "schema_version": "v1"
+    }
+  }
+}
+```
+
+- The error echoes the original request `id` so the host correlates it.
+- `code` uses the JSON-RPC implementation-defined range (`-32000..-32099`);
+  `-32001` is reserved here for a guard block.
+- `data` carries only the verdict and the blocking rule id — never the raw tool
+  arguments, and never an un-redacted secret. It is the `RuntimeGuardResult`
+  contract minus any payload.
+
+Proxy guard mode remains experimental until stable configuration, integration
+tests, failure-mode behavior, and compatibility guarantees are in place.
 
 ## Non-goals
 
