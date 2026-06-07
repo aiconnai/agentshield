@@ -37,6 +37,7 @@ const PRIVATE_PATTERNS: &[&str] = &[
 
 /// Whether `text` references a known cloud metadata endpoint (case-insensitive).
 /// Shared with the runtime guard so both surfaces use the same endpoint list.
+#[cfg(feature = "runtime-guard")]
 pub(crate) fn references_metadata_endpoint(text: &str) -> bool {
     let lower = text.to_lowercase();
     METADATA_ENDPOINTS.iter().any(|ep| lower.contains(ep))
