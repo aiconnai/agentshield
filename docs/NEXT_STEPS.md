@@ -1,6 +1,6 @@
 # Next Steps — Post v0.1.0
 
-Status: v0.8.0 complete plus Hermes Agent support. 7 framework/client adapters (MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations — all done.
+Status: v0.8.5 release prep. 7 framework/client adapters (MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering, experimental `guard --stdin`, and experimental `guard --mcp-proxy`. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations — all done.
 
 ---
 
@@ -8,10 +8,10 @@ Status: v0.8.0 complete plus Hermes Agent support. 7 framework/client adapters (
 
 Runtime guard work is planned as an experimental extension to AgentShield's current offline static scanner and policy evaluation contract. The staged roadmap is:
 
-- **Shared policy event model:** define one JSON event shape for static scanner findings, runtime guard observations, and future MCP proxy decisions.
-- **Secret redaction helpers:** detect and redact common credentials before runtime events are written to logs or JSON output.
-- **Experimental `agentshield guard --stdin`:** accept one runtime event from standard input and emit a machine-readable allow, warn, or block result.
-- **MCP proxy guard mode:** design a local proxy that can observe tool calls and apply policy before tool execution.
+- **Shared policy event model:** done.
+- **Secret redaction helpers:** done.
+- **Experimental `agentshield guard --stdin`:** done.
+- **MCP proxy guard mode:** experimental line-protocol implementation done.
 - **Production hardening:** add stable policy configuration, integration tests, and compatibility guarantees before runtime mode is considered stable.
 
 ---
