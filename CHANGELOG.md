@@ -5,6 +5,25 @@ All notable changes to AgentShield will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.5] - 2026-06-07
+
+### Added
+
+- Experimental `agentshield guard --mcp-proxy` support behind the
+  `runtime-guard` feature. The proxy reads line-delimited JSON-RPC messages from
+  stdin, evaluates `tools/call` requests with the shared runtime guard policy
+  core, forwards allow/warn decisions, and returns safe JSON-RPC block errors.
+- `[runtime.proxy]` config support with a default `fail_on` threshold and
+  per-tool overrides.
+- Runtime proxy hardening for nested metadata-service SSRF arguments,
+  oversized-line fail-closed behavior, and audit output for `fail_on = "never"`
+  suppressions.
+
+### Changed
+
+- Release documentation now reflects the implemented experimental runtime guard
+  surfaces: `guard --stdin` and `guard --mcp-proxy`.
+
 ## [0.8.4] - 2026-06-05
 
 ### Added

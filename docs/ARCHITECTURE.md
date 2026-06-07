@@ -18,7 +18,7 @@ and output formatters produce different report formats.
 
 ## Runtime Guard Roadmap
 
-AgentShield's stable architecture is the offline static scanning pipeline described in this document. Runtime guard components are roadmap work and must preserve the scanner's existing contracts while reusing the same policy vocabulary.
+AgentShield's stable architecture is the offline static scanning pipeline described in this document. Runtime guard components are experimental and must preserve the scanner's existing contracts while reusing the same policy vocabulary.
 
 Runtime guard components must consume the same policy concepts as static detection: severity thresholds, rule identity, suppression intent, operator decisions, and pass/warn/block verdicts should map cleanly to the static policy model instead of creating a separate policy dialect.
 
