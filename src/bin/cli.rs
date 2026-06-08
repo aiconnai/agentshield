@@ -17,6 +17,7 @@ use agentshield::rules::{RuleEngine, Severity};
 use agentshield::runtime::{
     evaluate_runtime_event, invalid_runtime_guard_input, RuntimeEvent, RuntimeVerdict,
 };
+use agentshield::ux::{CiInstallOptions, ExplainOptions};
 use agentshield::ScanOptions;
 
 #[cfg(feature = "runtime-guard")]
@@ -77,6 +78,37 @@ enum Commands {
         /// Analyze scan results and emit a starter egress policy to the given path
         #[arg(long, value_name = "PATH")]
         emit_egress_policy: Option<PathBuf>,
+
+        /// Explain the gate, coverage, confidence, grouped findings, and next actions.
+        ///
+        /// This is console-only so JSON, SARIF, and HTML output contracts stay stable.
+        #[arg(long)]
+        explain: bool,
+    },
+
+    /// First-run setup: create config, inspect coverage, and run an explained scan
+    Quickstart {
+        /// Project directory to initialize and scan
+        #[arg(default_value = ".")]
+        path: PathBuf,
+
+        /// Overwrite an existing .agentshield.toml
+        #[arg(long)]
+        force: bool,
+
+        /// Minimum severity to fail (info, low, medium, high, critical)
+        #[arg(long, default_value = "high")]
+        fail_on: String,
+
+        /// Include test files in the first scan and generated config
+        #[arg(long)]
+        include_tests: bool,
+    },
+
+    /// Install CI integration helpers
+    Ci {
+        #[command(subcommand)]
+        command: CiCommand,
     },
 
     /// List all available detection rules
@@ -208,6 +240,36 @@ enum Commands {
     },
 }
 
+#[derive(Subcommand)]
+enum CiCommand {
+    /// Generate a GitHub Actions workflow for AgentShield
+    Install {
+        /// Workflow output path
+        #[arg(long, short = 'o', default_value = ".github/workflows/agentshield.yml")]
+        output: PathBuf,
+
+        /// Overwrite an existing workflow file
+        #[arg(long)]
+        force: bool,
+
+        /// Repository path to scan in CI
+        #[arg(long, default_value = ".")]
+        scan_path: String,
+
+        /// Minimum severity to fail (info, low, medium, high, critical)
+        #[arg(long, default_value = "high")]
+        fail_on: String,
+
+        /// Include test files in CI scans
+        #[arg(long)]
+        include_tests: bool,
+
+        /// Disable SARIF upload in the generated workflow
+        #[arg(long)]
+        no_sarif: bool,
+    },
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -222,6 +284,7 @@ fn main() {
             baseline,
             write_baseline,
             emit_egress_policy,
+            explain,
         } => cmd_scan(ScanArgs {
             path,
             config,
@@ -232,7 +295,24 @@ fn main() {
             baseline_path: baseline,
             write_baseline_path: write_baseline,
             emit_egress_policy_path: emit_egress_policy,
+            explain,
         }),
+        Commands::Quickstart {
+            path,
+            force,
+            fail_on,
+            include_tests,
+        } => cmd_quickstart(path, force, fail_on, include_tests),
+        Commands::Ci { command } => match command {
+            CiCommand::Install {
+                output,
+                force,
+                scan_path,
+                fail_on,
+                include_tests,
+                no_sarif,
+            } => cmd_ci_install(output, force, scan_path, fail_on, include_tests, no_sarif),
+        },
         Commands::ListRules { format } => cmd_list_rules(format),
         Commands::Init { force } => cmd_init(force),
         Commands::Suppress {
@@ -681,6 +761,7 @@ struct ScanArgs {
     baseline_path: Option<PathBuf>,
     write_baseline_path: Option<PathBuf>,
     emit_egress_policy_path: Option<PathBuf>,
+    explain: bool,
 }
 
 fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
@@ -694,28 +775,39 @@ fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
         baseline_path,
         write_baseline_path,
         emit_egress_policy_path,
+        explain,
     } = args;
     let format = OutputFormat::from_str_lenient(&format_str).unwrap_or_else(|| {
         eprintln!("Warning: unknown format '{}', using console", format_str);
         OutputFormat::Console
     });
 
-    let fail_on = fail_on_str.and_then(|s| {
-        let sev = Severity::from_str_lenient(&s);
-        if sev.is_none() {
-            eprintln!("Warning: unknown severity '{}', using config default", s);
-        }
-        sev
-    });
+    if explain && format != OutputFormat::Console {
+        return Err(agentshield::error::ShieldError::Config(
+            "`scan --explain` is console-only; remove --format or use --format console".into(),
+        ));
+    }
+
+    let fail_on = parse_optional_severity(fail_on_str.as_deref());
+    let effective_ignore_tests = effective_ignore_tests(&path, config.as_ref(), ignore_tests)?;
 
     let options = ScanOptions {
-        config_path: config,
+        config_path: config.clone(),
         format,
         fail_on_override: fail_on,
         ignore_tests,
     };
 
-    let mut report = agentshield::scan(&path, &options)?;
+    let mut report = match agentshield::scan(&path, &options) {
+        Ok(report) => report,
+        Err(err) if explain && agentshield::ux::is_no_adapter(&err) => {
+            let rendered =
+                agentshield::ux::render_no_adapter_explain(&path, effective_ignore_tests);
+            write_rendered(output_path.as_ref(), &rendered)?;
+            return Ok(2);
+        }
+        Err(err) => return Err(err),
+    };
 
     // Filter out baseline findings if --baseline is provided
     if let Some(ref bl_path) = baseline_path {
@@ -768,15 +860,174 @@ fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
         );
     }
 
-    let rendered = agentshield::render_report(&report, format)?;
+    let rendered = if explain {
+        agentshield::ux::render_explain(
+            &report,
+            &ExplainOptions {
+                ignore_tests: effective_ignore_tests,
+            },
+        )
+    } else {
+        agentshield::render_report(&report, format)?
+    };
 
-    match output_path {
-        Some(out) => std::fs::write(&out, &rendered)?,
-        None => print!("{}", rendered),
-    }
+    write_rendered(output_path.as_ref(), &rendered)?;
 
     // Exit code: 0 = pass, 1 = findings above threshold
     Ok(if report.verdict.pass { 0 } else { 1 })
+}
+
+fn cmd_quickstart(
+    path: PathBuf,
+    force: bool,
+    fail_on_str: String,
+    include_tests: bool,
+) -> Result<i32, agentshield::error::ShieldError> {
+    let fail_on = require_severity(&fail_on_str)?;
+    let ignore_tests = !include_tests;
+    let config_path = path.join(".agentshield.toml");
+
+    println!("AgentShield quickstart");
+    println!("Project: {}", path.display());
+
+    if config_path.exists() && !force {
+        println!(
+            "Config: {} already exists; left unchanged",
+            config_path.display()
+        );
+    } else {
+        if let Some(parent) = non_empty_parent(&config_path) {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(
+            &config_path,
+            agentshield::ux::quickstart_config_toml(fail_on, ignore_tests),
+        )?;
+        println!("Config: created {}", config_path.display());
+    }
+
+    println!(
+        "CI: run `agentshield ci install --scan-path {}` to add GitHub Actions",
+        shell_display_path(&path)
+    );
+    println!();
+
+    let options = ScanOptions {
+        config_path: Some(config_path),
+        format: OutputFormat::Console,
+        fail_on_override: Some(fail_on),
+        ignore_tests,
+    };
+
+    match agentshield::scan(&path, &options) {
+        Ok(report) => {
+            let rendered =
+                agentshield::ux::render_explain(&report, &ExplainOptions { ignore_tests });
+            print!("{rendered}");
+            Ok(if report.verdict.pass { 0 } else { 1 })
+        }
+        Err(err) if agentshield::ux::is_no_adapter(&err) => {
+            print!(
+                "{}",
+                agentshield::ux::render_no_adapter_explain(&path, ignore_tests)
+            );
+            Ok(0)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn cmd_ci_install(
+    output: PathBuf,
+    force: bool,
+    scan_path: String,
+    fail_on_str: String,
+    include_tests: bool,
+    no_sarif: bool,
+) -> Result<i32, agentshield::error::ShieldError> {
+    let fail_on = require_severity(&fail_on_str)?;
+    let fail_on = fail_on.to_string();
+
+    if output.exists() && !force {
+        eprintln!(
+            "{} already exists. Use --force to overwrite.",
+            output.display()
+        );
+        return Ok(1);
+    }
+
+    if let Some(parent) = non_empty_parent(&output) {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let workflow = agentshield::ux::github_actions_workflow(&CiInstallOptions {
+        fail_on: &fail_on,
+        ignore_tests: !include_tests,
+        scan_path: &scan_path,
+        upload_sarif: !no_sarif,
+    });
+    std::fs::write(&output, workflow)?;
+    println!("Created {}", output.display());
+    println!("CI gate: scans `{scan_path}` and fails on `{fail_on}` findings or higher.");
+    if !no_sarif {
+        println!("SARIF upload: enabled for GitHub Code Scanning.");
+    }
+    Ok(0)
+}
+
+fn parse_optional_severity(value: Option<&str>) -> Option<Severity> {
+    value.and_then(|s| {
+        let sev = Severity::from_str_lenient(s);
+        if sev.is_none() {
+            eprintln!("Warning: unknown severity '{}', using config default", s);
+        }
+        sev
+    })
+}
+
+fn require_severity(value: &str) -> Result<Severity, agentshield::error::ShieldError> {
+    Severity::from_str_lenient(value).ok_or_else(|| {
+        agentshield::error::ShieldError::Config(format!(
+            "unknown severity '{value}' (expected info, low, medium, high, or critical)"
+        ))
+    })
+}
+
+fn effective_ignore_tests(
+    path: &std::path::Path,
+    config_path: Option<&PathBuf>,
+    cli_ignore_tests: bool,
+) -> Result<bool, agentshield::error::ShieldError> {
+    let resolved_config_path = config_path
+        .cloned()
+        .unwrap_or_else(|| path.join(".agentshield.toml"));
+    let config = Config::load(&resolved_config_path)?;
+    Ok(cli_ignore_tests || config.scan.ignore_tests)
+}
+
+fn write_rendered(
+    output_path: Option<&PathBuf>,
+    rendered: &str,
+) -> Result<(), agentshield::error::ShieldError> {
+    match output_path {
+        Some(out) => std::fs::write(out, rendered)?,
+        None => print!("{rendered}"),
+    }
+    Ok(())
+}
+
+fn non_empty_parent(path: &std::path::Path) -> Option<&std::path::Path> {
+    path.parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+}
+
+fn shell_display_path(path: &std::path::Path) -> String {
+    let text = path.display().to_string();
+    if text.contains(' ') {
+        format!("'{}'", text.replace('\'', "'\\''"))
+    } else {
+        text
+    }
 }
 
 fn cmd_doctor(

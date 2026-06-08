@@ -28,6 +28,7 @@ pub mod parser;
 pub mod rules;
 #[cfg(feature = "runtime-guard")]
 pub mod runtime;
+pub mod ux;
 
 use std::path::Path;
 

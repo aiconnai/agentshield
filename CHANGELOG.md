@@ -5,6 +5,23 @@ All notable changes to AgentShield will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `agentshield quickstart` for first-run setup: creates project config, suggests
+  CI installation, runs the first scan, and prints an explained gate/coverage
+  summary.
+- `agentshield scan --explain` for a console-only summary with gate reason,
+  coverage, security confidence, runtime-vs-supply-chain grouping, next actions,
+  and clear limits.
+- `agentshield ci install` to generate a GitHub Actions workflow.
+
+### Changed
+
+- Console scan output now separates runtime-risk findings from supply-chain
+  hygiene recommendations before listing individual findings.
+
 ## [0.8.6] - 2026-06-07
 
 ### Added
