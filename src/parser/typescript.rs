@@ -685,9 +685,6 @@ static FUNC_DEF_RE: Lazy<Regex> = Lazy::new(|| {
 });
 
 #[cfg(not(feature = "typescript"))]
-static EXPORT_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:export\s+)").unwrap());
-
-#[cfg(not(feature = "typescript"))]
 impl LanguageParser for TypeScriptParser {
     fn language(&self) -> Language {
         Language::TypeScript
