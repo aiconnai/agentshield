@@ -75,17 +75,17 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 ### CLI
 
 ```bash
-# Install from crates.io
-cargo install agent-shield
+# Install the current release from GitHub with the full feature set
+cargo install --git https://github.com/limaronaldo/agentshield --tag v0.8.6 --features full --force
 
-# Scan current directory
-agentshield scan .
+# First-run setup: config + explained first scan
+agentshield quickstart
 
-# Scan with a specific format and policy threshold
-agentshield scan ./my-agent-extension --format sarif --fail-on medium --output results.sarif
+# Understand the gate, coverage, confidence, and next actions
+agentshield scan . --ignore-tests --fail-on high --explain
 
-# Skip test files
-agentshield scan ./my-agent-extension --ignore-tests
+# Add a GitHub Actions workflow
+agentshield ci install
 
 # Generate a standalone HTML report
 agentshield scan ./my-agent-extension --format html --output report.html
@@ -96,6 +96,10 @@ agentshield list-rules
 # Create starter config
 agentshield init
 ```
+
+If you only need static scanning in a published crates.io version, `cargo
+install agent-shield` is also supported. Use the GitHub tag command above when
+you need the latest release line before crates.io has been updated.
 
 ### Pre-built binaries
 
@@ -182,6 +186,9 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | Command | Purpose |
 |---------|---------|
 | `agentshield scan [path]` | Scan an agent extension directory and emit console, JSON, SARIF, or HTML output. |
+| `agentshield scan [path] --explain` | Print a console-only gate, coverage, confidence, grouped findings, next-actions, and limits summary. |
+| `agentshield quickstart [path]` | Create first-run config, suggest CI setup, run the first scan, and explain the result. |
+| `agentshield ci install` | Generate a GitHub Actions workflow for AgentShield. |
 | `agentshield list-rules` | List available detection rules as a table or JSON. |
 | `agentshield doctor [path]` | Print environment, config, compile-feature, and adapter diagnostics. |
 | `agentshield init` | Generate a starter `.agentshield.toml` config file. |
@@ -192,7 +199,10 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield guard --stdin` | Evaluate one runtime event JSON document when built with the `runtime-guard` feature. |
 | `agentshield guard --mcp-proxy [-- <server cmd...>]` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages, block unsafe calls, and either emit forward markers or bridge stdio to a spawned downstream MCP server when built with the `runtime-guard` feature. |
 
-Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
+Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--explain`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
+
+`--explain` is intentionally console-only. It will not append text to JSON,
+SARIF, or HTML output.
 
 ---
 
