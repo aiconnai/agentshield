@@ -41,6 +41,7 @@ pub struct CiInstallOptions<'a> {
     pub fail_on: &'a str,
     pub ignore_tests: bool,
     pub scan_path: &'a str,
+    pub baseline_path: Option<&'a str>,
     pub upload_sarif: bool,
 }
 
@@ -62,6 +63,11 @@ fail_on = "block"
 }
 
 pub fn github_actions_workflow(options: &CiInstallOptions<'_>) -> String {
+    let baseline_input = options
+        .baseline_path
+        .map(|path| format!("          baseline: \"{path}\"\n"))
+        .unwrap_or_default();
+
     format!(
         r#"name: AgentShield
 
@@ -84,11 +90,12 @@ jobs:
           path: "{scan_path}"
           fail-on: "{fail_on}"
           ignore-tests: {ignore_tests}
-          upload-sarif: {upload_sarif}
+{baseline_input}          upload-sarif: {upload_sarif}
 "#,
         scan_path = options.scan_path,
         fail_on = options.fail_on,
         ignore_tests = options.ignore_tests,
+        baseline_input = baseline_input,
         upload_sarif = options.upload_sarif,
     )
 }
@@ -532,12 +539,28 @@ mod tests {
             fail_on: "high",
             ignore_tests: true,
             scan_path: ".",
+            baseline_path: None,
             upload_sarif: true,
         });
 
         assert!(workflow.contains("uses: limaronaldo/agentshield@v1"));
         assert!(workflow.contains("fail-on: \"high\""));
         assert!(workflow.contains("ignore-tests: true"));
+        assert!(workflow.contains("upload-sarif: true"));
+        assert!(!workflow.contains("baseline:"));
+    }
+
+    #[test]
+    fn ci_workflow_can_use_baseline_file() {
+        let workflow = github_actions_workflow(&CiInstallOptions {
+            fail_on: "high",
+            ignore_tests: true,
+            scan_path: ".",
+            baseline_path: Some(".agentshield-baseline.json"),
+            upload_sarif: true,
+        });
+
+        assert!(workflow.contains("baseline: \".agentshield-baseline.json\""));
         assert!(workflow.contains("upload-sarif: true"));
     }
 
