@@ -23,6 +23,10 @@ inputs:
     description: 'Path to .agentshield.toml config file'
     required: false
     default: ''
+  baseline:
+    description: 'Path to an AgentShield baseline file for known findings'
+    required: false
+    default: ''
   upload-sarif:
     description: 'Upload SARIF results to GitHub Code Scanning'
     required: false
@@ -117,6 +121,10 @@ runs:
 
         if [ -n "${{ inputs.config }}" ]; then
           ARGS="$ARGS --config ${{ inputs.config }}"
+        fi
+
+        if [ -n "${{ inputs.baseline }}" ]; then
+          ARGS="$ARGS --baseline ${{ inputs.baseline }}"
         fi
 
         if [ "${{ inputs.ignore-tests }}" = "true" ]; then

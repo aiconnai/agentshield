@@ -16,11 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coverage, security confidence, runtime-vs-supply-chain grouping, next actions,
   and clear limits.
 - `agentshield ci install` to generate a GitHub Actions workflow.
+- `agentshield ci install --baseline <path>` to generate GitHub Actions
+  workflows that filter known findings through a baseline file.
 
 ### Changed
 
 - Console scan output now separates runtime-risk findings from supply-chain
   hygiene recommendations before listing individual findings.
+
+### Fixed
+
+- Python parser no longer panics on incomplete quote tokens found during
+  regex-level multiline call analysis.
+- `ignore_tests = true` now excludes shell `*.test.sh`/`*.spec.sh` files and
+  Python `*_test.py` files.
+- MCP scans now count TypeScript/JavaScript SDK `server.tool(...)` declarations
+  as discovered tools in coverage summaries.
 
 ## [0.8.6] - 2026-06-07
 
