@@ -264,6 +264,10 @@ enum CiCommand {
         #[arg(long)]
         include_tests: bool,
 
+        /// Baseline file to filter existing findings in CI
+        #[arg(long, value_name = "PATH")]
+        baseline: Option<String>,
+
         /// Disable SARIF upload in the generated workflow
         #[arg(long)]
         no_sarif: bool,
@@ -310,8 +314,17 @@ fn main() {
                 scan_path,
                 fail_on,
                 include_tests,
+                baseline,
                 no_sarif,
-            } => cmd_ci_install(output, force, scan_path, fail_on, include_tests, no_sarif),
+            } => cmd_ci_install(
+                output,
+                force,
+                scan_path,
+                fail_on,
+                include_tests,
+                baseline,
+                no_sarif,
+            ),
         },
         Commands::ListRules { format } => cmd_list_rules(format),
         Commands::Init { force } => cmd_init(force),
@@ -943,6 +956,7 @@ fn cmd_ci_install(
     scan_path: String,
     fail_on_str: String,
     include_tests: bool,
+    baseline: Option<String>,
     no_sarif: bool,
 ) -> Result<i32, agentshield::error::ShieldError> {
     let fail_on = require_severity(&fail_on_str)?;
@@ -964,6 +978,7 @@ fn cmd_ci_install(
         fail_on: &fail_on,
         ignore_tests: !include_tests,
         scan_path: &scan_path,
+        baseline_path: baseline.as_deref(),
         upload_sarif: !no_sarif,
     });
     std::fs::write(&output, workflow)?;
@@ -971,6 +986,9 @@ fn cmd_ci_install(
     println!("CI gate: scans `{scan_path}` and fails on `{fail_on}` findings or higher.");
     if !no_sarif {
         println!("SARIF upload: enabled for GitHub Code Scanning.");
+    }
+    if let Some(baseline) = baseline {
+        println!("Baseline: filters known findings from `{baseline}`.");
     }
     Ok(0)
 }
