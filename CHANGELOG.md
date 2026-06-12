@@ -34,8 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as discovered tools in coverage summaries.
 - `agentshield ci install` no longer generates a workflow that points to the
   nonexistent `limaronaldo/agentshield@v1` action ref.
-- The GitHub Action now follows repository redirects when resolving
-  `version: latest`.
+- `agentshield ci install` now generates workflows with the canonical
+  `aiconnai/agentshield@main` action ref.
+- The GitHub Action now resolves release assets from the canonical
+  `aiconnai/agentshield` repository.
 
 ## [0.8.6] - 2026-06-07
 
