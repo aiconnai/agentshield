@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: limaronaldo/agentshield@v1
+      - uses: limaronaldo/agentshield@main
         with:
           path: '.'
           fail-on: 'high'
