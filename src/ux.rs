@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: limaronaldo/agentshield@main
+      - uses: aiconnai/agentshield@main
         with:
           path: "{scan_path}"
           fail-on: "{fail_on}"
@@ -543,7 +543,7 @@ mod tests {
             upload_sarif: true,
         });
 
-        assert!(workflow.contains("uses: limaronaldo/agentshield@main"));
+        assert!(workflow.contains("uses: aiconnai/agentshield@main"));
         assert!(workflow.contains("fail-on: \"high\""));
         assert!(workflow.contains("ignore-tests: true"));
         assert!(workflow.contains("upload-sarif: true"));

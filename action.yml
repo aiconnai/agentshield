@@ -60,7 +60,7 @@ runs:
       run: |
         if [ "${{ inputs.version }}" = "latest" ]; then
           VERSION=$(
-            curl -fsSL https://api.github.com/repos/limaronaldo/agentshield/releases/latest 2>/dev/null \
+            curl -fsSL https://api.github.com/repos/aiconnai/agentshield/releases/latest 2>/dev/null \
               | sed -nE 's/.*"tag_name": *"([^"]+)".*/\1/p' \
               | head -n 1 || true
           )
@@ -92,7 +92,7 @@ runs:
       run: |
         VERSION="${{ steps.version.outputs.version }}"
         TARGET="${{ steps.platform.outputs.target }}"
-        BASE_URL="https://github.com/limaronaldo/agentshield/releases/download/${VERSION}"
+        BASE_URL="https://github.com/aiconnai/agentshield/releases/download/${VERSION}"
 
         if [[ "$TARGET" == *"windows"* ]]; then
           ARCHIVE="agentshield-${VERSION}-${TARGET}.zip"
