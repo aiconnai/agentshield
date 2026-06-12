@@ -460,11 +460,9 @@ fn classify_argument(
         return ArgumentSource::Sanitized { sanitizer };
     }
 
-    // String literal
-    if (first_arg.starts_with('"') && first_arg.ends_with('"'))
-        || (first_arg.starts_with('\'') && first_arg.ends_with('\''))
-    {
-        let val = &first_arg[1..first_arg.len() - 1];
+    // String literal. Single quote tokens can appear when a regex-level parse
+    // sees an incomplete multiline literal; keep those conservative.
+    if let Some(val) = strip_python_string_literal(first_arg) {
         return ArgumentSource::Literal(val.to_string());
     }
 
@@ -489,6 +487,15 @@ fn classify_argument(
     }
 
     ArgumentSource::Unknown
+}
+
+fn strip_python_string_literal(arg: &str) -> Option<&str> {
+    arg.strip_prefix('"')
+        .and_then(|inner| inner.strip_suffix('"'))
+        .or_else(|| {
+            arg.strip_prefix('\'')
+                .and_then(|inner| inner.strip_suffix('\''))
+        })
 }
 
 fn sanitized_var_marker(var_name: &str, sanitizer_label: &str) -> String {
@@ -569,6 +576,22 @@ def fetch():
         assert!(matches!(
             parsed.network_operations[0].url_arg,
             ArgumentSource::Literal(_)
+        ));
+    }
+
+    #[test]
+    fn incomplete_quote_argument_is_unknown_not_panic() {
+        let code = r#"
+def fetch():
+    requests.get(
+        "
+    )
+"#;
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert_eq!(parsed.network_operations.len(), 1);
+        assert!(matches!(
+            parsed.network_operations[0].url_arg,
+            ArgumentSource::Unknown
         ));
     }
 

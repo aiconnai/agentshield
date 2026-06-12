@@ -1,23 +1,32 @@
 # AgentShield
 
-**Security scanner for AI agent extensions - offline-first, multi-framework, SARIF output.**
+**Find risky behavior in MCP and AI agent extensions before they ship.**
 
 [![CI](https://github.com/limaronaldo/agentshield/actions/workflows/ci.yml/badge.svg)](https://github.com/limaronaldo/agentshield/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
 
-AgentShield scans AI agent extensions for security vulnerabilities before they reach production. It runs locally as a single Rust binary, shares no source code with a service, and emits console, JSON, SARIF, and HTML reports.
+AgentShield is an offline Rust scanner for agent extensions: MCP servers,
+OpenClaw skills, CrewAI and LangChain/LangGraph tools, GPT Actions, Hermes Agent
+configs, and Cursor Rules. It catches command injection, credential
+exfiltration, SSRF, unsafe file access, runtime package installs, prompt
+injection surfaces, and dependency hygiene issues before those extensions run.
 
-AgentShield is currently aligned with the `0.8.6` release line.
+It runs as a CLI, GitHub Action, or library, keeps source code on your machine,
+and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML
+reports. The current release line is `0.8.6`.
 
-## What AgentShield is today
+## At a glance
 
-AgentShield is an offline-first static security scanner for AI agent extensions. It analyzes MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, and related agent extension surfaces before they run, then reports findings through console, JSON, SARIF, and HTML outputs.
+| Area | What AgentShield does |
+|------|------------------------|
+| Scanner surface | Normalizes seven framework/client families into one IR: MCP, OpenClaw, Hermes Agent, CrewAI, LangChain/LangGraph, GPT Actions, and Cursor Rules. |
+| Detection | Runs 18 built-in rules for command execution, credential exfiltration, SSRF, filesystem risk, runtime installs, prompt surfaces, dependency hygiene, unsafe deserialization, secret leakage, and more. |
+| Workflow fit | Works locally, in CI, and in GitHub Code Scanning without sending source code to a hosted service. |
+| Boundary | AgentShield is not a hosted monitoring service, runtime sandbox, or allowlist marketplace. Experimental runtime guard entrypoints are available behind opt-in feature flags; the stable contract is static scanning plus policy evaluation. |
 
-AgentShield is not a hosted monitoring service, a runtime sandbox, or an allowlist marketplace. Experimental runtime guard entrypoints are available behind opt-in feature flags; the current stable contract remains static scanning plus policy evaluation.
-
-Runtime guard roadmap: see [docs/RUNTIME_GUARD.md](docs/RUNTIME_GUARD.md).
+For runtime guard scope and roadmap, see [docs/RUNTIME_GUARD.md](docs/RUNTIME_GUARD.md).
 
 ---
 
@@ -62,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: limaronaldo/agentshield@v1
+      - uses: limaronaldo/agentshield@main
         with:
           path: '.'
           fail-on: 'high'
@@ -86,6 +95,10 @@ agentshield scan . --ignore-tests --fail-on high --explain
 
 # Add a GitHub Actions workflow
 agentshield ci install
+
+# Adopt in an existing repo without blocking on known findings
+agentshield scan --write-baseline .agentshield-baseline.json
+agentshield ci install --baseline .agentshield-baseline.json
 
 # Generate a standalone HTML report
 agentshield scan ./my-agent-extension --format html --output report.html
@@ -189,6 +202,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield scan [path] --explain` | Print a console-only gate, coverage, confidence, grouped findings, next-actions, and limits summary. |
 | `agentshield quickstart [path]` | Create first-run config, suggest CI setup, run the first scan, and explain the result. |
 | `agentshield ci install` | Generate a GitHub Actions workflow for AgentShield. |
+| `agentshield ci install --baseline <path>` | Generate a workflow that filters known findings through a baseline file. |
 | `agentshield list-rules` | List available detection rules as a table or JSON. |
 | `agentshield doctor [path]` | Print environment, config, compile-feature, and adapter diagnostics. |
 | `agentshield init` | Generate a starter `.agentshield.toml` config file. |
@@ -200,6 +214,15 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield guard --mcp-proxy [-- <server cmd...>]` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages, block unsafe calls, and either emit forward markers or bridge stdio to a spawned downstream MCP server when built with the `runtime-guard` feature. |
 
 Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--explain`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
+
+For mature repositories with existing findings, write a baseline first and use
+it in CI:
+
+```bash
+agentshield scan --write-baseline .agentshield-baseline.json
+agentshield scan --baseline .agentshield-baseline.json --explain
+agentshield ci install --baseline .agentshield-baseline.json
+```
 
 `--explain` is intentionally console-only. It will not append text to JSON,
 SARIF, or HTML output.

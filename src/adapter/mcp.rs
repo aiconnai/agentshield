@@ -83,6 +83,17 @@ impl super::Adapter for McpAdapter {
 
         // Collect source files
         collect_source_files(root, ignore_tests, &mut source_files)?;
+        for source_file in &source_files {
+            if matches!(
+                source_file.language,
+                Language::TypeScript | Language::JavaScript
+            ) {
+                tools.extend(extract_mcp_tools_from_source(
+                    &source_file.path,
+                    &source_file.content,
+                ));
+            }
+        }
 
         // Phase 1: Parse each source file, collecting results for cross-file analysis.
         let mut parsed_files: Vec<(PathBuf, parser::ParsedFile)> = Vec::new();
@@ -114,7 +125,8 @@ impl super::Adapter for McpAdapter {
         if tools_json.exists() {
             if let Ok(content) = std::fs::read_to_string(&tools_json) {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
-                    tools = parser::json_schema::parse_tools_from_json(&value);
+                    tools.extend(parser::json_schema::parse_tools_from_json(&value));
+                    tools = dedupe_tools_by_name(tools);
                 }
             }
         }
@@ -145,8 +157,8 @@ impl super::Adapter for McpAdapter {
 ///
 /// Matches common conventions across Python, TypeScript, and JavaScript:
 /// - Directories: `test/`, `tests/`, `__tests__/`, `__pycache__/`
-/// - Suffixes: `.test.{ts,js,tsx,jsx,py}`, `.spec.{ts,js,tsx,jsx}`
-/// - Prefixes: `test_*.py` (pytest convention)
+/// - Suffixes: `.test.{ts,js,tsx,jsx,py,sh}`, `.spec.{ts,js,tsx,jsx,py,sh}`
+/// - Python conventions: `test_*.py`, `*_test.py`
 /// - Config files: `conftest.py`, `jest.config.*`, `vitest.config.*`, `pytest.ini`, `setup.cfg`
 pub fn is_test_file(path: &Path) -> bool {
     // Check if any path component is a test directory
@@ -176,22 +188,27 @@ pub fn is_test_file(path: &Path) -> bool {
         return true;
     }
 
-    // pytest prefix convention: test_*.py
-    if file_name.starts_with("test_") && file_name.ends_with(".py") {
+    // pytest conventions: test_*.py and *_test.py
+    if file_name.ends_with(".py")
+        && (file_name.starts_with("test_") || file_name.ends_with("_test.py"))
+    {
         return true;
     }
 
-    // Suffix conventions: *.test.{ts,js,tsx,jsx,py}, *.spec.{ts,js,tsx,jsx}
+    // Suffix conventions: *.test.{ts,js,tsx,jsx,py,sh}, *.spec.{ts,js,tsx,jsx,py,sh}
     for suffix in [
         ".test.ts",
         ".test.js",
         ".test.tsx",
         ".test.jsx",
         ".test.py",
+        ".test.sh",
         ".spec.ts",
         ".spec.js",
         ".spec.tsx",
         ".spec.jsx",
+        ".spec.py",
+        ".spec.sh",
     ] {
         if file_name.ends_with(suffix) {
             return true;
@@ -199,6 +216,119 @@ pub fn is_test_file(path: &Path) -> bool {
     }
 
     false
+}
+
+fn extract_mcp_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
+    let mut tools = Vec::new();
+    let mut offset = 0;
+
+    while let Some(relative_start) = find_next_mcp_tool_call(&content[offset..]) {
+        let call_start = offset + relative_start;
+        let Some(open_paren) = content[call_start..].find('(').map(|pos| call_start + pos) else {
+            break;
+        };
+        let args_start = open_paren + 1;
+        let Some((name, after_name)) = parse_string_literal_at(content, args_start) else {
+            offset = args_start;
+            continue;
+        };
+        let description = parse_next_string_argument(content, after_name);
+        let line = content[..call_start].lines().count() + 1;
+
+        tools.push(ToolSurface {
+            name,
+            description,
+            input_schema: None,
+            output_schema: None,
+            declared_permissions: Vec::new(),
+            defined_at: Some(source_loc(path, line)),
+        });
+
+        offset = after_name;
+    }
+
+    dedupe_tools_by_name(tools)
+}
+
+fn find_next_mcp_tool_call(content: &str) -> Option<usize> {
+    match (content.find(".tool("), content.find(".registerTool(")) {
+        (Some(tool), Some(register_tool)) => Some(tool.min(register_tool)),
+        (Some(tool), None) => Some(tool),
+        (None, Some(register_tool)) => Some(register_tool),
+        (None, None) => None,
+    }
+}
+
+fn parse_next_string_argument(content: &str, offset: usize) -> Option<String> {
+    let mut index = skip_whitespace(content, offset);
+    if content[index..].starts_with(',') {
+        index += 1;
+    } else {
+        return None;
+    }
+
+    let index = skip_whitespace(content, index);
+    parse_string_literal_at(content, index).map(|(value, _)| value)
+}
+
+fn parse_string_literal_at(content: &str, offset: usize) -> Option<(String, usize)> {
+    let offset = skip_whitespace(content, offset);
+    let quote = content[offset..].chars().next()?;
+    if !matches!(quote, '\'' | '"' | '`') {
+        return None;
+    }
+
+    let mut value = String::new();
+    let mut escaped = false;
+    for (relative_index, ch) in content[offset + quote.len_utf8()..].char_indices() {
+        let absolute_index = offset + quote.len_utf8() + relative_index;
+        if escaped {
+            value.push(ch);
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == quote {
+            return Some((value, absolute_index + quote.len_utf8()));
+        }
+        value.push(ch);
+    }
+
+    None
+}
+
+fn skip_whitespace(content: &str, mut offset: usize) -> usize {
+    while let Some(ch) = content[offset..].chars().next() {
+        if !ch.is_whitespace() {
+            break;
+        }
+        offset += ch.len_utf8();
+    }
+    offset
+}
+
+fn dedupe_tools_by_name(tools: Vec<ToolSurface>) -> Vec<ToolSurface> {
+    let mut seen = std::collections::HashSet::new();
+    let mut deduped = Vec::new();
+    for tool in tools {
+        if seen.insert(tool.name.clone()) {
+            deduped.push(tool);
+        }
+    }
+    deduped
+}
+
+fn source_loc(file: &Path, line: usize) -> SourceLocation {
+    SourceLocation {
+        file: file.to_path_buf(),
+        line,
+        column: 0,
+        end_line: None,
+        end_column: None,
+    }
 }
 
 pub(super) fn collect_source_files(
@@ -437,3 +567,44 @@ pub(super) fn parse_provenance(root: &Path) -> provenance_surface::ProvenanceSur
 }
 
 use sha2::Digest;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_file_detection_covers_shell_and_suffix_python_tests() {
+        assert!(is_test_file(Path::new("scripts/check.test.sh")));
+        assert!(is_test_file(Path::new("scripts/check.spec.sh")));
+        assert!(is_test_file(Path::new("scripts/import_data_test.py")));
+        assert!(is_test_file(Path::new("tests/unit.py")));
+        assert!(!is_test_file(Path::new("scripts/load.py")));
+    }
+
+    #[test]
+    fn extracts_typescript_mcp_server_tool_declarations() {
+        let content = r#"
+const server = new McpServer({ name: "demo" })
+
+server.tool(
+  'search_party',
+  'Busca fuzzy por nome.',
+  {},
+  async () => ({ content: [] })
+)
+
+server.registerTool("create_report", { description: "Create report" }, async () => {})
+"#;
+
+        let tools = extract_mcp_tools_from_source(Path::new("src/mcp/server.ts"), content);
+        assert_eq!(tools.len(), 2);
+        assert_eq!(tools[0].name, "search_party");
+        assert_eq!(
+            tools[0].description.as_deref(),
+            Some("Busca fuzzy por nome.")
+        );
+        assert_eq!(tools[0].defined_at.as_ref().map(|loc| loc.line), Some(5));
+        assert_eq!(tools[1].name, "create_report");
+        assert_eq!(tools[1].description, None);
+    }
+}
