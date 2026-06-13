@@ -1,0 +1,11 @@
+{
+  "name": "agentshield-playwright-mcp-fixture",
+  "version": "0.1.0",
+  "description": "Safe Playwright MCP-style fixture for AgentShield scanning examples",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.12.0",
+    "playwright": "1.44.0",
+    "zod": "4.0.0"
+  }
+}

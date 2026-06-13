@@ -1,0 +1,6 @@
+[project]
+name = "agentshield-fastmcp-fixture"
+version = "0.1.0"
+description = "Safe FastMCP fixture for AgentShield scanning examples"
+requires-python = ">=3.11"
+dependencies = ["mcp==1.9.0"]
