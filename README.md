@@ -7,11 +7,15 @@
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
 
-AgentShield is an offline Rust scanner for agent extensions: MCP servers,
-OpenClaw skills, CrewAI and LangChain/LangGraph tools, GPT Actions, Hermes Agent
-configs, and Cursor Rules. It catches command injection, credential
-exfiltration, SSRF, unsafe file access, runtime package installs, prompt
-injection surfaces, and dependency hygiene issues before those extensions run.
+AgentShield is an offline Rust scanner for teams shipping tool-enabled agents
+across the current agent stack. Native adapters cover MCP servers, OpenClaw
+skills, Hermes Agent configs, CrewAI, LangChain/LangGraph, GPT Actions, and
+Cursor Rules; the same checks help harden repos built around OpenAI Agents SDK,
+Claude Code, Claude Desktop MCP setups, Browser Use, FastMCP, GitHub MCP Server,
+Playwright MCP, and other MCP-heavy workflows. It catches command injection,
+credential exfiltration, SSRF, unsafe file access, runtime package installs,
+prompt-injection surfaces, and dependency hygiene issues before an agent can
+call those tools.
 
 It runs as a CLI, GitHub Action, or library, keeps source code on your machine,
 and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML
@@ -27,6 +31,26 @@ reports. The current release line is `0.8.6`.
 | Boundary | AgentShield is not a hosted monitoring service, runtime sandbox, or allowlist marketplace. Experimental runtime guard entrypoints are available behind opt-in feature flags; the stable contract is static scanning plus policy evaluation. |
 
 For runtime guard scope and roadmap, see [docs/RUNTIME_GUARD.md](docs/RUNTIME_GUARD.md).
+
+## Works With
+
+AgentShield is useful anywhere an agent can call local tools, remote APIs,
+browser automation, file operations, shell commands, or MCP servers.
+
+| Ecosystem | How AgentShield helps |
+|-----------|-----------------------|
+| Claude Desktop and Claude Code | Scan MCP servers and tool repositories before adding them to Claude MCP configs or coding-agent workflows. |
+| Cursor and Cursor Rules | Detect risky agent guidance, MCP server definitions, and tool code that can reach files, commands, or the network. |
+| OpenAI Agents SDK | Scan tool implementations, OpenAPI/GPT Actions surfaces, and MCP-connected repos used by OpenAI agent apps. |
+| LangGraph and LangChain | Analyze Python/TypeScript tool code and dependency surfaces before agents execute tools. |
+| CrewAI | Check Python CrewAI tool projects for command execution, credential exfiltration, SSRF, and unsafe file access. |
+| FastMCP, GitHub MCP Server, and Playwright MCP | Scan MCP server code, manifests, schemas, dependencies, and provenance before publishing or installing. |
+| Browser Use and browser automation agents | Catch risky command, network, file, and dependency patterns in tool-enabled automation repos. |
+
+Runnable examples live under [examples/](examples/README.md), with focused
+guides for [Claude MCP security](docs/claude-mcp-security.md),
+[MCP security scanning](docs/mcp-security-scanner.md), and
+[OpenAI Agents security](docs/openai-agents-security.md).
 
 ---
 

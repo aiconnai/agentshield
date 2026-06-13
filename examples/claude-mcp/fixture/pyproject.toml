@@ -1,0 +1,6 @@
+[project]
+name = "agentshield-claude-mcp-fixture"
+version = "0.1.0"
+description = "Safe Claude MCP fixture for AgentShield scanning examples"
+requires-python = ">=3.11"
+dependencies = ["mcp==1.9.0"]

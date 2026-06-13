@@ -1,0 +1,30 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AgentShield Example Actions",
+    "version": "1.0.0",
+    "description": "Credential-free GPT Actions fixture for AgentShield examples"
+  },
+  "x-openai-isConsequential": false,
+  "paths": {
+    "/inventory/{item}": {
+      "get": {
+        "operationId": "getInventoryItem",
+        "summary": "Get a safe inventory count",
+        "parameters": [
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inventory item count"
+          }
+        }
+      }
+    }
+  }
+}
