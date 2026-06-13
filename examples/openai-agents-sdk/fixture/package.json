@@ -1,0 +1,11 @@
+{
+  "name": "agentshield-openai-agents-fixture",
+  "version": "0.1.0",
+  "description": "Safe OpenAI Agents SDK fixture with MCP and GPT Actions surfaces",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.12.0",
+    "@openai/agents": "0.1.0",
+    "zod": "4.0.0"
+  }
+}
