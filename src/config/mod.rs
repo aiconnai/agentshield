@@ -44,8 +44,14 @@ pub struct ScanPathFilter {
 #[derive(Debug, Clone)]
 struct CompiledPathPattern {
     raw: String,
-    pattern: glob::Pattern,
+    patterns: Vec<glob::Pattern>,
 }
+
+const PATH_PATTERN_MATCH_OPTIONS: glob::MatchOptions = glob::MatchOptions {
+    case_sensitive: true,
+    require_literal_separator: true,
+    require_literal_leading_dot: false,
+};
 
 impl ScanPathFilter {
     pub fn for_ignore_tests(ignore_tests: bool) -> Self {
@@ -107,18 +113,25 @@ impl CompiledPathPattern {
                 "{section} pattern must not be empty"
             )));
         }
-        let pattern = glob::Pattern::new(&normalized).map_err(|err| {
-            ShieldError::Config(format!("invalid {section} pattern '{raw}': {err}"))
-        })?;
+        let patterns = expand_config_pattern(&normalized)
+            .into_iter()
+            .map(|pattern| {
+                glob::Pattern::new(&pattern).map_err(|err| {
+                    ShieldError::Config(format!("invalid {section} pattern '{raw}': {err}"))
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
             raw: raw.to_string(),
-            pattern,
+            patterns,
         })
     }
 
     fn matches(&self, relative_path: &str) -> bool {
-        self.pattern.matches(relative_path)
+        self.patterns
+            .iter()
+            .any(|pattern| pattern.matches_with(relative_path, PATH_PATTERN_MATCH_OPTIONS))
     }
 }
 
@@ -130,7 +143,28 @@ fn compile_path_patterns(section: &str, patterns: &[String]) -> Result<Vec<Compi
 }
 
 fn normalize_config_pattern(pattern: &str) -> String {
-    pattern.trim().trim_start_matches('/').replace('\\', "/")
+    let mut normalized = pattern.trim().replace('\\', "/");
+    normalized = normalized.trim_start_matches('/').to_string();
+    while let Some(stripped) = normalized.strip_prefix("./") {
+        normalized = stripped.to_string();
+    }
+    while normalized.contains("//") {
+        normalized = normalized.replace("//", "/");
+    }
+    if normalized.ends_with('/') {
+        normalized.push_str("**");
+    }
+    normalized
+}
+
+fn expand_config_pattern(pattern: &str) -> Vec<String> {
+    let mut patterns = vec![pattern.to_string()];
+    if let Some(root_pattern) = pattern.strip_prefix("**/") {
+        if !root_pattern.is_empty() {
+            patterns.push(root_pattern.to_string());
+        }
+    }
+    patterns
 }
 
 fn relative_path(root: &Path, path: &Path) -> String {
@@ -252,6 +286,7 @@ fail_on = "high"
 # Skip test files (test/, tests/, __tests__/, *.test.ts, *.spec.ts, etc.).
 # ignore_tests = false
 # Include only matching paths. Empty means include all scan-supported files.
+# Use ** for recursive directories; * and ? stay within one path segment.
 # include = ["src/**", "tools/**"]
 # Exclude matching paths after include filtering.
 # exclude = ["legacy/**", "**/generated/**", "vendor/**"]
