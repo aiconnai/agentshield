@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use crate::config::ScanPathFilterSummary;
 use crate::error::ShieldError;
 use crate::ir::Language;
 use crate::rules::{AttackCategory, Finding, Severity};
@@ -146,12 +147,16 @@ pub fn render_explain(report: &ScanReport, options: &ExplainOptions) -> String {
     ));
     output.push_str(&format!("- Lockfiles detected: {}\n", coverage.lockfiles));
     output.push_str(&format!(
-        "- Test file exclusion: {}\n\n",
+        "- Test file exclusion: {}\n",
         if options.ignore_tests {
             "enabled"
         } else {
             "disabled"
         }
+    ));
+    output.push_str(&format!(
+        "- Path filters: {}\n\n",
+        format_path_filters(&report.path_filter_summary)
     ));
 
     output.push_str("Findings:\n");
@@ -182,7 +187,11 @@ pub fn render_explain(report: &ScanReport, options: &ExplainOptions) -> String {
     output
 }
 
-pub fn render_no_adapter_explain(path: &Path, ignore_tests: bool) -> String {
+pub fn render_no_adapter_explain(
+    path: &Path,
+    ignore_tests: bool,
+    path_filters: &ScanPathFilterSummary,
+) -> String {
     let mut output = String::new();
     output.push_str("AgentShield explain\n");
     output.push_str("===================\n\n");
@@ -197,8 +206,12 @@ pub fn render_no_adapter_explain(path: &Path, ignore_tests: bool) -> String {
     output.push_str("- Adapters: none\n");
     output.push_str(&format!("- Target: {}\n", path.display()));
     output.push_str(&format!(
-        "- Test file exclusion: {}\n\n",
+        "- Test file exclusion: {}\n",
         if ignore_tests { "enabled" } else { "disabled" }
+    ));
+    output.push_str(&format!(
+        "- Path filters: {}\n\n",
+        format_path_filters(path_filters)
     ));
     output.push_str("Next actions:\n");
     output.push_str("- Confirm this repository contains an MCP server, OpenClaw skill, Hermes agent, CrewAI/LangChain tool, GPT Action, or Cursor Rules surface.\n");
@@ -423,6 +436,25 @@ fn display_list(values: &BTreeSet<String>, empty: &str) -> String {
     }
 }
 
+fn format_path_filters(summary: &ScanPathFilterSummary) -> String {
+    if summary.include.is_empty() && summary.exclude.is_empty() {
+        return "disabled".into();
+    }
+
+    let include = if summary.include.is_empty() {
+        "all".into()
+    } else {
+        summary.include.join(", ")
+    };
+    let exclude = if summary.exclude.is_empty() {
+        "none".into()
+    } else {
+        summary.exclude.join(", ")
+    };
+
+    format!("include {include}; exclude {exclude}")
+}
+
 fn display_language(language: Language) -> &'static str {
     match language {
         Language::Python => "Python",
@@ -502,6 +534,7 @@ mod tests {
                     content_hash: String::new(),
                 }],
             }],
+            path_filter_summary: ScanPathFilterSummary::default(),
         }
     }
 
@@ -527,7 +560,8 @@ mod tests {
 
     #[test]
     fn no_adapter_explain_is_inconclusive() {
-        let output = render_no_adapter_explain(Path::new("."), true);
+        let output =
+            render_no_adapter_explain(Path::new("."), true, &ScanPathFilterSummary::default());
 
         assert!(output.contains("Gate: INCONCLUSIVE"));
         assert!(output.contains("does not mean the project is safe"));

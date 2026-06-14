@@ -32,7 +32,7 @@ pub mod ux;
 
 use std::path::Path;
 
-use config::Config;
+use config::{Config, ScanPathFilter, ScanPathFilterSummary};
 use error::Result;
 use ir::ScanTarget;
 use output::OutputFormat;
@@ -75,6 +75,7 @@ pub struct ScanReport {
     /// Raw scan targets produced by the adapter pipeline.
     /// Used by callers that need to inspect the IR (e.g., `--emit-egress-policy`).
     pub targets: Vec<ScanTarget>,
+    pub path_filter_summary: ScanPathFilterSummary,
 }
 
 /// Run a complete scan: detect framework, parse, analyze, evaluate policy.
@@ -93,7 +94,9 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
 
     // Auto-detect framework and load IR
     let ignore_tests = options.ignore_tests || config.scan.ignore_tests;
-    let targets = adapter::auto_detect_and_load(path, ignore_tests)?;
+    let path_filter = ScanPathFilter::from_scan_config(&config.scan, ignore_tests)?;
+    let path_filter_summary = path_filter.summary();
+    let targets = adapter::auto_detect_and_load_with_filter(path, &path_filter)?;
 
     // Run detectors on all targets
     let engine = RuleEngine::new();
@@ -125,6 +128,7 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
         verdict,
         scan_root,
         targets,
+        path_filter_summary,
     })
 }
 

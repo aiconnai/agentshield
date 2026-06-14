@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Component, Path};
 
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +22,135 @@ pub struct ScanConfig {
     /// Skip test files when true.
     #[serde(default)]
     pub ignore_tests: bool,
+    #[serde(default)]
+    pub include: Vec<String>,
+    #[serde(default)]
+    pub exclude: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ScanPathFilterSummary {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScanPathFilter {
+    ignore_tests: bool,
+    include: Vec<CompiledPathPattern>,
+    exclude: Vec<CompiledPathPattern>,
+}
+
+#[derive(Debug, Clone)]
+struct CompiledPathPattern {
+    raw: String,
+    pattern: glob::Pattern,
+}
+
+impl ScanPathFilter {
+    pub fn for_ignore_tests(ignore_tests: bool) -> Self {
+        Self {
+            ignore_tests,
+            include: Vec::new(),
+            exclude: Vec::new(),
+        }
+    }
+
+    pub fn from_scan_config(config: &ScanConfig, ignore_tests: bool) -> Result<Self> {
+        Ok(Self {
+            ignore_tests,
+            include: compile_path_patterns("scan.include", &config.include)?,
+            exclude: compile_path_patterns("scan.exclude", &config.exclude)?,
+        })
+    }
+
+    pub const fn ignore_tests(&self) -> bool {
+        self.ignore_tests
+    }
+
+    pub fn allows_path(&self, root: &Path, path: &Path) -> bool {
+        let relative = relative_path(root, path);
+        let included = self.include.is_empty()
+            || self
+                .include
+                .iter()
+                .any(|pattern| pattern.matches(&relative));
+        let excluded = self
+            .exclude
+            .iter()
+            .any(|pattern| pattern.matches(&relative));
+
+        included && !excluded
+    }
+
+    pub fn summary(&self) -> ScanPathFilterSummary {
+        ScanPathFilterSummary {
+            include: self
+                .include
+                .iter()
+                .map(|pattern| pattern.raw.clone())
+                .collect(),
+            exclude: self
+                .exclude
+                .iter()
+                .map(|pattern| pattern.raw.clone())
+                .collect(),
+        }
+    }
+}
+
+impl CompiledPathPattern {
+    fn new(section: &str, raw: &str) -> Result<Self> {
+        let normalized = normalize_config_pattern(raw);
+        if normalized.is_empty() {
+            return Err(ShieldError::Config(format!(
+                "{section} pattern must not be empty"
+            )));
+        }
+        let pattern = glob::Pattern::new(&normalized).map_err(|err| {
+            ShieldError::Config(format!("invalid {section} pattern '{raw}': {err}"))
+        })?;
+
+        Ok(Self {
+            raw: raw.to_string(),
+            pattern,
+        })
+    }
+
+    fn matches(&self, relative_path: &str) -> bool {
+        self.pattern.matches(relative_path)
+    }
+}
+
+fn compile_path_patterns(section: &str, patterns: &[String]) -> Result<Vec<CompiledPathPattern>> {
+    patterns
+        .iter()
+        .map(|pattern| CompiledPathPattern::new(section, pattern))
+        .collect()
+}
+
+fn normalize_config_pattern(pattern: &str) -> String {
+    pattern.trim().trim_start_matches('/').replace('\\', "/")
+}
+
+fn relative_path(root: &Path, path: &Path) -> String {
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let relative = canonical_path
+        .strip_prefix(&canonical_root)
+        .or_else(|_| path.strip_prefix(root))
+        .unwrap_or(path);
+    let parts: Vec<String> = relative
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
+            Component::CurDir => None,
+            Component::ParentDir => Some("..".to_string()),
+            Component::RootDir | Component::Prefix(_) => None,
+        })
+        .collect();
+
+    parts.join("/")
 }
 
 /// `[runtime]` section of the config file.
@@ -86,6 +215,7 @@ impl Config {
                 )));
             }
         }
+        let _ = ScanPathFilter::from_scan_config(&self.scan, self.scan.ignore_tests)?;
         Ok(())
     }
 
@@ -121,6 +251,10 @@ fail_on = "high"
 # [scan]
 # Skip test files (test/, tests/, __tests__/, *.test.ts, *.spec.ts, etc.).
 # ignore_tests = false
+# Include only matching paths. Empty means include all scan-supported files.
+# include = ["src/**", "tools/**"]
+# Exclude matching paths after include filtering.
+# exclude = ["legacy/**", "**/generated/**", "vendor/**"]
 
 # [runtime.proxy]
 # Runtime MCP proxy guard blocking threshold: block, warn, or never.
