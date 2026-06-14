@@ -83,8 +83,8 @@ impl super::Adapter for HermesAgentAdapter {
             execution.dynamic_exec.extend(parsed.dynamic_exec);
         }
 
-        let dependencies = super::mcp::parse_dependencies(root);
-        let provenance = super::mcp::parse_provenance(root);
+        let dependencies = super::mcp::parse_dependencies(root, filter);
+        let provenance = super::mcp::parse_provenance(root, filter);
         let data = build_data_surface(&tools, &execution);
 
         Ok(vec![ScanTarget {

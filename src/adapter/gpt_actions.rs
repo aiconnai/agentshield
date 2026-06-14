@@ -104,8 +104,8 @@ impl super::Adapter for GptActionsAdapter {
         }
 
         let source_files = collect_spec_source_files(root, filter);
-        let dependencies = super::mcp::parse_dependencies(root);
-        let provenance = super::mcp::parse_provenance(root);
+        let dependencies = super::mcp::parse_dependencies(root, filter);
+        let provenance = super::mcp::parse_provenance(root, filter);
         let data = build_data_surface(&tools, &execution);
 
         Ok(vec![ScanTarget {

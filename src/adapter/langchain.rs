@@ -137,10 +137,10 @@ impl super::Adapter for LangChainAdapter {
         }
 
         // Parse dependencies from pyproject.toml / requirements.txt
-        let dependencies = super::mcp::parse_dependencies(root);
+        let dependencies = super::mcp::parse_dependencies(root, filter);
 
         // Parse provenance from pyproject.toml
-        let provenance = super::mcp::parse_provenance(root);
+        let provenance = super::mcp::parse_provenance(root, filter);
 
         let tools = vec![];
         let data = build_data_surface(&tools, &execution);
