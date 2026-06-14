@@ -98,10 +98,9 @@ impl super::Adapter for McpAdapter {
                 parse_provenance(root, filter),
             )
         } else {
-            let metadata_filter = ScanPathFilter::for_ignore_tests(filter.ignore_tests());
             (
-                parse_dependencies(&metadata_root, &metadata_filter),
-                parse_provenance(&metadata_root, &metadata_filter),
+                parse_dependencies(&metadata_root, filter),
+                parse_provenance(&metadata_root, filter),
             )
         };
 

@@ -5,6 +5,8 @@ use agentshield::{scan, ScanOptions};
 use tempfile::TempDir;
 
 const ROOT_PACKAGE_JSON: &str = r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#;
+const VULNERABLE_PACKAGE_JSON: &str =
+    r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0","event-stream":"3.3.6"}}"#;
 
 const MCP_SERVER_TS: &str = r#"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -12,6 +14,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 const server = new McpServer({ name: "demo" });
 
 server.tool("echo", "Echo input", {}, async () => ({ content: [] }));
+"#;
+
+const MCP_SERVER_PY: &str = r#"
+from mcp import Server
+
+server = Server("demo")
+
+@server.tool("echo")
+def echo(value: str) -> str:
+    return "ok"
 "#;
 
 #[test]
@@ -66,6 +78,75 @@ fn subdirectory_scan_detects_typescript_mcp_source_without_root_package() {
     assert_eq!(source_paths(&report), vec!["server.ts"]);
 }
 
+#[test]
+fn subdirectory_scan_honors_metadata_root_exclude_for_package_json() {
+    let fixture = Fixture::new();
+    fixture.write("package.json", VULNERABLE_PACKAGE_JSON);
+    fixture.write(
+        ".agentshield.toml",
+        "[scan]\nexclude = [\"package.json\"]\n",
+    );
+    fixture.write("src/mcp/server.ts", MCP_SERVER_TS);
+
+    let report = scan(
+        &fixture.path().join("src/mcp"),
+        &ScanOptions {
+            config_path: Some(fixture.path().join(".agentshield.toml")),
+            ..ScanOptions::default()
+        },
+    )
+    .unwrap();
+
+    assert_eq!(source_paths(&report), vec!["server.ts"]);
+    assert_no_finding_from(&report, "package.json");
+    assert!(report.targets[0].dependencies.dependencies.is_empty());
+}
+
+#[test]
+fn subdirectory_scan_honors_metadata_root_exclude_for_requirements_txt() {
+    let fixture = Fixture::new();
+    fixture.write("requirements.txt", "mcp==1.0.0\nevent-stream==3.3.6\n");
+    fixture.write(
+        ".agentshield.toml",
+        "[scan]\nexclude = [\"requirements.txt\"]\n",
+    );
+    fixture.write("src/mcp/server.py", MCP_SERVER_PY);
+
+    let report = scan(
+        &fixture.path().join("src/mcp"),
+        &ScanOptions {
+            config_path: Some(fixture.path().join(".agentshield.toml")),
+            ..ScanOptions::default()
+        },
+    )
+    .unwrap();
+
+    assert_eq!(source_paths(&report), vec!["server.py"]);
+    assert_no_finding_from(&report, "requirements.txt");
+    assert!(report.targets[0].dependencies.dependencies.is_empty());
+}
+
+#[test]
+fn subdirectory_scan_honors_metadata_root_include_for_package_json() {
+    let fixture = Fixture::new();
+    fixture.write("package.json", VULNERABLE_PACKAGE_JSON);
+    fixture.write(".agentshield.toml", "[scan]\ninclude = [\"server.ts\"]\n");
+    fixture.write("src/mcp/server.ts", MCP_SERVER_TS);
+
+    let report = scan(
+        &fixture.path().join("src/mcp"),
+        &ScanOptions {
+            config_path: Some(fixture.path().join(".agentshield.toml")),
+            ..ScanOptions::default()
+        },
+    )
+    .unwrap();
+
+    assert_eq!(source_paths(&report), vec!["server.ts"]);
+    assert_no_finding_from(&report, "package.json");
+    assert!(report.targets[0].dependencies.dependencies.is_empty());
+}
+
 struct Fixture {
     dir: TempDir,
 }
@@ -101,6 +182,27 @@ fn source_paths(report: &agentshield::ScanReport) -> Vec<String> {
         .flat_map(|target| target.source_files.iter())
         .map(|source| relative_path(&report.scan_root, &source.path))
         .collect()
+}
+
+fn assert_no_finding_from(report: &agentshield::ScanReport, file_name: &str) {
+    assert!(
+        !report.findings.iter().any(|finding| finding
+            .location
+            .as_ref()
+            .is_some_and(|location| location.file.ends_with(file_name))),
+        "expected no findings from {file_name}, got: {:?}",
+        report
+            .findings
+            .iter()
+            .map(|finding| (
+                finding.rule_id.as_str(),
+                finding
+                    .location
+                    .as_ref()
+                    .map(|location| location.file.clone())
+            ))
+            .collect::<Vec<_>>()
+    );
 }
 
 fn relative_path(root: &Path, path: &Path) -> String {
