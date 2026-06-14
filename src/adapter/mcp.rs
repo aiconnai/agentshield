@@ -22,54 +22,7 @@ impl super::Adapter for McpAdapter {
     }
 
     fn detect(&self, root: &Path) -> bool {
-        // Check package.json for MCP SDK
-        let pkg_json = root.join("package.json");
-        if pkg_json.exists() {
-            if let Ok(content) = std::fs::read_to_string(&pkg_json) {
-                if content.contains("@modelcontextprotocol/sdk") || content.contains("mcp-server") {
-                    return true;
-                }
-            }
-        }
-
-        // Check pyproject.toml for mcp dependency
-        let pyproject = root.join("pyproject.toml");
-        if pyproject.exists() {
-            if let Ok(content) = std::fs::read_to_string(&pyproject) {
-                if content.contains("mcp") {
-                    return true;
-                }
-            }
-        }
-
-        // Check for Python files importing mcp
-        if let Ok(entries) = std::fs::read_dir(root) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "py") {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if content.contains("from mcp")
-                            || content.contains("import mcp")
-                            || content.contains("@server.tool")
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Check requirements.txt
-        let requirements = root.join("requirements.txt");
-        if requirements.exists() {
-            if let Ok(content) = std::fs::read_to_string(&requirements) {
-                if content.lines().any(|l| l.trim().starts_with("mcp")) {
-                    return true;
-                }
-            }
-        }
-
-        false
+        super::mcp_metadata::metadata_root_for_scan(root).is_some()
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
@@ -78,6 +31,8 @@ impl super::Adapter for McpAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
+        let metadata_root =
+            super::mcp_metadata::metadata_root_for_scan(root).unwrap_or_else(|| root.to_path_buf());
         let name = root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -137,18 +92,25 @@ impl super::Adapter for McpAdapter {
             }
         }
 
-        // Parse dependencies (metadata files honor the path filter)
-        let dependencies = parse_dependencies(root, filter);
-
-        // Parse provenance from package.json or pyproject.toml (filtered)
-        let provenance = parse_provenance(root, filter);
+        let (dependencies, provenance) = if super::mcp_metadata::same_path(root, &metadata_root) {
+            (
+                parse_dependencies(root, filter),
+                parse_provenance(root, filter),
+            )
+        } else {
+            let metadata_filter = ScanPathFilter::for_ignore_tests(filter.ignore_tests());
+            (
+                parse_dependencies(&metadata_root, &metadata_filter),
+                parse_provenance(&metadata_root, &metadata_filter),
+            )
+        };
 
         let data = build_data_surface(&tools, &execution);
 
         Ok(vec![ScanTarget {
             name,
             framework: Framework::Mcp,
-            root_path: root.to_path_buf(),
+            root_path: metadata_root,
             tools,
             execution,
             data,
