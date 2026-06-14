@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use agentshield::rules::AttackCategory;
 use agentshield::ux::ExplainOptions;
 use agentshield::{scan, ScanOptions};
 use tempfile::TempDir;
@@ -134,6 +135,7 @@ fn exclude_suppresses_dependency_findings_from_package_json() {
 
     let report = scan(fixture.path(), &ScanOptions::default()).unwrap();
 
+    assert_no_supply_chain_findings(&report);
     assert!(
         !report.findings.iter().any(|finding| finding
             .location
@@ -155,11 +157,16 @@ fn exclude_suppresses_dependency_findings_from_requirements_txt() {
         ".agentshield.toml",
         "[scan]\nexclude = [\"requirements.txt\"]\n",
     );
+    fixture.write(
+        "package-lock.json",
+        r#"{"lockfileVersion":3,"packages":{}}"#,
+    );
     fixture.write("requirements.txt", "event-stream==3.3.6\n");
     fixture.write("src/main.py", SAFE_TOOL);
 
     let report = scan(fixture.path(), &ScanOptions::default()).unwrap();
 
+    assert_no_supply_chain_findings(&report);
     assert!(
         !report.findings.iter().any(|finding| finding
             .location
@@ -234,6 +241,21 @@ fn source_paths(report: &agentshield::ScanReport) -> Vec<String> {
         .flat_map(|target| target.source_files.iter())
         .map(|source| relative_path(&report.scan_root, &source.path))
         .collect()
+}
+
+fn assert_no_supply_chain_findings(report: &agentshield::ScanReport) {
+    assert!(
+        !report
+            .findings
+            .iter()
+            .any(|finding| finding.attack_category == AttackCategory::SupplyChain),
+        "excluded dependency metadata must not produce supply-chain findings, got: {:?}",
+        report
+            .findings
+            .iter()
+            .map(|f| (&f.rule_id, f.location.as_ref().map(|l| l.file.clone())))
+            .collect::<Vec<_>>()
+    );
 }
 
 fn relative_path(root: &Path, path: &Path) -> String {
