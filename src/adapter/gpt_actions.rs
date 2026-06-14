@@ -6,6 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::execution_surface::{ExecutionSurface, NetworkOperation};
 use crate::ir::taint_builder::build_data_surface;
@@ -73,7 +74,12 @@ impl super::Adapter for GptActionsAdapter {
         false
     }
 
-    fn load(&self, root: &Path, _ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+    fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+        let filter = ScanPathFilter::for_ignore_tests(ignore_tests);
+        self.load_with_filter(root, &filter)
+    }
+
+    fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
         let name = root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -83,7 +89,7 @@ impl super::Adapter for GptActionsAdapter {
         let mut execution = ExecutionSurface::default();
 
         // Find the OpenAPI spec (prefer openapi.json, then others)
-        let spec_path = find_openapi_spec(root);
+        let spec_path = find_openapi_spec(root, filter);
 
         if let Some(spec_path) = spec_path {
             if let Ok(content) = std::fs::read_to_string(&spec_path) {
@@ -97,9 +103,9 @@ impl super::Adapter for GptActionsAdapter {
             }
         }
 
-        let source_files = collect_spec_source_files(root);
-        let dependencies = super::mcp::parse_dependencies(root);
-        let provenance = super::mcp::parse_provenance(root);
+        let source_files = collect_spec_source_files(root, filter);
+        let dependencies = super::mcp::parse_dependencies(root, filter);
+        let provenance = super::mcp::parse_provenance(root, filter);
         let data = build_data_surface(&tools, &execution);
 
         Ok(vec![ScanTarget {
@@ -127,10 +133,10 @@ fn has_plugin_manifest(root: &Path) -> bool {
 }
 
 /// Find the first OpenAPI spec file present under root, in preference order.
-fn find_openapi_spec(root: &Path) -> Option<PathBuf> {
+fn find_openapi_spec(root: &Path, filter: &ScanPathFilter) -> Option<PathBuf> {
     for filename in OPENAPI_FILENAMES {
         let path = root.join(filename);
-        if path.exists() {
+        if path.exists() && filter.allows_path(root, &path) {
             return Some(path);
         }
     }
@@ -289,7 +295,7 @@ fn build_input_schema_from_operation(operation: &serde_json::Value) -> serde_jso
 ///
 /// We do not parse them with language parsers (there is no Rust/Python source),
 /// but including them lets detectors and output formatters reference them.
-fn collect_spec_source_files(root: &Path) -> Vec<SourceFile> {
+fn collect_spec_source_files(root: &Path, filter: &ScanPathFilter) -> Vec<SourceFile> {
     let mut files = Vec::new();
 
     let candidates: Vec<PathBuf> = OPENAPI_FILENAMES
@@ -303,6 +309,9 @@ fn collect_spec_source_files(root: &Path) -> Vec<SourceFile> {
 
     for path in candidates {
         if !path.exists() {
+            continue;
+        }
+        if !filter.allows_path(root, &path) {
             continue;
         }
         let Ok(metadata) = std::fs::metadata(&path) else {

@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::analysis::cross_file::apply_cross_file_sanitization;
+use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::execution_surface::ExecutionSurface;
 use crate::ir::taint_builder::build_data_surface;
@@ -72,6 +73,11 @@ impl super::Adapter for McpAdapter {
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+        let filter = ScanPathFilter::for_ignore_tests(ignore_tests);
+        self.load_with_filter(root, &filter)
+    }
+
+    fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
         let name = root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -82,7 +88,7 @@ impl super::Adapter for McpAdapter {
         let mut tools = Vec::new();
 
         // Collect source files
-        collect_source_files(root, ignore_tests, &mut source_files)?;
+        collect_source_files_with_filter(root, filter, &mut source_files)?;
         for source_file in &source_files {
             if matches!(
                 source_file.language,
@@ -122,7 +128,7 @@ impl super::Adapter for McpAdapter {
 
         // Parse tool definitions from JSON if available
         let tools_json = root.join("tools.json");
-        if tools_json.exists() {
+        if tools_json.exists() && filter.allows_path(root, &tools_json) {
             if let Ok(content) = std::fs::read_to_string(&tools_json) {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
                     tools.extend(parser::json_schema::parse_tools_from_json(&value));
@@ -131,11 +137,11 @@ impl super::Adapter for McpAdapter {
             }
         }
 
-        // Parse dependencies
-        let dependencies = parse_dependencies(root);
+        // Parse dependencies (metadata files honor the path filter)
+        let dependencies = parse_dependencies(root, filter);
 
-        // Parse provenance from package.json or pyproject.toml
-        let provenance = parse_provenance(root);
+        // Parse provenance from package.json or pyproject.toml (filtered)
+        let provenance = parse_provenance(root, filter);
 
         let data = build_data_surface(&tools, &execution);
 
@@ -331,9 +337,9 @@ fn source_loc(file: &Path, line: usize) -> SourceLocation {
     }
 }
 
-pub(super) fn collect_source_files(
+pub(super) fn collect_source_files_with_filter(
     root: &Path,
-    ignore_tests: bool,
+    filter: &ScanPathFilter,
     files: &mut Vec<SourceFile>,
 ) -> Result<()> {
     let walker = ignore::WalkBuilder::new(root)
@@ -348,7 +354,11 @@ pub(super) fn collect_source_files(
             continue;
         }
 
-        if ignore_tests && is_test_file(path) {
+        if filter.ignore_tests() && is_test_file(path) {
+            continue;
+        }
+
+        if !filter.allows_path(root, path) {
             continue;
         }
 
@@ -386,13 +396,16 @@ pub(super) fn collect_source_files(
     Ok(())
 }
 
-pub(super) fn parse_dependencies(root: &Path) -> dependency_surface::DependencySurface {
+pub(super) fn parse_dependencies(
+    root: &Path,
+    filter: &ScanPathFilter,
+) -> dependency_surface::DependencySurface {
     use crate::ir::dependency_surface::*;
     let mut surface = DependencySurface::default();
 
     // Parse requirements.txt as a dependency manifest (NOT a lockfile)
     let req_file = root.join("requirements.txt");
-    if req_file.exists() {
+    if req_file.exists() && filter.allows_path(root, &req_file) {
         if let Ok(content) = std::fs::read_to_string(&req_file) {
             for (idx, line) in content.lines().enumerate() {
                 let line = line.trim();
@@ -439,7 +452,7 @@ pub(super) fn parse_dependencies(root: &Path) -> dependency_surface::DependencyS
         ("uv.lock", LockfileFormat::UvLock),
     ] {
         let lock_path = root.join(filename);
-        if lock_path.exists() {
+        if lock_path.exists() && filter.allows_path(root, &lock_path) {
             surface.lockfile = Some(LockfileInfo {
                 path: lock_path,
                 format,
@@ -452,7 +465,7 @@ pub(super) fn parse_dependencies(root: &Path) -> dependency_surface::DependencyS
 
     // Parse package.json dependencies
     let pkg_json = root.join("package.json");
-    if pkg_json.exists() {
+    if pkg_json.exists() && filter.allows_path(root, &pkg_json) {
         if let Ok(content) = std::fs::read_to_string(&pkg_json) {
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
                 for (key, is_dev) in [("dependencies", false), ("devDependencies", true)] {
@@ -507,12 +520,15 @@ fn find_json_key_line(content: &str, key: &str) -> usize {
     1
 }
 
-pub(super) fn parse_provenance(root: &Path) -> provenance_surface::ProvenanceSurface {
+pub(super) fn parse_provenance(
+    root: &Path,
+    filter: &ScanPathFilter,
+) -> provenance_surface::ProvenanceSurface {
     let mut prov = provenance_surface::ProvenanceSurface::default();
 
     // From package.json
     let pkg_json = root.join("package.json");
-    if pkg_json.exists() {
+    if pkg_json.exists() && filter.allows_path(root, &pkg_json) {
         if let Ok(content) = std::fs::read_to_string(&pkg_json) {
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
                 prov.author = value
@@ -534,7 +550,7 @@ pub(super) fn parse_provenance(root: &Path) -> provenance_surface::ProvenanceSur
 
     // From pyproject.toml
     let pyproject = root.join("pyproject.toml");
-    if pyproject.exists() {
+    if pyproject.exists() && filter.allows_path(root, &pyproject) {
         if let Ok(content) = std::fs::read_to_string(&pyproject) {
             if let Ok(value) = content.parse::<toml::Value>() {
                 if let Some(project) = value.get("project") {

@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::analysis::cross_file::apply_cross_file_sanitization;
+use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::execution_surface::{
     CommandInvocation, EnvAccess, ExecutionSurface, NetworkOperation,
@@ -39,6 +40,11 @@ impl super::Adapter for HermesAgentAdapter {
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+        let filter = ScanPathFilter::for_ignore_tests(ignore_tests);
+        self.load_with_filter(root, &filter)
+    }
+
+    fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
         let name = root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -48,7 +54,7 @@ impl super::Adapter for HermesAgentAdapter {
         let mut execution = ExecutionSurface::default();
         let mut source_files: Vec<SourceFile> = Vec::new();
 
-        collect_hermes_source_files(root, ignore_tests, &mut source_files)?;
+        collect_hermes_source_files(root, filter, &mut source_files)?;
 
         for sf in &source_files {
             if is_yaml_file(&sf.path) {
@@ -77,8 +83,8 @@ impl super::Adapter for HermesAgentAdapter {
             execution.dynamic_exec.extend(parsed.dynamic_exec);
         }
 
-        let dependencies = super::mcp::parse_dependencies(root);
-        let provenance = super::mcp::parse_provenance(root);
+        let dependencies = super::mcp::parse_dependencies(root, filter);
+        let provenance = super::mcp::parse_provenance(root, filter);
         let data = build_data_surface(&tools, &execution);
 
         Ok(vec![ScanTarget {
@@ -147,7 +153,7 @@ fn has_skill_md_under(dir: &Path) -> bool {
 
 fn collect_hermes_source_files(
     root: &Path,
-    ignore_tests: bool,
+    filter: &ScanPathFilter,
     source_files: &mut Vec<SourceFile>,
 ) -> Result<()> {
     for path in [
@@ -156,38 +162,48 @@ fn collect_hermes_source_files(
         root.join(".hermes.md"),
         root.join("SOUL.md"),
     ] {
-        push_source_file(&path, source_files)?;
+        push_source_file_if_allowed(root, &path, filter, source_files)?;
     }
 
-    collect_profile_configs(root, source_files)?;
+    collect_profile_configs(root, filter, source_files)?;
 
     for dir in [
         root.join("skills"),
         root.join("optional-skills"),
         root.join("optional-mcps"),
     ] {
-        collect_artifact_tree(&dir, ignore_tests, source_files)?;
+        collect_artifact_tree(root, &dir, filter, source_files)?;
     }
 
     Ok(())
 }
 
-fn collect_profile_configs(root: &Path, source_files: &mut Vec<SourceFile>) -> Result<()> {
+fn collect_profile_configs(
+    root: &Path,
+    filter: &ScanPathFilter,
+    source_files: &mut Vec<SourceFile>,
+) -> Result<()> {
     let profiles_dir = root.join("profiles");
     let Ok(entries) = std::fs::read_dir(profiles_dir) else {
         return Ok(());
     };
 
     for entry in entries.flatten() {
-        push_source_file(&entry.path().join("config.yaml"), source_files)?;
+        push_source_file_if_allowed(
+            root,
+            &entry.path().join("config.yaml"),
+            filter,
+            source_files,
+        )?;
     }
 
     Ok(())
 }
 
 fn collect_artifact_tree(
+    root: &Path,
     dir: &Path,
-    ignore_tests: bool,
+    filter: &ScanPathFilter,
     source_files: &mut Vec<SourceFile>,
 ) -> Result<()> {
     if !dir.exists() {
@@ -206,7 +222,11 @@ fn collect_artifact_tree(
             continue;
         }
 
-        if ignore_tests && super::mcp::is_test_file(path) {
+        if filter.ignore_tests() && super::mcp::is_test_file(path) {
+            continue;
+        }
+
+        if !filter.allows_path(root, path) {
             continue;
         }
 
@@ -233,6 +253,18 @@ fn collect_artifact_tree(
         }
     }
 
+    Ok(())
+}
+
+fn push_source_file_if_allowed(
+    root: &Path,
+    path: &Path,
+    filter: &ScanPathFilter,
+    source_files: &mut Vec<SourceFile>,
+) -> Result<()> {
+    if filter.allows_path(root, path) {
+        push_source_file(path, source_files)?;
+    }
     Ok(())
 }
 
