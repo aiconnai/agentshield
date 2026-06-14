@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::analysis::cross_file::apply_cross_file_sanitization;
+use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::execution_surface::ExecutionSurface;
 use crate::ir::taint_builder::build_data_surface;
@@ -72,6 +73,11 @@ impl super::Adapter for McpAdapter {
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+        let filter = ScanPathFilter::for_ignore_tests(ignore_tests);
+        self.load_with_filter(root, &filter)
+    }
+
+    fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
         let name = root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -82,7 +88,7 @@ impl super::Adapter for McpAdapter {
         let mut tools = Vec::new();
 
         // Collect source files
-        collect_source_files(root, ignore_tests, &mut source_files)?;
+        collect_source_files_with_filter(root, filter, &mut source_files)?;
         for source_file in &source_files {
             if matches!(
                 source_file.language,
@@ -331,9 +337,9 @@ fn source_loc(file: &Path, line: usize) -> SourceLocation {
     }
 }
 
-pub(super) fn collect_source_files(
+pub(super) fn collect_source_files_with_filter(
     root: &Path,
-    ignore_tests: bool,
+    filter: &ScanPathFilter,
     files: &mut Vec<SourceFile>,
 ) -> Result<()> {
     let walker = ignore::WalkBuilder::new(root)
@@ -348,7 +354,11 @@ pub(super) fn collect_source_files(
             continue;
         }
 
-        if ignore_tests && is_test_file(path) {
+        if filter.ignore_tests() && is_test_file(path) {
+            continue;
+        }
+
+        if !filter.allows_path(root, path) {
             continue;
         }
 

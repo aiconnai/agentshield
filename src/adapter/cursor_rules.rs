@@ -8,6 +8,7 @@
 
 use std::path::Path;
 
+use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::execution_surface::{CommandInvocation, EnvAccess, ExecutionSurface};
 use crate::ir::taint_builder::build_data_surface;
@@ -30,7 +31,12 @@ impl super::Adapter for CursorRulesAdapter {
         root.join(".cursorrules").exists() || root.join(".cursor").join("mcp.json").exists()
     }
 
-    fn load(&self, root: &Path, _ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+    fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+        let filter = ScanPathFilter::for_ignore_tests(ignore_tests);
+        self.load_with_filter(root, &filter)
+    }
+
+    fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
         let name = root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -42,7 +48,7 @@ impl super::Adapter for CursorRulesAdapter {
 
         // Load .cursorrules as a plain-text source file (no structured parsing needed)
         let cursorrules_path = root.join(".cursorrules");
-        if cursorrules_path.exists() {
+        if cursorrules_path.exists() && filter.allows_path(root, &cursorrules_path) {
             if let Some(sf) = read_as_source_file(&cursorrules_path) {
                 source_files.push(sf);
             }
@@ -50,7 +56,7 @@ impl super::Adapter for CursorRulesAdapter {
 
         // Load .cursor/mcp.json — MCP server definitions
         let mcp_json_path = root.join(".cursor").join("mcp.json");
-        if mcp_json_path.exists() {
+        if mcp_json_path.exists() && filter.allows_path(root, &mcp_json_path) {
             if let Some(sf) = read_as_source_file(&mcp_json_path) {
                 source_files.push(sf);
             }

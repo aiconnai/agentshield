@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::analysis::cross_file::apply_cross_file_sanitization;
+use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
@@ -92,6 +93,11 @@ impl super::Adapter for CrewAiAdapter {
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+        let filter = ScanPathFilter::for_ignore_tests(ignore_tests);
+        self.load_with_filter(root, &filter)
+    }
+
+    fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
         let name = root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -101,7 +107,7 @@ impl super::Adapter for CrewAiAdapter {
         let mut execution = execution_surface::ExecutionSurface::default();
 
         // Phase 0: Collect source files (reuses MCP adapter's walker)
-        super::mcp::collect_source_files(root, ignore_tests, &mut source_files)?;
+        super::mcp::collect_source_files_with_filter(root, filter, &mut source_files)?;
 
         // Filter to Python-only (CrewAI is a Python framework)
         source_files.retain(|sf| matches!(sf.language, Language::Python));
