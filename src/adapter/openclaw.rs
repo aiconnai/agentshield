@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::analysis::cross_file::apply_cross_file_sanitization;
+use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
@@ -21,6 +22,11 @@ impl super::Adapter for OpenClawAdapter {
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+        let filter = ScanPathFilter::for_ignore_tests(ignore_tests);
+        self.load_with_filter(root, &filter)
+    }
+
+    fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
         let name = root
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -42,7 +48,11 @@ impl super::Adapter for OpenClawAdapter {
                 continue;
             }
 
-            if ignore_tests && super::mcp::is_test_file(path) {
+            if filter.ignore_tests() && super::mcp::is_test_file(path) {
+                continue;
+            }
+
+            if !filter.allows_path(root, path) {
                 continue;
             }
 

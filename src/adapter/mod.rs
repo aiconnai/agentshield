@@ -8,6 +8,7 @@ pub mod openclaw;
 
 use std::path::Path;
 
+use crate::config::ScanPathFilter;
 use crate::error::{Result, ShieldError};
 use crate::ir::{Framework, ScanTarget};
 
@@ -23,6 +24,10 @@ pub trait Adapter: Send + Sync {
     /// Load artifacts from the directory into scan targets.
     /// When `ignore_tests` is true, test files are excluded before parsing.
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>>;
+
+    fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
+        self.load(root, filter.ignore_tests())
+    }
 }
 
 /// All registered adapters.
@@ -43,12 +48,20 @@ pub fn all_adapters() -> Vec<Box<dyn Adapter>> {
 /// Repos may contain both MCP and OpenClaw artifacts — all matching
 /// adapters contribute targets rather than stopping at the first match.
 pub fn auto_detect_and_load(root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
+    let filter = ScanPathFilter::for_ignore_tests(ignore_tests);
+    auto_detect_and_load_with_filter(root, &filter)
+}
+
+pub fn auto_detect_and_load_with_filter(
+    root: &Path,
+    filter: &ScanPathFilter,
+) -> Result<Vec<ScanTarget>> {
     let adapters = all_adapters();
     let mut all_targets = Vec::new();
 
     for adapter in &adapters {
         if adapter.detect(root) {
-            match adapter.load(root, ignore_tests) {
+            match adapter.load_with_filter(root, filter) {
                 Ok(targets) => all_targets.extend(targets),
                 Err(e) => {
                     tracing::warn!(

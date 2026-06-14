@@ -308,6 +308,12 @@ ignore_rules = ["SHIELD-008"]
 # Skip test files before parsing
 ignore_tests = true
 
+# Optional path filters are relative to the scan root.
+# Empty include means all scan-supported files are eligible.
+# Use ** for recursive directories; * and ? stay within one path segment.
+include = ["src/**", "tools/**"]
+exclude = ["legacy/**", "**/generated/**", "vendor/**"]
+
 [runtime.proxy]
 # Runtime MCP proxy guard blocking threshold: block, warn, or never.
 fail_on = "block"
@@ -318,6 +324,13 @@ fail_on = "never"
 ```
 
 Suppressions can be added through `agentshield suppress <fingerprint> --reason "..."` after obtaining finding fingerprints from JSON output.
+
+When both `include` and `exclude` match a file, `exclude` wins. Use
+`agentshield scan . --explain` to confirm the active path filters and parsed
+source-file count before relying on a focused scan in CI.
+Path filter matching is case-sensitive, accepts `/` on all platforms, treats
+leading `./` or `/` as relative to the scan root, and treats a trailing slash
+such as `legacy/` as matching that directory's contents.
 
 ---
 

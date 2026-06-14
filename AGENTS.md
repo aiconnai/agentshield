@@ -95,6 +95,25 @@ cargo run -- scan . --ignore-tests --format html --output report.html
 cargo run -- list-rules
 ```
 
+## Huly Skill
+
+When working with Huly issues, projects, labels, milestones, or documents, use
+the repo skill at `skills/huly/SKILL.md`.
+
+The skill prefers the official Huly Platform API with token auth. Required
+environment variables are:
+
+```bash
+HULY_URL=https://huly.app/workbench/<workspace>/
+HULY_WORKSPACE=<workspace-slug>
+HULY_PROJECT=<project-identifier>
+HULY_API_TOKEN=<token>
+```
+
+Compatibility token fallbacks are `HULY_TOKEN` and `HULY_APY_TOKEN`. Do not
+print tokens or full environment values. Run a read-only project lookup before
+creating or updating Huly data, and make write scripts idempotent.
+
 ## RTK Usage for Agent Check Loops
 
 RTK is optional and should only filter command output seen by agents or humans. RTK filters local command output only. It must not alter AgentShield JSON, SARIF, HTML, or console output contracts consumed by users, clients, CI, or GitHub Code Scanning.
@@ -135,7 +154,7 @@ Rules:
 - `ArgumentSource` — `Literal` (safe), `Parameter` (tainted), `EnvVar`, `Interpolated`, `Unknown`, `Sanitized` (safe, v0.2.2)
 - `Detector` trait — `metadata() -> RuleMetadata`, `run(&ScanTarget) -> Vec<Finding>`
 - `PolicyVerdict` — pass/fail with threshold and highest severity
-- `ScanConfig` — `[scan]` config section with `ignore_tests` bool
+- `ScanConfig` — `[scan]` config section with `ignore_tests`, `include`, and `exclude`
 - `ParsedFile` — parser output with `commands`, `file_operations`, `network_operations`, `function_defs`, `call_sites`, `sanitized_vars`
 - `FunctionDef` — extracted function definition with name, params, `is_exported`
 - `CallSite` — function call with callee name, classified arguments, caller context
@@ -188,6 +207,22 @@ The `--ignore-tests` flag skips test files at the file-walking stage (before par
 - **Library:** `ScanOptions { ignore_tests: true, .. }`
 
 CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
+
+## Scan Path Filters (`[scan] include/exclude`)
+
+`[scan] include` and `[scan] exclude` are optional glob lists relative to the scan root:
+
+```toml
+[scan]
+include = ["src/**", "tools/**"]
+exclude = ["legacy/**", "**/generated/**", "vendor/**"]
+```
+
+Rules:
+
+- Empty `include` means all scan-supported files are eligible.
+- `exclude` is applied after `include`, so exclude wins when both match.
+- Filters are applied before source parsing and are shown in `scan --explain`.
 
 `is_test_file()` in `src/adapter/mcp.rs` matches:
 - Directories: `test/`, `tests/`, `__tests__/`, `__pycache__/`
