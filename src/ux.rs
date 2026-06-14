@@ -1,3 +1,6 @@
+mod hotspots;
+mod roots;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -134,6 +137,7 @@ pub fn render_explain(report: &ScanReport, options: &ExplainOptions) -> String {
         "- Adapters: {}\n",
         display_list(&coverage.frameworks, "none")
     ));
+    output.push_str(&roots::render(report));
     output.push_str(&format!("- Targets: {}\n", coverage.targets));
     output.push_str(&format!(
         "- Source files parsed: {} ({})\n",
@@ -172,6 +176,8 @@ pub fn render_explain(report: &ScanReport, options: &ExplainOptions) -> String {
         "- Severity counts: {}\n\n",
         severity_counts(&report.findings)
     ));
+
+    output.push_str(&hotspots::render(report));
 
     output.push_str("Next actions:\n");
     for action in next_actions(report) {

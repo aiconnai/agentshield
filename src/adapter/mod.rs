@@ -4,6 +4,7 @@ pub mod gpt_actions;
 pub mod hermes;
 pub mod langchain;
 pub mod mcp;
+pub(super) mod mcp_metadata;
 pub mod openclaw;
 
 use std::path::Path;
