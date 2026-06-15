@@ -17,7 +17,7 @@ Use this checklist for public AgentShield releases.
 - [ ] Run `.github/scripts/check-release-invariants.sh v<version>` before pushing the tag. This must confirm the canonical Docker image is `ghcr.io/aiconnai/agentshield:<version>`.
 - [ ] Run the automated release checklist before tagging:
   ```bash
-  bash docs/harness/bin/release-checklist.sh 0.8.3 --allow-untagged
+  bash docs/harness/bin/release-checklist.sh 0.8.7 --allow-untagged
   ```
 - [ ] Confirm no `.env` files, private keys, tokens, or local secrets are staged.
 
@@ -52,11 +52,11 @@ Use this checklist for public AgentShield releases.
 
 - [ ] Tag the release with `v<version>`.
   ```bash
-  git tag -a v0.8.3 -m "Release v0.8.3"
+  git tag -a v0.8.7 -m "Release v0.8.7"
   ```
 - [ ] Run the final release checklist after tagging:
   ```bash
-  bash docs/harness/bin/release-checklist.sh 0.8.3
+  bash docs/harness/bin/release-checklist.sh 0.8.7
   ```
 - [ ] Publish the GitHub release with release notes and artifacts.
 - [ ] Publish the crate if this is a crates.io release. `cargo publish` is the human-approved final action, and it must not run from a dirty worktree.
