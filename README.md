@@ -19,7 +19,8 @@ call those tools.
 
 It runs as a CLI, GitHub Action, or library, keeps source code on your machine,
 and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML
-reports. The current release line is `0.8.6`.
+reports. The current release line is `0.8.6`; 0.8.7 release notes are staged
+for the path-filter and first-run explain UX work.
 
 ## At a glance
 
@@ -238,6 +239,8 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield guard --mcp-proxy [-- <server cmd...>]` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages, block unsafe calls, and either emit forward markers or bridge stdio to a spawned downstream MCP server when built with the `runtime-guard` feature. |
 
 Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--explain`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
+Configured `[scan] include` and `[scan] exclude` filters scope source and
+metadata-derived findings before detectors run.
 
 For mature repositories with existing findings, write a baseline first and use
 it in CI:
@@ -249,7 +252,8 @@ agentshield ci install --baseline .agentshield-baseline.json
 ```
 
 `--explain` is intentionally console-only. It will not append text to JSON,
-SARIF, or HTML output.
+SARIF, or HTML output. Explain output includes the scan root, metadata root
+when different, and hotspot summaries for concentrated blocking findings.
 
 ---
 
@@ -399,4 +403,5 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- list-rules
 ```
 
-For release-specific notes, see `docs/releases/0.8.6.md` and `docs/RELEASE_CHECKLIST.md`.
+For release-specific notes, see `docs/releases/0.8.6.md`,
+`docs/releases/0.8.7.md`, and `docs/RELEASE_CHECKLIST.md`.
