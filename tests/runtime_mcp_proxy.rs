@@ -26,7 +26,7 @@ fn run_mcp_proxy_transport(input: &[u8]) -> Output {
 
 fn run_mcp_proxy_transport_with_server(input: &[u8], server: &str) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_agentshield"))
-        .args(["guard", "--mcp-proxy", "--", "python3", server])
+        .args(["guard", "--mcp-proxy", "--", python_command(), server])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -39,6 +39,16 @@ fn run_mcp_proxy_transport_with_server(input: &[u8], server: &str) -> Output {
         .write_all(input)
         .expect("write proxy stdin");
     child.wait_with_output().expect("wait for proxy output")
+}
+
+#[cfg(windows)]
+fn python_command() -> &'static str {
+    "python"
+}
+
+#[cfg(not(windows))]
+fn python_command() -> &'static str {
+    "python3"
 }
 
 #[test]
