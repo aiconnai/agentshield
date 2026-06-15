@@ -18,11 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `agentshield ci install` to generate a GitHub Actions workflow.
 - `agentshield ci install --baseline <path>` to generate GitHub Actions
   workflows that filter known findings through a baseline file.
+- `[scan] include` and `[scan] exclude` path filters for scoping scans from
+  `.agentshield.toml`.
+- MCP subdirectory scans that keep source parsing bounded to the requested
+  directory while reading project metadata from an ancestor root when needed.
+- Explain-mode scan-root, metadata-root, and blocking-finding hotspot summaries.
 
 ### Changed
 
 - Console scan output now separates runtime-risk findings from supply-chain
   hygiene recommendations before listing individual findings.
+- `scan --explain` now highlights concentrated runtime, supply-chain, and rule
+  hotspots so first-run triage points at the highest-value directories/files.
 
 ### Fixed
 
@@ -38,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `aiconnai/agentshield@main` action ref.
 - The GitHub Action now resolves release assets from the canonical
   `aiconnai/agentshield` repository.
+- Path filters now also apply to dependency and provenance metadata files, so
+  excluded manifests do not produce metadata-derived findings.
 
 ## [0.8.6] - 2026-06-07
 

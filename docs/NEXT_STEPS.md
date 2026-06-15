@@ -1,6 +1,6 @@
 # Next Steps — Post v0.1.0
 
-Status: v0.8.6 release prep. 7 framework/client adapters (MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering, experimental `guard --stdin`, and experimental bidirectional `guard --mcp-proxy` transport. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations - all done.
+Status: v0.8.7 release prep. 7 framework/client adapters (MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering, scan include/exclude filters, MCP subdirectory scans, explain hotspot summaries, experimental `guard --stdin`, and experimental bidirectional `guard --mcp-proxy` transport. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations - all done.
 
 ---
 
@@ -13,6 +13,24 @@ Runtime guard work is planned as an experimental extension to AgentShield's curr
 - **Experimental `agentshield guard --stdin`:** done.
 - **MCP proxy guard mode:** experimental line-protocol and bidirectional stdio transport implementations done.
 - **Production hardening:** broaden MCP client/server compatibility tests and runtime compatibility guarantees before runtime mode is considered stable.
+
+---
+
+## v0.8.7 release prep
+
+The current release-prep scope covers first-run scanner scoping and triage:
+
+- `[scan] include` and `[scan] exclude` path filters for source and
+  metadata-derived findings.
+- MCP subdirectory scans that preserve the requested source boundary while
+  reading ancestor project metadata.
+- `scan --explain` root reporting and blocking-finding hotspot summaries.
+
+Remaining follow-up before tagging:
+
+- AGENT-31 GitHub Action/e2e coverage for path filters plus MCP subdirectory
+  scans is included in the release-prep batch.
+- Final release checklist pass and version/tag bump when publication is ready.
 
 ---
 
