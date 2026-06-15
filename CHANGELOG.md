@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-06-15
+
 ### Added
 
 - `agentshield quickstart` for first-run setup: creates project config, suggests
@@ -47,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `aiconnai/agentshield` repository.
 - Path filters now also apply to dependency and provenance metadata files, so
   excluded manifests do not produce metadata-derived findings.
+- GitHub Actions maintenance updated the Action E2E checkout step and SARIF
+  upload actions to current major versions.
 
 ## [0.8.6] - 2026-06-07
 
