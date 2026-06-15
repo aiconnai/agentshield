@@ -452,88 +452,13 @@ const GUARD_BLOCK_EXIT: i32 = 3;
 /// Fails closed: a line that is not valid JSON is blocked.
 #[cfg(feature = "runtime-guard")]
 fn cmd_mcp_proxy(config_path: Option<std::path::PathBuf>) -> agentshield::error::Result<i32> {
-    use agentshield::runtime::{decide_tool_call, ProxyDecision};
-    use std::io::{BufRead, Write};
-
     let policy = load_proxy_policy(config_path);
-    let mut blocked_any = false;
-
-    let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-    let mut out = stdout.lock();
-
-    let mut reader = stdin.lock();
-    let mut raw = Vec::new();
-    loop {
-        // Read one line with a hard byte cap so a single huge line cannot
-        // exhaust memory (mirrors the stdin guard's 1 MiB limit). A line that
-        // exceeds the cap is treated as malformed and blocked (fail closed).
-        raw.clear();
-        let read = (&mut reader)
-            .take((GUARD_STDIN_MAX_BYTES + 1) as u64)
-            .read_until(b'\n', &mut raw);
-        let n = match read {
-            Ok(0) => break, // EOF
-            Ok(n) => n,
-            Err(_) => break,
-        };
-        let over_limit = n > GUARD_STDIN_MAX_BYTES;
-        let line = String::from_utf8_lossy(&raw);
-        let line = line.trim_end_matches(['\n', '\r']);
-        if !over_limit && line.trim().is_empty() {
-            continue;
-        }
-
-        let parsed = if over_limit {
-            // Force the fail-closed branch below without parsing a truncated line.
-            Err(())
-        } else {
-            serde_json::from_str::<serde_json::Value>(line).map_err(|_| ())
-        };
-
-        let response = match parsed {
-            Ok(request) => {
-                match decide_tool_call(&request, &policy) {
-                    ProxyDecision::Forward => serde_json::json!({ "forward": request }),
-                    ProxyDecision::ForwardSuppressed { rule_id } => {
-                        // Audit: a block was suppressed by a `never` override.
-                        eprintln!("agentshield: forwarded a {rule_id} block suppressed by a 'never' override");
-                        serde_json::json!({ "forward": request })
-                    }
-                    ProxyDecision::Block(error) => {
-                        blocked_any = true;
-                        error
-                    }
-                }
-            }
-            // Fail closed: an unparseable line is blocked with a synthetic error.
-            Err(_) => {
-                blocked_any = true;
-                serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "id": serde_json::Value::Null,
-                    "error": {
-                        "code": agentshield::runtime::mcp_proxy::BLOCKED_ERROR_CODE,
-                        "message": "Blocked by AgentShield runtime guard",
-                        "data": { "verdict": "block", "rule_id": "AGENTSHIELD-RUNTIME-INVALID-INPUT", "schema_version": "v1" }
-                    }
-                })
-            }
-        };
-
-        // Best-effort line-delimited output; a write failure ends the loop.
-        match serde_json::to_string(&response) {
-            Ok(rendered) => {
-                if writeln!(out, "{rendered}").is_err() {
-                    break;
-                }
-            }
-            Err(_) => break,
-        }
-    }
-
-    // Non-zero exit if any call was blocked, so a wrapper can detect it.
-    Ok(if blocked_any { GUARD_BLOCK_EXIT } else { 0 })
+    agentshield::runtime::mcp_proxy_stdio::run_line_mode(
+        &policy,
+        GUARD_STDIN_MAX_BYTES,
+        GUARD_BLOCK_EXIT,
+    )
+    .map_err(agentshield::error::ShieldError::Io)
 }
 
 /// Build a `ProxyPolicy` from the `[runtime.proxy]` config section.
@@ -578,168 +503,14 @@ fn cmd_mcp_proxy_transport(
     config_path: Option<std::path::PathBuf>,
     server: Vec<String>,
 ) -> agentshield::error::Result<i32> {
-    use agentshield::runtime::{decide_tool_call, ProxyDecision};
-    use std::io::{BufRead, Write};
-    use std::process::{Command, Stdio};
-    use std::thread;
-
     let policy = load_proxy_policy(config_path);
-
-    let (program, args) = match server.split_first() {
-        Some(parts) => parts,
-        None => return cmd_mcp_proxy(None), // no command → line mode
-    };
-
-    let mut child = match Command::new(program)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-    {
-        Ok(child) => child,
-        // Fail closed: cannot spawn the server → block everything.
-        Err(_) => {
-            eprintln!("agentshield: failed to spawn MCP server; blocking all calls");
-            return Ok(GUARD_BLOCK_EXIT);
-        }
-    };
-
-    let mut server_stdin = child.stdin.take().expect("server stdin piped");
-    let server_stdout = child.stdout.take().expect("server stdout piped");
-
-    // Pump the server's stdout straight to the client's stdout (responses).
-    // Lock stdout per-line (not for the thread's lifetime) so the main loop can
-    // also write block errors without deadlocking on the stdout lock.
-    let pump = thread::spawn(move || {
-        let mut reader = std::io::BufReader::new(server_stdout);
-        let mut line = String::new();
-        loop {
-            line.clear();
-            match reader.read_line(&mut line) {
-                Ok(0) => break, // server closed
-                Ok(_) => {
-                    let stdout = std::io::stdout();
-                    let mut out = stdout.lock();
-                    if out.write_all(line.as_bytes()).is_err() || out.flush().is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
-            }
-        }
-    });
-
-    let mut blocked_any = false;
-    let stdin = std::io::stdin();
-    let mut reader = stdin.lock();
-    let mut raw = Vec::new();
-
-    loop {
-        raw.clear();
-        let n = match (&mut reader)
-            .take((GUARD_STDIN_MAX_BYTES + 1) as u64)
-            .read_until(b'\n', &mut raw)
-        {
-            Ok(0) => break, // client EOF
-            Ok(n) => n,
-            Err(_) => break,
-        };
-        let over_limit = n > GUARD_STDIN_MAX_BYTES;
-        let line = String::from_utf8_lossy(&raw);
-        let line = line.trim_end_matches(['\n', '\r']);
-        if !over_limit && line.trim().is_empty() {
-            continue;
-        }
-
-        let parsed = if over_limit {
-            Err(())
-        } else {
-            serde_json::from_str::<serde_json::Value>(line).map_err(|_| ())
-        };
-
-        match parsed {
-            Ok(request) => match decide_tool_call(&request, &policy) {
-                ProxyDecision::Forward => {
-                    // Forward the original request bytes to the server. If the
-                    // server is gone, tell the client instead of dropping the
-                    // request silently, then stop.
-                    if server_stdin.write_all(raw.as_slice()).is_err() {
-                        let _ = write_client_line(&downstream_unavailable_error(&request));
-                        break;
-                    }
-                    let _ = server_stdin.flush();
-                }
-                ProxyDecision::ForwardSuppressed { rule_id } => {
-                    eprintln!(
-                        "agentshield: forwarded a {rule_id} block suppressed by a 'never' override"
-                    );
-                    if server_stdin.write_all(raw.as_slice()).is_err() {
-                        let _ = write_client_line(&downstream_unavailable_error(&request));
-                        break;
-                    }
-                    let _ = server_stdin.flush();
-                }
-                ProxyDecision::Block(error) => {
-                    // The server never sees a blocked call; the proxy answers.
-                    blocked_any = true;
-                    if write_client_line(&error).is_err() {
-                        break;
-                    }
-                }
-            },
-            Err(()) => {
-                blocked_any = true;
-                let error = serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "id": serde_json::Value::Null,
-                    "error": {
-                        "code": agentshield::runtime::mcp_proxy::BLOCKED_ERROR_CODE,
-                        "message": "Blocked by AgentShield runtime guard",
-                        "data": { "verdict": "block", "rule_id": "AGENTSHIELD-RUNTIME-INVALID-INPUT", "schema_version": "v1" }
-                    }
-                });
-                if write_client_line(&error).is_err() {
-                    break;
-                }
-            }
-        }
-    }
-
-    // Close the server's stdin so it can finish, then drain its output.
-    drop(server_stdin);
-    let _ = pump.join();
-    let _ = child.wait();
-
-    Ok(if blocked_any { GUARD_BLOCK_EXIT } else { 0 })
-}
-
-/// JSON-RPC error returned to the client when the downstream MCP server is no
-/// longer writable, so an allowed request is not dropped silently.
-#[cfg(feature = "runtime-guard")]
-fn downstream_unavailable_error(request: &serde_json::Value) -> serde_json::Value {
-    let id = request
-        .get("id")
-        .cloned()
-        .unwrap_or(serde_json::Value::Null);
-    serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "error": {
-            "code": -32002,
-            "message": "Downstream MCP server unavailable"
-        }
-    })
-}
-
-/// Write one JSON line to the client's stdout. Returns Err on a write failure.
-#[cfg(feature = "runtime-guard")]
-fn write_client_line(value: &serde_json::Value) -> std::io::Result<()> {
-    use std::io::Write;
-    let rendered = serde_json::to_string(value).map_err(std::io::Error::other)?;
-    let stdout = std::io::stdout();
-    let mut out = stdout.lock();
-    writeln!(out, "{rendered}")?;
-    out.flush()
+    agentshield::runtime::mcp_proxy_stdio::run_transport(
+        &policy,
+        &server,
+        GUARD_STDIN_MAX_BYTES,
+        GUARD_BLOCK_EXIT,
+    )
+    .map_err(agentshield::error::ShieldError::Io)
 }
 
 /// Serialize and print a guard result. Returns Err only on a serialization or
