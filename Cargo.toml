@@ -108,6 +108,11 @@ path = "tests/runtime_guard.rs"
 required-features = ["runtime-guard"]
 
 [[test]]
+name = "runtime_mcp_proxy"
+path = "tests/runtime_mcp_proxy.rs"
+required-features = ["runtime-guard"]
+
+[[test]]
 name = "runtime_redaction"
 path = "tests/runtime_redaction.rs"
 required-features = ["runtime-guard"]
