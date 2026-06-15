@@ -19,8 +19,7 @@ call those tools.
 
 It runs as a CLI, GitHub Action, or library, keeps source code on your machine,
 and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML
-reports. The current release line is `0.8.6`; 0.8.7 release notes are staged
-for the path-filter and first-run explain UX work.
+reports. The current release line is `0.8.7`.
 
 ## At a glance
 
@@ -95,7 +94,7 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: aiconnai/agentshield@main
         with:
           path: '.'
@@ -110,7 +109,7 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 
 ```bash
 # Install the current release from GitHub with the full feature set
-cargo install --git https://github.com/limaronaldo/agentshield --tag v0.8.6 --features full --force
+cargo install --git https://github.com/limaronaldo/agentshield --tag v0.8.7 --features full --force
 
 # First-run setup: config + explained first scan
 agentshield quickstart
@@ -146,7 +145,7 @@ Download from the [latest release](https://github.com/limaronaldo/agentshield/re
 For container consumers, the release image tag is:
 
 ```text
-ghcr.io/aiconnai/agentshield:0.8.6
+ghcr.io/aiconnai/agentshield:0.8.7
 ```
 
 ### Docker
@@ -154,9 +153,9 @@ ghcr.io/aiconnai/agentshield:0.8.6
 The GHCR image is built with the `full` feature set, including runtime `wrap` support and experimental runtime guard commands. The image is published for `linux/amd64` and `linux/arm64`.
 
 ```bash
-docker pull ghcr.io/aiconnai/agentshield:0.8.6
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.6 scan .
-docker run --rm ghcr.io/aiconnai/agentshield:0.8.6 --version
+docker pull ghcr.io/aiconnai/agentshield:0.8.7
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.7 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:0.8.7 --version
 ```
 
 If the GHCR package is private in your organization, authenticate first:
