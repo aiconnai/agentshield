@@ -1,6 +1,7 @@
 pub mod event;
 pub mod guard;
 pub mod mcp_proxy;
+pub mod mcp_proxy_stdio;
 pub mod redaction;
 pub mod schema;
 
