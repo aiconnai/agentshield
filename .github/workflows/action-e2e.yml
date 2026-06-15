@@ -189,6 +189,65 @@ jobs:
             exit 1
           fi
 
+      - name: "Test 8a: Unfiltered subdirectory scan sees ancestor metadata"
+        shell: bash
+        run: |
+          set +e
+          agentshield scan tests/fixtures/action_subdir_filters/src/mcp --format json --output ${{ runner.temp }}/subdir-unfiltered.json --fail-on low
+          UNFILTERED_EXIT=$?
+          set -e
+
+          if [ "$UNFILTERED_EXIT" -ne 1 ]; then
+            echo "::error::unfiltered subdirectory scan should fail on ancestor package.json findings, got $UNFILTERED_EXIT"
+            exit 1
+          fi
+
+          python3 -c "
+          from pathlib import Path
+
+          unfiltered = Path('${{ runner.temp }}/subdir-unfiltered.json').read_text()
+          assert 'package.json' in unfiltered, 'unfiltered scan should read ancestor package metadata'
+          assert 'event-stream' in unfiltered, 'unfiltered scan should report dependency metadata'
+          print('PASS: unfiltered subdirectory scan read ancestor dependency metadata')
+          "
+
+      - name: "Test 8b: Composite action honors root config path filters"
+        id: subdir-filtered-action
+        uses: ./
+        with:
+          binary-path: ${{ runner.temp }}/agentshield/agentshield
+          path: tests/fixtures/action_subdir_filters/src/mcp
+          config: tests/fixtures/action_subdir_filters/.agentshield.toml
+          format: sarif
+          fail-on: low
+          upload-sarif: false
+
+      - name: "Test 8c: Verify composite action filtered SARIF"
+        shell: bash
+        run: |
+          if [ "${{ steps.subdir-filtered-action.outputs.exit-code }}" != "0" ]; then
+            echo "::error::filtered composite action scan should pass, got ${{ steps.subdir-filtered-action.outputs.exit-code }}"
+            exit 1
+          fi
+          if [ "${{ steps.subdir-filtered-action.outputs.finding-count }}" != "0" ]; then
+            echo "::error::filtered composite action scan should have zero findings, got ${{ steps.subdir-filtered-action.outputs.finding-count }}"
+            exit 1
+          fi
+
+          python3 -c "
+          import json
+          from pathlib import Path
+
+          sarif = Path('${{ steps.subdir-filtered-action.outputs.sarif-file }}').read_text()
+          assert 'package.json' not in sarif, 'filtered SARIF must not mention excluded package.json'
+          assert 'event-stream' not in sarif, 'filtered SARIF must not mention excluded dependency'
+
+          data = json.loads(sarif)
+          results = data.get('runs', [{}])[0].get('results', [])
+          assert results == [], f'expected no filtered SARIF results, got {results}'
+          print('PASS: composite action used root config and suppressed excluded metadata findings')
+          "
+
       # --- Upload SARIF for real Code Scanning integration ---
       - name: Upload SARIF to Code Scanning
         if: always() && matrix.os == 'ubuntu-latest'
@@ -212,4 +271,5 @@ jobs:
           echo "| 5 | Console output format | Passed |" >> $GITHUB_STEP_SUMMARY
           echo "| 6 | HTML output format | Passed |" >> $GITHUB_STEP_SUMMARY
           echo "| 7 | list-rules (18 detectors) | Passed |" >> $GITHUB_STEP_SUMMARY
-          echo "| 8 | SARIF upload to Code Scanning | Attempted |" >> $GITHUB_STEP_SUMMARY
+          echo "| 8 | Subdirectory path filters | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| 9 | SARIF upload to Code Scanning | Attempted |" >> $GITHUB_STEP_SUMMARY
