@@ -39,6 +39,10 @@ inputs:
     description: 'AgentShield version to use (default: latest)'
     required: false
     default: 'latest'
+  binary-path:
+    description: 'Path to an existing AgentShield binary; skips release download when set'
+    required: false
+    default: ''
 
 outputs:
   finding-count:
@@ -55,6 +59,7 @@ runs:
   using: 'composite'
   steps:
     - name: Determine version
+      if: inputs.binary-path == ''
       id: version
       shell: bash
       run: |
@@ -74,6 +79,7 @@ runs:
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Determine platform
+      if: inputs.binary-path == ''
       id: platform
       shell: bash
       run: |
@@ -88,6 +94,7 @@ runs:
         echo "target=$TARGET" >> $GITHUB_OUTPUT
 
     - name: Download AgentShield
+      if: inputs.binary-path == ''
       shell: bash
       run: |
         VERSION="${{ steps.version.outputs.version }}"
@@ -107,6 +114,24 @@ runs:
 
         chmod +x ${{ runner.temp }}/agentshield/agentshield* 2>/dev/null || true
         echo "${{ runner.temp }}/agentshield" >> $GITHUB_PATH
+
+    - name: Use provided AgentShield
+      if: inputs.binary-path != ''
+      shell: bash
+      env:
+        AGENTSHIELD_BINARY_PATH: ${{ inputs.binary-path }}
+      run: |
+        if [ ! -x "$AGENTSHIELD_BINARY_PATH" ]; then
+          echo "::error::Provided AgentShield binary is not executable: $AGENTSHIELD_BINARY_PATH"
+          exit 2
+        fi
+        AGENTSHIELD_DEST="${{ runner.temp }}/agentshield/agentshield"
+        mkdir -p "$(dirname "$AGENTSHIELD_DEST")"
+        if [ "$AGENTSHIELD_BINARY_PATH" != "$AGENTSHIELD_DEST" ]; then
+          cp "$AGENTSHIELD_BINARY_PATH" "$AGENTSHIELD_DEST"
+        fi
+        chmod +x "$AGENTSHIELD_DEST"
+        echo "$(dirname "$AGENTSHIELD_DEST")" >> $GITHUB_PATH
 
     - name: Run scan
       id: scan

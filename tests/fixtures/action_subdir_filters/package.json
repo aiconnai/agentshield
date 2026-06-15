@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.0.0",
+    "event-stream": "^3.3.6"
+  }
+}
