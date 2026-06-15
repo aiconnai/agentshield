@@ -196,9 +196,12 @@ mcp_checks() {
 action_checks() {
   assert_match "action exposes ignore-tests input" '^  ignore-tests:' action.yml || return 1
   assert_match "action supports SARIF upload" 'upload-sarif' action.yml || return 1
+  assert_match "action supports local binary e2e override" '^  binary-path:' action.yml || return 1
   assert_match "action records SARIF output path" 'sarif-file' action.yml || return 1
   assert_match "action preserves scan exit code" 'AGENTSHIELD_EXIT' action.yml || return 1
   assert_match "action reports finding count" 'finding-count' action.yml || return 1
+  assert_match "action e2e invokes the local composite action" 'uses: \./' .github/workflows/action-e2e.yml || return 1
+  assert_match "action e2e covers subdirectory path filters" 'Composite action honors root config path filters' .github/workflows/action-e2e.yml || return 1
 }
 
 release_checks() {
