@@ -319,19 +319,19 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: happy path still emits valid JSON after tempfile-free fix
 - harness_verify:
-  command: "env PATH=/usr/bin:/bin:/usr/sbin:/sbin bash docs/harness/bin/doctor.sh --json > /tmp/df.json 2>/tmp/df.err; echo exit=$?; python3 -c \"import json; d=json.load(open('/tmp/df.json')); assert d['status']=='fail' and d['exit_code']==1 and isinstance(d['failures'],list) and d['failure_count']==len(d['failures']); print('FAIL-PATH-OK', d['failure_count'])\"; wc -c /tmp/df.err"
-  exit_code: 0
-  output_summary: "exit=1; FAIL-PATH-OK 45; 0 (zero stderr bytes)"
+  command: "env PATH=/usr/bin:/bin:/usr/sbin:/sbin bash docs/harness/bin/doctor.sh --json"
+  exit_code: 1
+  output_summary: "one harness-json-v1 object on stdout (status fail, exit_code 1, failure_count == len(failures) == 45); stderr 0 bytes; stdout parsed as valid JSON"
   passed: true
   evidence_path: none
   skipped_reason: none
   issue_numbers: A2
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
-  importance: failure path emits exactly one valid JSON object, exits 1, zero bytes on stderr (no shell errors)
+  importance: failure path (rg hidden from PATH) emits exactly one valid JSON object, process exits 1, zero bytes on stderr (no shell errors)
 - harness_verify:
-  command: "TMPDIR=/nonexistent env PATH=/usr/bin:/bin:/usr/sbin:/sbin bash docs/harness/bin/doctor.sh --json >/tmp/df2.json 2>/tmp/df2.err; echo exit=$?; python3 -c \"import json; json.load(open('/tmp/df2.json')); print('NO-TMP-OK')\"; wc -c /tmp/df2.err"
-  exit_code: 0
-  output_summary: "exit=1; NO-TMP-OK; 0 (zero stderr bytes — tempfile path unused)"
+  command: "TMPDIR=/nonexistent env PATH=/usr/bin:/bin:/usr/sbin:/sbin bash docs/harness/bin/doctor.sh --json"
+  exit_code: 1
+  output_summary: "with TMPDIR=/nonexistent: still one valid harness-json-v1 object on stdout, process exits 1, stderr 0 bytes"
   passed: true
   evidence_path: none
   skipped_reason: none
