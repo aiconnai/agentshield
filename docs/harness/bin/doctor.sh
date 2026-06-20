@@ -104,6 +104,7 @@ for script in \
   docs/harness/bin/doctor.sh \
   docs/harness/bin/sensors.sh \
   docs/harness/bin/pr-title-policy.sh \
+  docs/harness/bin/check-commit-msg.sh \
   docs/harness/bin/review-gate.sh \
   docs/harness/bin/codex-gate.sh \
   docs/harness/bin/baseline.sh \
@@ -161,6 +162,9 @@ require_match "sensors runs PR title policy" 'pr-title-policy\.sh' docs/harness/
 require_match "README mentions PR title policy" 'PR title policy' docs/harness/README.md
 require_match "GATES mentions PR title policy" 'PR title policy' docs/harness/GATES.md
 require_match "CODE_REVIEW_POLICY mentions PR title policy" 'PR title policy' docs/harness/CODE_REVIEW_POLICY.md
+
+require_match "check-commit-msg lists adapter scope" 'adapter\|detector\|parser' docs/harness/bin/check-commit-msg.sh
+require_match "GATES mentions commit message gate" 'check-commit-msg' docs/harness/GATES.md
 
 require_no_match "GitHub workflows do not execute harness scripts" 'docs/harness/bin' .github/workflows
 

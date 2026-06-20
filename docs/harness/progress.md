@@ -96,3 +96,10 @@ No commands are recorded as verified unless they are run and logged using the `d
 
 - Aligned `review-gate.sh` prompts with the bootstrap read-order contract by removing `VERIFICATION_MANIFEST.md` from the mandatory read list.
 - Kept verification-manifest guidance as conditional evidence handling instead of mandatory prompt reading.
+
+## Harness follow-up - 2026-06-20 (A1: scope-validated commit message checker)
+
+- Added `docs/harness/bin/check-commit-msg.sh` for Conventional-Commit + AgentShield scope validation.
+- Chained checker into `.githooks/commit-msg` after trailer validation.
+- Registered in `doctor.sh` with scope and GATES.md documentation checks.
+- Documented in `GATES.md` with allowed types, required scopes, and invocation examples.
