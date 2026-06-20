@@ -170,7 +170,7 @@ Expected: `doctor=0`, `sensors=0`, and a review artifact `docs/harness/reviews/<
 
 ```bash
 cd /Users/ronaldo/Projects/_aiconnai/agentshield
-git add docs/harness/bin/check-commit-msg.sh .githooks/commit-msg docs/harness/bin/doctor.sh docs/harness/GATES.md docs/harness/progress.md docs/harness/reviews/
+git add docs/harness/bin/check-commit-msg.sh .githooks/commit-msg docs/harness/bin/doctor.sh docs/harness/GATES.md docs/harness/progress.md
 git commit -m "chore(harness): add scope-validated commit message checker"
 ```
 
@@ -289,7 +289,7 @@ cd /Users/ronaldo/Projects/_aiconnai/agentshield
 bash docs/harness/bin/doctor.sh; echo "doctor=$?"
 bash docs/harness/bin/sensors.sh quick; echo "sensors=$?"
 bash docs/harness/bin/review-gate.sh post a2-json-outputs
-git add docs/harness/JSON_OUTPUTS.md docs/harness/bin/doctor.sh docs/harness/README.md docs/harness/progress.md docs/harness/reviews/
+git add docs/harness/JSON_OUTPUTS.md docs/harness/bin/doctor.sh docs/harness/README.md docs/harness/progress.md
 git commit -m "feat(harness): add harness-json-v1 contract and doctor --json mode"
 ```
 
@@ -379,7 +379,7 @@ cd /Users/ronaldo/Projects/_aiconnai/agentshield
 bash docs/harness/bin/doctor.sh; echo "doctor=$?"
 bash docs/harness/bin/sensors.sh quick; echo "sensors=$?"
 bash docs/harness/bin/review-gate.sh post a3-sensors-status-json
-git add docs/harness/bin/sensors.sh docs/harness/bin/doctor.sh docs/harness/JSON_OUTPUTS.md docs/harness/progress.md docs/harness/reviews/
+git add docs/harness/bin/sensors.sh docs/harness/bin/doctor.sh docs/harness/JSON_OUTPUTS.md docs/harness/progress.md
 git commit -m "feat(harness): add sensors status --json read-only snapshot"
 ```
 
@@ -439,7 +439,7 @@ Expected: `doctor=0`; `manual` backend produces a prompt file / advisory output 
 cd /Users/ronaldo/Projects/_aiconnai/agentshield
 bash docs/harness/bin/sensors.sh; echo "sensors=$?"
 bash docs/harness/bin/review-gate.sh post a4-review-gate-multicli
-git add docs/harness/bin/review-gate.sh docs/harness/bin/doctor.sh docs/harness/CODE_REVIEW_POLICY.md docs/harness/canvas/ docs/harness/progress.md docs/harness/reviews/
+git add docs/harness/bin/review-gate.sh docs/harness/bin/doctor.sh docs/harness/CODE_REVIEW_POLICY.md docs/harness/canvas/ docs/harness/progress.md
 git commit -m "feat(harness): support multi-CLI reviewers and prior-finding re-injection"
 ```
 
@@ -510,7 +510,7 @@ Expected: `doctor=0` with new `OK:` lines for the latest review and `.sensors-la
 cd /Users/ronaldo/Projects/_aiconnai/agentshield
 bash docs/harness/bin/sensors.sh quick; echo "sensors=$?"
 bash docs/harness/bin/review-gate.sh post a5-doctor-drift-checks
-git add docs/harness/bin/doctor.sh docs/harness/progress.md docs/harness/reviews/
+git add docs/harness/bin/doctor.sh docs/harness/progress.md
 git commit -m "chore(harness): doctor validates review verdict and sensors-last format"
 ```
 
@@ -554,7 +554,7 @@ cd /Users/ronaldo/Projects/_aiconnai/agentshield
 bash docs/harness/bin/doctor.sh; echo "doctor=$?"
 bash docs/harness/bin/sensors.sh quick; echo "sensors=$?"
 bash docs/harness/bin/review-gate.sh post a6-agents-md-reconcile
-git add AGENTS.md docs/harness/progress.md docs/harness/reviews/
+git add AGENTS.md docs/harness/progress.md
 git commit -m "docs(harness): reconcile AGENTS.md with current CLAUDE.md (v0.8.0)"
 ```
 
@@ -616,7 +616,7 @@ bash docs/harness/bin/doctor.sh; echo "doctor=$?"
 bash docs/harness/bin/sensors.sh quick; echo "sensors=$?"
 bash docs/harness/bin/review-gate.sh post b1-pr-title-policy
 bash docs/harness/bin/check-commit-msg.sh --message "chore(harness): add PR title policy gate"
-git add docs/harness/bin/pr-title-policy.sh docs/harness/bin/doctor.sh docs/harness/bin/sensors.sh docs/harness/GATES.md docs/harness/progress.md docs/harness/reviews/
+git add docs/harness/bin/pr-title-policy.sh docs/harness/bin/doctor.sh docs/harness/bin/sensors.sh docs/harness/GATES.md docs/harness/progress.md
 git commit -m "chore(harness): add PR title policy gate"
 ```
 
@@ -669,7 +669,7 @@ cd /Users/ronaldo/Projects/_aiconnai/engram
 bash docs/harness/bin/sensors.sh quick; echo "sensors=$?"
 bash docs/harness/bin/review-gate.sh post b2-loop-skills-policy
 bash docs/harness/bin/check-commit-msg.sh --message "docs(harness): add SKILLS.md policy and loop-engineering skill"
-git add docs/harness/SKILLS.md skills/loop-engineering/SKILL.md docs/harness/bin/doctor.sh docs/harness/README.md docs/harness/progress.md docs/harness/reviews/
+git add docs/harness/SKILLS.md skills/loop-engineering/SKILL.md docs/harness/bin/doctor.sh docs/harness/README.md docs/harness/progress.md
 git commit -m "docs(harness): add SKILLS.md policy and loop-engineering skill"
 ```
 

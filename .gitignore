@@ -6,6 +6,7 @@ Cargo.lock
 .orchestrator/
 .env
 .worktrees/
+.superpowers/
 
 docs/harness/.baseline-last
 docs/harness/.sensors-last
