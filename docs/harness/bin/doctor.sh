@@ -83,6 +83,7 @@ require_file docs/harness/INVARIANTS.md
 require_file docs/harness/WHAT_WE_DONT_DO.md
 require_file docs/harness/GATES.md
 require_file docs/harness/CODE_REVIEW_POLICY.md
+require_file docs/harness/SKILLS.md
 require_file docs/harness/VERIFICATION_MANIFEST.md
 require_file docs/harness/progress.md
 require_file docs/harness/progress/harness-foundation.md
@@ -121,6 +122,7 @@ require_match "bootstrap mentions WHAT_WE_DONT_DO.md" 'WHAT_WE_DONT_DO\.md' docs
 require_match "bootstrap mentions CODE_REVIEW_POLICY.md" 'CODE_REVIEW_POLICY\.md' docs/harness/bin/bootstrap.sh
 require_match "README mentions WHAT_WE_DONT_DO.md" 'WHAT_WE_DONT_DO\.md' docs/harness/README.md
 require_match "README mentions CODE_REVIEW_POLICY.md" 'CODE_REVIEW_POLICY\.md' docs/harness/README.md
+require_match "README mentions SKILLS.md" 'SKILLS\.md' docs/harness/README.md
 require_match "README mentions Review Canvas" 'Review Canvas' docs/harness/README.md
 require_match "README mentions doctor.sh" 'doctor\.sh' docs/harness/README.md
 require_match "README mentions baseline.sh" 'baseline\.sh' docs/harness/README.md
@@ -161,8 +163,25 @@ require_match "sensors runs PR title policy" 'pr-title-policy\.sh' docs/harness/
 require_match "README mentions PR title policy" 'PR title policy' docs/harness/README.md
 require_match "GATES mentions PR title policy" 'PR title policy' docs/harness/GATES.md
 require_match "CODE_REVIEW_POLICY mentions PR title policy" 'PR title policy' docs/harness/CODE_REVIEW_POLICY.md
+require_match "SKILLS documents loop-engineering" '`loop-engineering`' docs/harness/SKILLS.md
+require_match "SKILLS documents personal skill location" '~/.codex/skills' docs/harness/SKILLS.md
+require_match ".gitignore ignores local OMO evidence" '^\.omo/$' .gitignore
 
 require_no_match "GitHub workflows do not execute harness scripts" 'docs/harness/bin' .github/workflows
+
+UNTRACKED_SKILLS="$(git ls-files --others --exclude-standard -- 'skills/*/SKILL.md' 2>/dev/null || true)"
+if [ -n "$UNTRACKED_SKILLS" ]; then
+  fail "untracked repo-local skills found: $UNTRACKED_SKILLS"
+else
+  ok "repo-local skills are tracked or ignored"
+fi
+
+while IFS= read -r skill_file; do
+  skill_dir="$(basename "$(dirname "$skill_file")")"
+  require_match "skill has matching name: $skill_file" "^name:[[:space:]]*$skill_dir[[:space:]]*$" "$skill_file"
+  require_match "skill has description: $skill_file" '^description:[[:space:]].+' "$skill_file"
+  require_match "skill is inventoried: $skill_dir" "\\\`$skill_dir\\\`" docs/harness/SKILLS.md
+done < <(find skills -mindepth 2 -maxdepth 2 -name SKILL.md | sort)
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "PASS: AgentShield harness doctor"

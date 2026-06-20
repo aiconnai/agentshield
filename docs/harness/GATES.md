@@ -120,8 +120,16 @@ It is not a pass/fail gate and must not delete, archive, or rewrite files. Human
 - mandatory policy files and read-order references are present;
 - review gate prompts include negative-scope and Review Canvas checks.
 - PR title policy rejects titles containing `[codex]`.
+- repo-local skills are tracked and have required frontmatter.
 
 Changes to `docs/harness/bin/*` require independent post-review evidence. A self-generated or missing review artifact is not authoritative for harness script changes.
+
+## Repo-Local Skills Gate
+
+Repo-local skills under `skills/<name>/SKILL.md` are part of the harness. Doctor
+must fail when a skill file is untracked, missing frontmatter, or missing from
+the skill inventory. Local evidence under `.omo/` is ignored and must not be
+used as source-of-truth process state.
 
 ## Known-Issue Sensor Exclusions
 
