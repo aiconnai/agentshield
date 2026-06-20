@@ -198,9 +198,9 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: confirms JSON envelope is valid, schema_version and tool fields correct, failure_count 0 on clean repo
 - harness_verify:
-  command: bash docs/harness/bin/doctor.sh >/dev/null 2>&1; echo "human=$?"
+  command: bash docs/harness/bin/doctor.sh
   exit_code: 0
-  output_summary: human=0
+  output_summary: "PASS: AgentShield harness doctor (exit 0)"
   passed: true
   evidence_path: none
   skipped_reason: none
@@ -208,9 +208,9 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: human mode unchanged, exits 0 on clean repo
 - harness_verify:
-  command: bash docs/harness/bin/doctor.sh --json >/dev/null 2>&1; echo "json=$?"
+  command: bash docs/harness/bin/doctor.sh --json
   exit_code: 0
-  output_summary: json=0
+  output_summary: "one harness-json-v1 object, status pass, exit 0"
   passed: true
   evidence_path: none
   skipped_reason: none
