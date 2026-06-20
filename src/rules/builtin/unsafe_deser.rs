@@ -1,3 +1,7 @@
+use super::unsafe_deser_patterns::{
+    code_outside_literals, is_unsafe_deserializer, LiteralScanState, JS_UNSAFE_PATTERNS, YAML_LOAD,
+};
+
 use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
@@ -8,40 +12,6 @@ use crate::rules::{
 /// Detects unsafe deserialization functions that can execute arbitrary code
 /// when processing untrusted input (CWE-502).
 pub struct UnsafeDeserDetector;
-
-/// Python unsafe deserializers that can execute arbitrary code.
-const UNSAFE_DESERIALIZERS: &[&str] = &[
-    "pickle.load",
-    "pickle.loads",
-    "yaml.unsafe_load",
-    "yaml.full_load",
-    "marshal.load",
-    "marshal.loads",
-    "shelve.open",
-    "jsonpickle.decode",
-    "jsonpickle.loads",
-];
-
-/// `yaml.load` is only unsafe when used without `Loader=SafeLoader`.
-const YAML_LOAD: &str = "yaml.load";
-
-/// JavaScript/TypeScript unsafe patterns in dynamic exec.
-const JS_UNSAFE_PATTERNS: &[&str] = &[
-    "vm.runInContext",
-    "vm.runInNewContext",
-    "vm.runInThisContext",
-    "Function(",
-    "new Function(",
-];
-
-/// Check if a function name matches an unsafe deserializer.
-fn is_unsafe_deserializer(function: &str) -> Option<&'static str> {
-    let func_lower = function.to_lowercase();
-    UNSAFE_DESERIALIZERS
-        .iter()
-        .find(|deser| func_lower.contains(&deser.to_lowercase()))
-        .copied()
-}
 
 impl Detector for UnsafeDeserDetector {
     fn metadata(&self) -> RuleMetadata {
@@ -130,13 +100,57 @@ impl Detector for UnsafeDeserDetector {
 
         // Phase 2: Scan source files for yaml.load without SafeLoader
         for source_file in &target.source_files {
+            if source_file.language.is_documentation() {
+                continue;
+            }
+            let mut literal_state = LiteralScanState::default();
             for (line_idx, line) in source_file.content.lines().enumerate() {
-                if line.contains(YAML_LOAD)
-                    && !line.contains("safe_load")
-                    && !line.contains("SafeLoader")
-                    && !line.contains("yaml.safe_load")
-                    && !line.contains("CSafeLoader")
-                    // Exclude import lines
+                let searchable =
+                    code_outside_literals(line, source_file.language, &mut literal_state);
+
+                if let Some(deser) = is_unsafe_deserializer(&searchable) {
+                    let location = crate::ir::SourceLocation {
+                        file: source_file.path.clone(),
+                        line: line_idx + 1,
+                        column: 0,
+                        end_line: None,
+                        end_column: None,
+                    };
+                    findings.push(Finding {
+                        rule_id: "SHIELD-016".into(),
+                        rule_name: "Unsafe Deserialization".into(),
+                        severity: Severity::Critical,
+                        confidence: Confidence::High,
+                        attack_category: AttackCategory::CodeInjection,
+                        message: format!(
+                            "'{}' uses unsafe deserializer '{}' — can execute arbitrary code",
+                            source_file.path.display(),
+                            deser
+                        ),
+                        location: Some(location.clone()),
+                        evidence: vec![Evidence {
+                            description: format!("Unsafe deserializer '{deser}' found in source"),
+                            location: Some(location),
+                            snippet: Some(line.trim().to_string()),
+                        }],
+                        taint_path: None,
+                        remediation: Some(
+                            "Replace unsafe deserializers with safe alternatives: use \
+                             `json.loads()` instead of `pickle.loads()`, \
+                             `yaml.safe_load()` instead of `yaml.load()`, \
+                             or schema-validated JSON parsing."
+                                .into(),
+                        ),
+                        cwe_id: Some("CWE-502".into()),
+                    });
+                    continue;
+                }
+
+                if searchable.contains(YAML_LOAD)
+                    && !searchable.contains("safe_load")
+                    && !searchable.contains("SafeLoader")
+                    && !searchable.contains("yaml.safe_load")
+                    && !searchable.contains("CSafeLoader")
                     && !line.trim_start().starts_with("import")
                     && !line.trim_start().starts_with("from")
                 {
@@ -186,113 +200,5 @@ impl Detector for UnsafeDeserDetector {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ir::execution_surface::*;
-    use crate::ir::*;
-    use std::path::PathBuf;
-
-    fn loc() -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from("test.py"),
-            line: 5,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
-    }
-
-    fn empty_target() -> ScanTarget {
-        ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: ExecutionSurface::default(),
-            data: DataSurface::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![],
-        }
-    }
-
-    #[test]
-    fn detects_pickle_loads() {
-        let mut target = empty_target();
-        target.execution.dynamic_exec.push(DynamicExec {
-            function: "pickle.loads".into(),
-            code_arg: ArgumentSource::Parameter {
-                name: "data".into(),
-            },
-            location: loc(),
-        });
-
-        let findings = UnsafeDeserDetector.run(&target);
-        assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].rule_id, "SHIELD-016");
-        assert_eq!(findings[0].severity, Severity::Critical);
-    }
-
-    #[test]
-    fn detects_yaml_load_without_safe_loader() {
-        let mut target = empty_target();
-        target.source_files.push(SourceFile {
-            path: PathBuf::from("config.py"),
-            language: Language::Python,
-            content: "import yaml\ndata = yaml.load(user_input)\n".into(),
-            size_bytes: 40,
-            content_hash: "abc123".into(),
-        });
-
-        let findings = UnsafeDeserDetector.run(&target);
-        assert_eq!(findings.len(), 1);
-        assert!(findings[0].message.contains("yaml.load"));
-        assert!(findings[0].message.contains("without SafeLoader"));
-    }
-
-    #[test]
-    fn no_finding_for_yaml_safe_load() {
-        let mut target = empty_target();
-        target.source_files.push(SourceFile {
-            path: PathBuf::from("config.py"),
-            language: Language::Python,
-            content: "import yaml\ndata = yaml.safe_load(user_input)\n".into(),
-            size_bytes: 45,
-            content_hash: "abc123".into(),
-        });
-
-        let findings = UnsafeDeserDetector.run(&target);
-        assert!(findings.is_empty());
-    }
-
-    #[test]
-    fn no_finding_for_yaml_load_with_safe_loader() {
-        let mut target = empty_target();
-        target.source_files.push(SourceFile {
-            path: PathBuf::from("config.py"),
-            language: Language::Python,
-            content: "import yaml\ndata = yaml.load(user_input, Loader=SafeLoader)\n".into(),
-            size_bytes: 55,
-            content_hash: "abc123".into(),
-        });
-
-        let findings = UnsafeDeserDetector.run(&target);
-        assert!(findings.is_empty());
-    }
-
-    #[test]
-    fn detects_vm_run_in_context() {
-        let mut target = empty_target();
-        target.execution.dynamic_exec.push(DynamicExec {
-            function: "vm.runInNewContext".into(),
-            code_arg: ArgumentSource::Parameter {
-                name: "code".into(),
-            },
-            location: loc(),
-        });
-
-        let findings = UnsafeDeserDetector.run(&target);
-        assert_eq!(findings.len(), 1);
-        assert!(findings[0].message.contains("vm.runInNewContext"));
-    }
-}
+#[path = "unsafe_deser_tests.rs"]
+mod unsafe_deser_tests;
