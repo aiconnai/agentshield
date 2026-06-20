@@ -416,3 +416,90 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A2
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: canonical full gate passes after all A2 round-3 fixes
+
+## A3 sensors status JSON - 2026-06-20
+
+- Added a read-only `sensors.sh status --json` snapshot command for `docs/harness/.sensors-last`.
+- The status snapshot maps saved `PASS` to `pass`, saved `FAIL` to `fail`, and missing/empty state to `warn`.
+- The command reports saved state only; it exits 0 for valid status snapshots, including a saved failing run.
+- Registered the subcommand in `doctor.sh` and documented the JSON object in `JSON_OUTPUTS.md`.
+- harness_verify:
+  command: bash -n docs/harness/bin/sensors.sh
+  exit_code: 0
+  output_summary: no output; shell syntax clean
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A3
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: changed harness script parses before behavior checks
+- harness_verify:
+  command: "bash docs/harness/bin/sensors.sh status --json | python3 -c \"import sys,json; d=json.load(sys.stdin); assert d['tool']=='sensors' and d['status'] in ('pass','warn','fail'); print('STATUS-JSON-OK', d['status'])\""
+  exit_code: 0
+  output_summary: STATUS-JSON-OK pass
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A3
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: populated .sensors-last emits valid harness-json-v1 status object
+- harness_verify:
+  command: "bash docs/harness/bin/sensors.sh status --json | python3 -c \"import sys,json; d=json.load(sys.stdin); assert d['status']=='warn' and d['exit_code']==0 and d['last_timestamp']=='' and d['last_mode']==''; print('MISSING-STATUS-OK', d['status'])\""
+  exit_code: 0
+  output_summary: MISSING-STATUS-OK warn
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A3
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: missing .sensors-last is a valid read-only warn snapshot, not a command failure
+- harness_verify:
+  command: "bash docs/harness/bin/sensors.sh status --json | python3 -c \"import sys,json; d=json.load(sys.stdin); assert d['status']=='fail' and d['exit_code']==0; print('FAIL-STATUS-OK', d['status'])\""
+  exit_code: 0
+  output_summary: FAIL-STATUS-OK fail
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A3
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: saved FAIL maps to JSON status fail while the read-only status command still exits 0
+- harness_verify:
+  command: bash docs/harness/bin/sensors.sh status
+  exit_code: 0
+  output_summary: "last sensors: 2026-06-20T22:20:19Z quick PASS"
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A3
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: human default status output remains a one-line text summary
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: PASS: AgentShield harness doctor
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A3
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: doctor includes and passes the sensors status subcommand self-check
+- harness_verify:
+  command: bash docs/harness/bin/sensors.sh quick
+  exit_code: 0
+  output_summary: ALL SENSORS GREEN (quick, 2026-06-20T22:21:47Z)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A3
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: existing quick sensor lane still passes after status subcommand addition
+- harness_verify:
+  command: bash docs/harness/bin/sensors.sh status --json --bogus
+  exit_code: 2
+  output_summary: '{"schema_version":"harness-json-v1","tool":"sensors","mode":"status","status":"usage_error","exit_code":2,"summary":"usage error: unknown argument","failures":[],"failure_count":0}'
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A3
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: JSON status mode reports unknown arguments as a machine-readable usage_error

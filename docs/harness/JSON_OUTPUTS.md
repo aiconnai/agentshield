@@ -147,8 +147,76 @@ support in a later task:
 - `baseline` — baseline snapshot writes .baseline-last and doctor passes
 - `audit` — evidence-only quarterly audit report is generated and doctor passes
 
-When `sensors.sh` gains a `--json` flag, it must use this same envelope with
-`tool` set to `sensors` and `mode` set to the selected lane.
+Other `sensors.sh` lanes may gain JSON support later. They must use this same
+envelope with `tool` set to `sensors` and `mode` set to the selected lane.
+
+## `sensors.sh status --json`
+
+`sensors.sh status --json` is a read-only snapshot command. It reads
+`docs/harness/.sensors-last`, which is written by sensor lanes as:
+
+```text
+TIMESTAMP MODE PASS|FAIL
+```
+
+It does not rerun the sensor gate and does not update `.sensors-last`.
+
+Required fields:
+
+- `schema_version`
+- `tool`
+- `mode`
+- `status`
+- `exit_code`
+- `summary`
+- `last_timestamp`
+- `last_mode`
+
+Status mapping:
+
+- `PASS` maps to `status:"pass"`.
+- `FAIL` maps to `status:"fail"`.
+- A missing, empty, or unrecognized `.sensors-last` result maps to `status:"warn"`.
+
+Compatibility requirements:
+
+- `bash docs/harness/bin/sensors.sh status` remains human-readable by default.
+- `bash docs/harness/bin/sensors.sh status --json` exits `0` for valid status
+  snapshots, including when the saved last result maps to `status:"fail"`.
+- `exit_code` reports the `status --json` command exit, not the exit code of the
+  previous sensor run.
+- Successful JSON output must be parseable with `python3 -c "import json,sys; json.load(sys.stdin)"`.
+- JSON mode is read-only and must not create or update harness files.
+
+Example passing snapshot:
+
+```json
+{
+  "schema_version": "harness-json-v1",
+  "tool": "sensors",
+  "mode": "status",
+  "status": "pass",
+  "exit_code": 0,
+  "summary": "last sensors run: 2026-06-20T19:23:45Z full PASS",
+  "last_timestamp": "2026-06-20T19:23:45Z",
+  "last_mode": "full"
+}
+```
+
+Example missing snapshot:
+
+```json
+{
+  "schema_version": "harness-json-v1",
+  "tool": "sensors",
+  "mode": "status",
+  "status": "warn",
+  "exit_code": 0,
+  "summary": "last sensors run: none none none",
+  "last_timestamp": "",
+  "last_mode": ""
+}
+```
 
 ## JSON-Only Output vs Artifacts
 
