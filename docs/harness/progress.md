@@ -218,9 +218,9 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: confirms exit code parity between human and JSON modes (both 0 on clean repo)
 - harness_verify:
-  command: "bash docs/harness/bin/doctor.sh --bogus; echo \"exit=$?\""
+  command: bash docs/harness/bin/doctor.sh --bogus
   exit_code: 2
-  output_summary: exit=2
+  output_summary: "Usage: doctor.sh [--json] on stderr, exit 2"
   passed: true
   evidence_path: none
   skipped_reason: none
@@ -358,3 +358,61 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A2
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: no regression in quick sensor gate after BLOCKER fix
+
+## A2 post-gate fix round 3 - 2026-06-20 (two MED: usage_error JSON envelope + progress.md exit_code masking)
+
+- Codex gate returned FAIL [MED] finding 1: doctor.sh --json did not emit a JSON envelope on usage errors.
+  When --json appeared before an unknown flag, JSON_MODE was set to 1 but the *)  branch still emitted
+  a plain-text "Usage:" line to stderr and exited 2 — violating the JSON_OUTPUTS.md usage_error contract.
+  The reverse order (--bogus --json) also failed because the *) branch exited before --json was processed.
+  Fix: restructured arg parsing into two passes. First pass (loop over all args, --json only) sets
+  JSON_MODE. usage_error() function then checks JSON_MODE and emits either a harness-json-v1 JSON envelope
+  (status=usage_error, exit_code=2, failures=[], failure_count=0) or the plain-text Usage: line to stderr.
+  Second pass detects unknown args and calls usage_error(). Order-independent; human mode unchanged.
+- Codex gate returned FAIL [MED] finding 2: progress.md line 220-229 recorded command
+  "bash docs/harness/bin/doctor.sh --bogus; echo \"exit=$?\"" with exit_code: 2, but the compound
+  command (with the trailing echo) actually exits 0 (echo succeeds), making the recorded exit_code false.
+  Fix: replaced command with bare "bash docs/harness/bin/doctor.sh --bogus" and updated output_summary
+  to describe the real stderr output. No other A2 entries had the same false-exit-code pattern
+  (lines 201 and 211 use masking but record exit_code: 0, which is truthful for those bare commands).
+- Added canonical full-gate harness_verify entry (sensors.sh full) for A2 below.
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh --json --bogus
+  exit_code: 2
+  output_summary: '{"schema_version":"harness-json-v1","tool":"doctor","mode":"json","status":"usage_error","exit_code":2,"summary":"usage error: unknown argument","failures":[],"failure_count":0} on stdout, zero stderr bytes'
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: --json --bogus order emits valid JSON usage_error envelope, no plain-text on stderr
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh --bogus --json
+  exit_code: 2
+  output_summary: '{"schema_version":"harness-json-v1","tool":"doctor","mode":"json","status":"usage_error","exit_code":2,"summary":"usage error: unknown argument","failures":[],"failure_count":0} on stdout, zero stderr bytes'
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: --bogus --json order (json after bad flag) also emits valid JSON usage_error — order-independent
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh --bogus
+  exit_code: 2
+  output_summary: "Usage: doctor.sh [--json] on stderr, exit 2, no stdout"
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: human mode (no --json) still emits plain-text Usage: to stderr unchanged
+- harness_verify:
+  command: bash docs/harness/bin/sensors.sh
+  exit_code: 0
+  output_summary: ALL SENSORS GREEN (full, 2026-06-20T18:56:43Z)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: canonical full gate passes after all A2 round-3 fixes

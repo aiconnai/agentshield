@@ -10,7 +10,23 @@ JSON_MODE=0
 for arg in "$@"; do
   case "$arg" in
     --json) JSON_MODE=1 ;;
-    *) echo "Usage: doctor.sh [--json]" >&2; exit 2 ;;
+  esac
+done
+
+usage_error() {
+  local msg="$1"
+  if [ "$JSON_MODE" -eq 1 ]; then
+    printf '{"schema_version":"harness-json-v1","tool":"doctor","mode":"json","status":"usage_error","exit_code":2,"summary":"%s","failures":[],"failure_count":0}\n' "$msg"
+  else
+    echo "Usage: doctor.sh [--json]" >&2
+  fi
+  exit 2
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --json) ;;
+    *) usage_error "usage error: unknown argument" ;;
   esac
 done
 
