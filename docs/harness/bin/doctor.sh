@@ -182,6 +182,7 @@ require_match "sensors mentions full" 'full\)' docs/harness/bin/sensors.sh
 require_match "sensors mentions quick" 'quick\)' docs/harness/bin/sensors.sh
 require_match "sensors mentions mcp" 'mcp\)' docs/harness/bin/sensors.sh
 require_match "sensors mentions baseline" 'baseline\)' docs/harness/bin/sensors.sh
+require_match "sensors supports status subcommand" 'status\)' docs/harness/bin/sensors.sh
 require_match "sensors runs doctor" 'doctor\.sh' docs/harness/bin/sensors.sh
 require_match "sensors supports known issue flag" '--known-issue' docs/harness/bin/sensors.sh
 require_match "sensors supports exclusion flag" '--exclude-sensor' docs/harness/bin/sensors.sh
