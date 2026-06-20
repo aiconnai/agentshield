@@ -444,7 +444,7 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: populated .sensors-last emits valid harness-json-v1 status object
 - harness_verify:
-  command: "bash docs/harness/bin/sensors.sh status --json | python3 -c \"import sys,json; d=json.load(sys.stdin); assert d['status']=='warn' and d['exit_code']==0 and d['last_timestamp']=='' and d['last_mode']==''; print('MISSING-STATUS-OK', d['status'])\""
+  command: python3 -c "import json,pathlib,subprocess; p=pathlib.Path('docs/harness/.sensors-last'); old=p.read_bytes() if p.exists() else None; p.unlink(missing_ok=True); cp=subprocess.run(['bash','docs/harness/bin/sensors.sh','status','--json'], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE); p.write_bytes(old) if old is not None else p.unlink(missing_ok=True); d=json.loads(cp.stdout); assert cp.returncode==0 and cp.stderr=='' and d['status']=='warn' and d['exit_code']==0 and d['last_timestamp']=='' and d['last_mode']==''; print('MISSING-STATUS-OK', d['status'])"
   exit_code: 0
   output_summary: MISSING-STATUS-OK warn
   passed: true
@@ -454,7 +454,7 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: missing .sensors-last is a valid read-only warn snapshot, not a command failure
 - harness_verify:
-  command: "bash docs/harness/bin/sensors.sh status --json | python3 -c \"import sys,json; d=json.load(sys.stdin); assert d['status']=='fail' and d['exit_code']==0; print('FAIL-STATUS-OK', d['status'])\""
+  command: python3 -c "import json,pathlib,subprocess; p=pathlib.Path('docs/harness/.sensors-last'); old=p.read_bytes() if p.exists() else None; p.write_text('2026-06-20T00:00:00Z quick FAIL\n'); cp=subprocess.run(['bash','docs/harness/bin/sensors.sh','status','--json'], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE); p.write_bytes(old) if old is not None else p.unlink(missing_ok=True); d=json.loads(cp.stdout); assert cp.returncode==0 and cp.stderr=='' and d['status']=='fail' and d['exit_code']==0; print('FAIL-STATUS-OK', d['status'])"
   exit_code: 0
   output_summary: FAIL-STATUS-OK fail
   passed: true

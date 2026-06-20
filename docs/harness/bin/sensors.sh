@@ -35,6 +35,16 @@ status_usage_error() {
   exit 2
 }
 
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\t'/\\t}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\n'/\\n}"
+  printf '%s' "$value"
+}
+
 case "${1:-}" in
   status)
     shift
@@ -66,8 +76,12 @@ case "${1:-}" in
     esac
 
     if [ "$STATUS_JSON" -eq 1 ]; then
-      printf '{"schema_version":"harness-json-v1","tool":"sensors","mode":"status","status":"%s","exit_code":0,"summary":"last sensors run: %s %s %s","last_timestamp":"%s","last_mode":"%s"}\n' \
-        "$status" "${ts:-none}" "${mode:-none}" "${res:-none}" "${ts:-}" "${mode:-}"
+      summary="last sensors run: ${ts:-none} ${mode:-none} ${res:-none}"
+      summary_json="$(json_escape "$summary")"
+      ts_json="$(json_escape "${ts:-}")"
+      mode_json="$(json_escape "${mode:-}")"
+      printf '{"schema_version":"harness-json-v1","tool":"sensors","mode":"status","status":"%s","exit_code":0,"summary":"%s","last_timestamp":"%s","last_mode":"%s"}\n' \
+        "$status" "$summary_json" "$ts_json" "$mode_json"
     else
       echo "last sensors: ${ts:-none} ${mode:-none} ${res:-none}"
     fi
