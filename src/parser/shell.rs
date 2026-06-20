@@ -23,6 +23,13 @@ static BACKTICK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"`[^`]+`").unwrap());
 static SENSITIVE_VAR_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)\$\{?(AWS_|SECRET|TOKEN|PASSWORD|API_KEY|PRIVATE_KEY)").unwrap());
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ShellQuoteState {
+    Unquoted,
+    SingleQuoted,
+    DoubleQuoted,
+}
+
 impl LanguageParser for ShellParser {
     fn language(&self) -> Language {
         Language::Shell
@@ -67,12 +74,14 @@ impl LanguageParser for ShellParser {
             }
 
             // backtick execution
-            if BACKTICK_RE.is_match(trimmed) {
-                parsed.commands.push(CommandInvocation {
-                    function: "backtick".into(),
-                    command_arg: ArgumentSource::Interpolated,
-                    location: loc(&file_path, line_num),
-                });
+            for mat in BACKTICK_RE.find_iter(trimmed) {
+                if is_active_backtick(trimmed, mat.start()) {
+                    parsed.commands.push(CommandInvocation {
+                        function: "backtick".into(),
+                        command_arg: ArgumentSource::Interpolated,
+                        location: loc(&file_path, line_num),
+                    });
+                }
             }
 
             // pip/npm install
@@ -97,6 +106,34 @@ impl LanguageParser for ShellParser {
 
         Ok(parsed)
     }
+}
+
+fn is_active_backtick(line: &str, backtick_idx: usize) -> bool {
+    let mut state = ShellQuoteState::Unquoted;
+    let mut escaped = false;
+
+    for (idx, ch) in line.char_indices() {
+        if idx >= backtick_idx {
+            return state != ShellQuoteState::SingleQuoted && !escaped;
+        }
+
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match (state, ch) {
+            (ShellQuoteState::SingleQuoted, '\'') => state = ShellQuoteState::Unquoted,
+            (ShellQuoteState::SingleQuoted, _) => {}
+            (_, '\\') => escaped = state != ShellQuoteState::SingleQuoted,
+            (ShellQuoteState::Unquoted, '\'') => state = ShellQuoteState::SingleQuoted,
+            (ShellQuoteState::Unquoted, '"') => state = ShellQuoteState::DoubleQuoted,
+            (ShellQuoteState::DoubleQuoted, '"') => state = ShellQuoteState::Unquoted,
+            _ => {}
+        }
+    }
+
+    false
 }
 
 fn loc(file: &Path, line: usize) -> SourceLocation {
@@ -133,5 +170,49 @@ mod tests {
         let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
         assert_eq!(parsed.commands.len(), 1);
         assert!(parsed.commands[0].function.contains("package_install"));
+    }
+
+    #[test]
+    fn detects_backticks() {
+        let code = "echo `whoami`";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert_eq!(parsed.commands.len(), 1);
+        assert_eq!(parsed.commands[0].function, "backtick");
+    }
+
+    #[test]
+    fn ignores_escaped_backticks() {
+        let code = "echo \\`whoami\\`";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert_eq!(parsed.commands.len(), 0);
+    }
+
+    #[test]
+    fn ignores_single_quoted_backticks() {
+        let code = "echo '`whoami`'\n";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert_eq!(parsed.commands.len(), 0);
+    }
+
+    #[test]
+    fn detects_backticks_after_apostrophe_in_double_quotes() {
+        let code = "echo \"it's\" `whoami`";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert_eq!(parsed.commands.len(), 1);
+    }
+
+    #[test]
+    fn detects_double_escaped_backticks() {
+        // e.g. \\`whoami` - the backslash is escaped, so the backtick is active
+        let code = "echo \\\\`whoami`";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert_eq!(parsed.commands.len(), 1);
+    }
+
+    #[test]
+    fn detects_multiple_backticks_per_line() {
+        let code = "res=\"`cmd1` `cmd2`\"";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert_eq!(parsed.commands.len(), 2);
     }
 }

@@ -22,8 +22,7 @@ path = "src/bin/cli.rs"
 [features]
 default = ["python", "typescript"]
 
-# Language parsers (feature-gated to control binary size)
-python = ["dep:tree-sitter-python"]
+python = []
 typescript = ["dep:tree-sitter-typescript"]
 
 # Runtime proxy for `wrap` command (tokio + parking_lot)
@@ -48,7 +47,6 @@ thiserror = "1.0"
 
 # Tree-sitter core + language grammars
 tree-sitter = "0.24"
-tree-sitter-python = { version = "0.23", optional = true }
 tree-sitter-typescript = { version = "0.23", optional = true }
 
 # Regex for shell parser, source/sink patterns
@@ -56,7 +54,6 @@ regex = "1.10"
 once_cell = "1.19"
 
 # File walking (.gitignore-aware)
-walkdir = "2.5"
 ignore = "0.4"
 glob = "0.3"
 
@@ -72,18 +69,11 @@ toml = "0.8"
 # Timestamps
 chrono = { version = "0.4", features = ["serde"] }
 
-# UUID for SARIF run IDs
-uuid = { version = "1.6", features = ["v4"] }
-
 # Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Typosquat detection
 levenshtein = "1.0"
-
-# Semver parsing
-semver = "1.0"
 
 # URL parsing
 url = "2.5"

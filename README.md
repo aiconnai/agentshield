@@ -352,13 +352,13 @@ such as `legacy/` as matching that directory's contents.
 
 | Language | Parser | Feature flag |
 |----------|--------|--------------|
-| Python | tree-sitter AST with regex source/sink patterns | `python` (default) |
+| Python | Regex parser with source/sink patterns | `python` compatibility flag (default) |
 | TypeScript/TSX | tree-sitter AST with fallback patterns | `typescript` (default) |
 | JavaScript/JSX | tree-sitter AST through TypeScript grammar support | `typescript` (default) |
 | Shell | Regex parser | always on |
 | JSON Schema / OpenAPI-style schemas | Schema parser | always on |
 
-Both tree-sitter parsers are feature-gated:
+TypeScript tree-sitter support is feature-gated; the Python compatibility flag keeps existing build commands stable:
 
 ```bash
 cargo build --no-default-features

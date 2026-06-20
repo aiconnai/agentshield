@@ -176,6 +176,14 @@ run_sensor() {
 
 harness_checks() {
   run_sensor doctor "harness doctor" bash docs/harness/bin/doctor.sh || return 1
+  if ! should_skip pr-title-policy; then
+    run "PR title policy accepts clean title" \
+      bash docs/harness/bin/pr-title-policy.sh --title "fix: clean title" || return 1
+    run_expected_exit "PR title policy rejects [codex] title" 4 \
+      bash docs/harness/bin/pr-title-policy.sh --title "[codex] fix: bad title" || return 1
+    run_expected_exit "PR title policy rejects spaced mixed-case codex title" 4 \
+      bash docs/harness/bin/pr-title-policy.sh --title "[ CoDeX ] fix: bad title" || return 1
+  fi
 }
 
 docs_checks() {

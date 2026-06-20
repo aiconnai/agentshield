@@ -60,7 +60,7 @@ pub trait Adapter: Send + Sync {
 
 ```
 src/parser/mod.rs         — Parser trait, ParsedFile, FunctionDef, CallSite
-src/parser/python.rs      — tree-sitter AST + compiled regex
+src/parser/python.rs      — compiled regex source/sink extraction
 src/parser/typescript.rs  — tree-sitter TypeScript/TSX + regex fallback
 src/parser/shell.rs       — regex-based command extraction
 src/parser/json_schema.rs — JSON Schema → ToolSurface
@@ -77,8 +77,8 @@ Parsers extract structured information from source files into `ParsedFile`:
 - **Call sites** (`CallSite`) — callee name, classified arguments, caller context (v0.2.2)
 - **Sanitized variables** (`sanitized_vars`) — variables holding return values of sanitizer functions (v0.2.2)
 
-Python and TypeScript parsers use tree-sitter for AST parsing combined with compiled
-regex patterns for source/sink detection. TypeScript also has a regex fallback when
+Python uses compiled regex patterns for source/sink extraction. TypeScript uses
+tree-sitter AST parsing with compiled regex patterns, plus a regex fallback when
 the `typescript` feature is disabled.
 
 ### 2.5. Cross-File Analysis (v0.2.2)

@@ -110,6 +110,10 @@ impl Language {
             _ => Self::Unknown,
         }
     }
+
+    pub fn is_documentation(&self) -> bool {
+        matches!(self, Self::Markdown)
+    }
 }
 
 /// Location in source code.
