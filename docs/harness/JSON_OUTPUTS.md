@@ -135,17 +135,17 @@ Example failing output:
 AgentShield's `sensors.sh` supports the following modes, which may gain JSON
 support in a later task:
 
-- `full` (default, no-arg) — canonical full local gate
-- `quick` — fast subset: doctor + clippy + fmt + unit tests
-- `docs` — doc checks only
-- `mcp` — MCP validation report parity
-- `fixtures` — fixture scan checks
-- `sarif` — SARIF output checks
-- `action` — GitHub Action checks
-- `release` — release workflow checks
-- `vscode` — VS Code extension checks
-- `baseline` — baseline drift evidence
-- `audit` — quarterly audit evidence
+- `full` (default, no-arg) — complete local gate: doctor + fmt + clippy + tests + fixture smoke + SARIF + action/release static checks
+- `quick` — fast subset: harness checks (doctor + shell syntax) + fmt + cargo check --all-features
+- `docs` — harness policy references and current CLI/action/release doc references are present
+- `mcp` — MCP validation report references the Anthropic reference servers and records current validation evidence
+- `fixtures` — supported fixture scans return success or findings, not scan errors
+- `sarif` — SARIF file is emitted and has expected top-level shape
+- `action` — composite action keeps expected inputs, SARIF upload, and exit-code behavior
+- `release` — release workflow keeps 5 targets, --features full, and wrap smoke checks
+- `vscode` — npm ci and npm run compile pass in vscode/
+- `baseline` — baseline snapshot writes .baseline-last and doctor passes
+- `audit` — evidence-only quarterly audit report is generated and doctor passes
 
 When `sensors.sh` gains a `--json` flag, it must use this same envelope with
 `tool` set to `sensors` and `mode` set to the selected lane.

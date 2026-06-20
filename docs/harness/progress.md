@@ -247,3 +247,50 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A2
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: no regression in quick sensor gate after A2 changes
+
+## A2 post-gate fix round 1 - 2026-06-20 (JSON_OUTPUTS sensor-description parity)
+
+- Codex gate returned FAIL [MED]: sensor-mode descriptions in `docs/harness/JSON_OUTPUTS.md` were copied
+  from Engram and described the wrong commands for AgentShield.
+- Corrected all 11 sensor-mode descriptions against GATES.md (authoritative source):
+  - `full`: was "canonical full local gate" → "complete local gate: doctor + fmt + clippy + tests + fixture smoke + SARIF + action/release static checks"
+  - `quick`: was "fast subset: doctor + clippy + fmt + unit tests" → "fast subset: harness checks (doctor + shell syntax) + fmt + cargo check --all-features"
+  - `docs`: was "doc checks only" → "harness policy references and current CLI/action/release doc references are present"
+  - `mcp`: was "MCP validation report parity" → "MCP validation report references the Anthropic reference servers and records current validation evidence"
+  - `fixtures`: was "fixture scan checks" → "supported fixture scans return success or findings, not scan errors"
+  - `sarif`: was "SARIF output checks" → "SARIF file is emitted and has expected top-level shape"
+  - `action`: was "GitHub Action checks" → "composite action keeps expected inputs, SARIF upload, and exit-code behavior"
+  - `release`: was "release workflow checks" → "release workflow keeps 5 targets, --features full, and wrap smoke checks"
+  - `vscode`: was "VS Code extension checks" → "npm ci and npm run compile pass in vscode/"
+  - `baseline`: was "baseline drift evidence" → "baseline snapshot writes .baseline-last and doctor passes"
+  - `audit`: was "quarterly audit evidence" → "evidence-only quarterly audit report is generated and doctor passes"
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: PASS: AgentShield harness doctor
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: doctor still passes after sensor description corrections
+- harness_verify:
+  command: bash docs/harness/bin/sensors.sh quick
+  exit_code: 0
+  output_summary: ALL SENSORS GREEN (quick)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: quick sensor gate unaffected by doc-only change
+- harness_verify:
+  command: bash docs/harness/bin/sensors.sh docs
+  exit_code: 0
+  output_summary: ALL SENSORS GREEN (docs)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: docs sensor (validates harness doc references) passes after parity fix
