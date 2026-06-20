@@ -10,6 +10,10 @@ MSG=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --message)
+      if [ "$#" -lt 2 ]; then
+        echo "Usage: check-commit-msg.sh --message 'type(scope): subject'  or  path/to/COMMIT_EDITMSG" >&2
+        exit 2
+      fi
       MSG="$2"
       shift 2
       ;;

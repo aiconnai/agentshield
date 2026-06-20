@@ -103,3 +103,79 @@ No commands are recorded as verified unless they are run and logged using the `d
 - Chained checker into `.githooks/commit-msg` after trailer validation.
 - Registered in `doctor.sh` with scope and GATES.md documentation checks.
 - Documented in `GATES.md` with allowed types, required scopes, and invocation examples.
+
+## A1 post-gate fix round 1 - 2026-06-20
+
+- Created `docs/harness/canvas/2026-06-20-a1-check-commit-msg.md` (missing review canvas — Finding 1).
+- Fixed `--message` missing-operand guard in `check-commit-msg.sh` to exit 2 with usage message instead of crashing on unbound variable (Finding 2).
+- Added verification evidence block below (Finding 3).
+- harness_verify:
+  command: bash -n docs/harness/bin/check-commit-msg.sh
+  exit_code: 0
+  output_summary: shell syntax clean
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A1
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms script is parseable by bash before any runtime check
+- harness_verify:
+  command: sh -n .githooks/commit-msg
+  exit_code: 0
+  output_summary: hook syntax clean under POSIX sh
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A1
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: hook is invoked by git under /bin/sh; must be POSIX-clean
+- harness_verify:
+  command: bash docs/harness/bin/check-commit-msg.sh --message
+  exit_code: 2
+  output_summary: printed usage line and exited 2 (documented usage-error code)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A1
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies Finding 2 fix — missing operand now exits 2, not unbound-variable crash
+- harness_verify:
+  command: bash docs/harness/bin/check-commit-msg.sh --message "feat(adapter): x"
+  exit_code: 0
+  output_summary: "OK commit message: feat(adapter): x"
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A1
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms valid scope+type still accepted after guard insertion
+- harness_verify:
+  command: bash docs/harness/bin/check-commit-msg.sh --message "broken"
+  exit_code: 1
+  output_summary: FAIL — message does not match required format
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A1
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms malformed message rejected with exit 1
+- harness_verify:
+  command: bash docs/harness/bin/check-commit-msg.sh --message "feat(nope): x"
+  exit_code: 1
+  output_summary: FAIL — bad scope rejected with exit 1
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A1
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms unknown scope rejected with exit 1
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: PASS: AgentShield harness doctor (all checks pass including new canvas)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A1
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: doctor validates script, canvas dir, GATES.md references, and no regression
