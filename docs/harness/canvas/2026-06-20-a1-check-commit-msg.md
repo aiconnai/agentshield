@@ -36,14 +36,15 @@ Scope: Add a harness gate that validates Conventional Commit format and AgentShi
 
 ## Breakage Risk
 
-| Risk | Impact | Mitigation | Verification |
-|---|---|---|---|
-| Hook rejects legitimate commits | Blocking for developers | Scope + type allowlist matches GATES.md exactly; POSIX-sh chaining means the hook only calls the script, not inline logic | `bash -n docs/harness/bin/check-commit-msg.sh && sh -n .githooks/commit-msg` + the four edge-case commands |
-| Future scope additions not reflected in script | Script silently rejects valid scopes | `doctor.sh` `require_match` keeps GATES.md and script in sync; any new scope must be added to both or doctor fails | `bash docs/harness/bin/doctor.sh` |
-| `--message` missing operand exits with unbound-variable error instead of documented exit 2 | Confusing UX; exit code does not match documented contract | Guard added: `if [ "$#" -lt 2 ]; then … exit 2; fi` before `$2` dereference | `bash docs/harness/bin/check-commit-msg.sh --message` → exit 2 |
-| Unknown bare flags silently ignored | Mistyped flags produce no feedback | `*)` branch only accepts existing files; non-file bare args are silently skipped (acceptable for hook usage; CLI usage is `--message` or file path only) | No change needed; documented as by-design |
+| Risk | Impact | Mitigation | Rollback | Verification |
+|---|---|---|---|---|
+| Hook rejects legitimate commits | Blocking for developers | Scope + type allowlist matches GATES.md exactly; POSIX-sh chaining means the hook only calls the script, not inline logic | Remove the appended `check-commit-msg.sh` block from `.githooks/commit-msg` (hook reverts to trailer-only) | `bash -n docs/harness/bin/check-commit-msg.sh && sh -n .githooks/commit-msg` + the four edge-case commands |
+| Future scope additions not reflected in script | Script silently rejects valid scopes | `doctor.sh` asserts (via `require_match`) that `check-commit-msg.sh` exists, is executable, passes `bash -n`, references the core scopes (`adapter\|detector\|parser`), and that GATES.md documents the commit gate — it is a presence/cross-reference check, NOT a full scope/type parity validator. Keeping the SCOPES list in the script aligned with GATES.md:132 remains a manual discipline. | Remove the appended `check-commit-msg.sh` block from `.githooks/commit-msg` and delete `docs/harness/bin/check-commit-msg.sh` plus its `doctor.sh` registration; or `git revert 5504702 a09e8f9` | `bash docs/harness/bin/doctor.sh` |
+| `--message` missing operand exits with unbound-variable error instead of documented exit 2 | Confusing UX; exit code does not match documented contract | Guard added: `if [ "$#" -lt 2 ]; then … exit 2; fi` before `$2` dereference | Revert `docs/harness/bin/check-commit-msg.sh` to pre-guard state (behaviour degrades to unbound-variable error on missing operand, which was the prior behaviour) | `bash docs/harness/bin/check-commit-msg.sh --message` → exit 2 |
+| Unknown bare flags silently ignored | Mistyped flags produce no feedback | `*)` branch only accepts existing files; non-file bare args are silently skipped (acceptable for hook usage; CLI usage is `--message` or file path only) | No rollback needed; documented as by-design | No change needed; documented as by-design |
 
 ## Decision
 
 - Proceed / split / block: Proceed.
 - Reason: A small deterministic script chained into the existing commit-msg hook gives reliable local enforcement with minimal complexity. The doctor integration ensures future drift is caught automatically.
+- Follow-up (optional, out of A1 scope): strengthen doctor to validate full scope/type parity between check-commit-msg.sh and GATES.md.
