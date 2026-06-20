@@ -294,3 +294,67 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A2
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: docs sensor (validates harness doc references) passes after parity fix
+
+## A2 post-gate fix round 2 - 2026-06-20 (BLOCKER: doctor --json failure path tempfile-free)
+
+- Codex gate returned FAIL [BLOCKER]: the `--json` failure path used `IFS='|' read -r -a _f <<< "$JSON_FAILURES"`.
+  The here-string (`<<<`) is implemented by bash via a temp file. In a restricted environment
+  (sandbox, locked-down CI, read-only FS) the here-string creation fails, `_f` is never
+  assigned, and the subsequent `${_f[@]}` expansion aborts under `set -uo pipefail` with
+  `_f[@]: unbound variable`, emitting shell errors instead of a valid JSON object.
+- Fix: replaced the here-string split with pure-bash word-splitting:
+  save IFS, disable globbing (`set -f`), assign `_f=( $JSON_FAILURES )` with `IFS='|'`,
+  then restore. `_f=()` is initialized empty before the `if` so `${_f[@]}` is safe under
+  `set -u` even when `JSON_FAILURES` is empty. No temp file, no subshell.
+- `local` was NOT used — the block is at top level (not inside a function); using `local`
+  outside a function is a bash error. Plain `_old_ifs=` and `_f=()` assignments used instead.
+- harness_verify:
+  command: "bash docs/harness/bin/doctor.sh --json | python3 -c \"import sys,json; d=json.load(sys.stdin); assert d['status']=='pass' and d['failure_count']==0; print('PASS-OK')\""
+  exit_code: 0
+  output_summary: PASS-OK (valid JSON, status=pass, failure_count=0)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: happy path still emits valid JSON after tempfile-free fix
+- harness_verify:
+  command: "env PATH=/usr/bin:/bin:/usr/sbin:/sbin bash docs/harness/bin/doctor.sh --json > /tmp/df.json 2>/tmp/df.err; echo exit=$?; python3 -c \"import json; d=json.load(open('/tmp/df.json')); assert d['status']=='fail' and d['exit_code']==1 and isinstance(d['failures'],list) and d['failure_count']==len(d['failures']); print('FAIL-PATH-OK', d['failure_count'])\"; wc -c /tmp/df.err"
+  exit_code: 0
+  output_summary: "exit=1; FAIL-PATH-OK 45; 0 (zero stderr bytes)"
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: failure path emits exactly one valid JSON object, exits 1, zero bytes on stderr (no shell errors)
+- harness_verify:
+  command: "TMPDIR=/nonexistent env PATH=/usr/bin:/bin:/usr/sbin:/sbin bash docs/harness/bin/doctor.sh --json >/tmp/df2.json 2>/tmp/df2.err; echo exit=$?; python3 -c \"import json; json.load(open('/tmp/df2.json')); print('NO-TMP-OK')\"; wc -c /tmp/df2.err"
+  exit_code: 0
+  output_summary: "exit=1; NO-TMP-OK; 0 (zero stderr bytes — tempfile path unused)"
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms no temp file needed for the split — TMPDIR=/nonexistent does not affect correctness
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: PASS: AgentShield harness doctor
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: human mode unaffected by the fix
+- harness_verify:
+  command: bash docs/harness/bin/sensors.sh quick
+  exit_code: 0
+  output_summary: ALL SENSORS GREEN (quick)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: no regression in quick sensor gate after BLOCKER fix

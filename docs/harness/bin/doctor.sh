@@ -185,7 +185,16 @@ if [ "$JSON_MODE" -eq 1 ]; then
   exit_code=0; [ "$FAILURES" -ne 0 ] && exit_code=1
   fjson=""
   if [ -n "$JSON_FAILURES" ]; then
-    IFS='|' read -r -a _f <<< "$JSON_FAILURES"
+    # Split the '|'-delimited accumulator without a here-string (which needs a
+    # writable tempfile) and without a subshell. Disable globbing so values
+    # with shell metacharacters are not expanded; restore IFS/globbing after.
+    _old_ifs="$IFS"
+    _f=()
+    set -f
+    IFS='|'
+    _f=( $JSON_FAILURES )
+    set +f
+    IFS="$_old_ifs"
     for m in "${_f[@]}"; do
       esc="${m//\\/\\\\}"; esc="${esc//\"/\\\"}"
       fjson="${fjson}${fjson:+,}\"${esc}\""
