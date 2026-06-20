@@ -16,6 +16,7 @@ mod ssrf;
 mod typosquat;
 mod unpinned_deps;
 mod unsafe_deser;
+mod unsafe_deser_patterns;
 
 use super::Detector;
 
