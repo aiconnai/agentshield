@@ -6,15 +6,25 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
+JSON_MODE=0
+for arg in "$@"; do
+  case "$arg" in
+    --json) JSON_MODE=1 ;;
+    *) echo "Usage: doctor.sh [--json]" >&2; exit 2 ;;
+  esac
+done
+
 FAILURES=0
+JSON_FAILURES=""
 
 fail() {
-  echo "FAIL: $*" >&2
+  [ "$JSON_MODE" -eq 0 ] && echo "FAIL: $*" >&2
   FAILURES=$((FAILURES + 1))
+  JSON_FAILURES="${JSON_FAILURES}${JSON_FAILURES:+|}$*"
 }
 
 ok() {
-  echo "OK: $*"
+  [ "$JSON_MODE" -eq 0 ] && echo "OK: $*"
 }
 
 need_cmd() {
@@ -78,6 +88,7 @@ need_cmd rg
 need_cmd bash
 
 require_file docs/harness/README.md
+require_file docs/harness/JSON_OUTPUTS.md
 require_file docs/harness/SPEC.md
 require_file docs/harness/INVARIANTS.md
 require_file docs/harness/WHAT_WE_DONT_DO.md
@@ -120,6 +131,7 @@ done
 
 require_match "bootstrap mentions WHAT_WE_DONT_DO.md" 'WHAT_WE_DONT_DO\.md' docs/harness/bin/bootstrap.sh
 require_match "bootstrap mentions CODE_REVIEW_POLICY.md" 'CODE_REVIEW_POLICY\.md' docs/harness/bin/bootstrap.sh
+require_match "README mentions JSON_OUTPUTS.md" 'JSON_OUTPUTS\.md' docs/harness/README.md
 require_match "README mentions WHAT_WE_DONT_DO.md" 'WHAT_WE_DONT_DO\.md' docs/harness/README.md
 require_match "README mentions CODE_REVIEW_POLICY.md" 'CODE_REVIEW_POLICY\.md' docs/harness/README.md
 require_match "README mentions Review Canvas" 'Review Canvas' docs/harness/README.md
@@ -167,6 +179,22 @@ require_match "check-commit-msg lists adapter scope" 'adapter\|detector\|parser'
 require_match "GATES mentions commit message gate" 'check-commit-msg' docs/harness/GATES.md
 
 require_no_match "GitHub workflows do not execute harness scripts" 'docs/harness/bin' .github/workflows
+
+if [ "$JSON_MODE" -eq 1 ]; then
+  status="pass"; [ "$FAILURES" -ne 0 ] && status="fail"
+  exit_code=0; [ "$FAILURES" -ne 0 ] && exit_code=1
+  fjson=""
+  if [ -n "$JSON_FAILURES" ]; then
+    IFS='|' read -r -a _f <<< "$JSON_FAILURES"
+    for m in "${_f[@]}"; do
+      esc="${m//\\/\\\\}"; esc="${esc//\"/\\\"}"
+      fjson="${fjson}${fjson:+,}\"${esc}\""
+    done
+  fi
+  printf '{"schema_version":"harness-json-v1","tool":"doctor","mode":"json","status":"%s","exit_code":%d,"summary":"harness doctor %s","failures":[%s],"failure_count":%d}\n' \
+    "$status" "$exit_code" "$status" "$fjson" "$FAILURES"
+  exit "$exit_code"
+fi
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "PASS: AgentShield harness doctor"

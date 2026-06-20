@@ -179,3 +179,71 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A1
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: doctor validates script, canvas dir, GATES.md references, and no regression
+
+## Harness follow-up - 2026-06-20 (A2: harness-json-v1 contract + doctor --json)
+
+- Created `docs/harness/JSON_OUTPUTS.md` defining the harness-json-v1 contract (adapted from Engram).
+- Added `--json` mode to `docs/harness/bin/doctor.sh` with flag parsing, JSON_FAILURES accumulator, guarded echoes, and JSON output block.
+- Registered `require_file docs/harness/JSON_OUTPUTS.md` and `require_match "README mentions JSON_OUTPUTS.md"` in doctor.sh.
+- Added Machine-readable Output section to `docs/harness/README.md` linking the contract.
+- Created `docs/harness/canvas/2026-06-20-a2-json-outputs.md` (canvas required by GATES.md for harness script changes).
+- harness_verify:
+  command: "bash docs/harness/bin/doctor.sh --json | python3 -c \"import sys,json; d=json.load(sys.stdin); assert d['schema_version']=='harness-json-v1' and d['tool']=='doctor'; print('OK', d['status'], d['failure_count'])\""
+  exit_code: 0
+  output_summary: OK pass 0
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms JSON envelope is valid, schema_version and tool fields correct, failure_count 0 on clean repo
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh >/dev/null 2>&1; echo "human=$?"
+  exit_code: 0
+  output_summary: human=0
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: human mode unchanged, exits 0 on clean repo
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh --json >/dev/null 2>&1; echo "json=$?"
+  exit_code: 0
+  output_summary: json=0
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms exit code parity between human and JSON modes (both 0 on clean repo)
+- harness_verify:
+  command: "bash docs/harness/bin/doctor.sh --bogus; echo \"exit=$?\""
+  exit_code: 2
+  output_summary: exit=2
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms unknown flag exits 2 (usage_error) as documented in JSON_OUTPUTS.md Status Vocabulary
+- harness_verify:
+  command: bash docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: PASS: AgentShield harness doctor
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: human mode PASS line unchanged after all A2 modifications
+- harness_verify:
+  command: bash docs/harness/bin/sensors.sh quick
+  exit_code: 0
+  output_summary: ALL SENSORS GREEN (quick)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A2
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: no regression in quick sensor gate after A2 changes
