@@ -436,7 +436,7 @@ No commands are recorded as verified unless they are run and logged using the `d
 - harness_verify:
   command: "bash docs/harness/bin/sensors.sh status --json | python3 -c \"import sys,json; d=json.load(sys.stdin); assert d['tool']=='sensors' and d['status'] in ('pass','warn','fail'); print('STATUS-JSON-OK', d['status'])\""
   exit_code: 0
-  output_summary: STATUS-JSON-OK pass
+  output_summary: STATUS-JSON-OK <pass|warn|fail> depending on current .sensors-last snapshot
   passed: true
   evidence_path: none
   skipped_reason: none
