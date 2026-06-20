@@ -27,6 +27,7 @@ Status: stricter cross-harness foundation added on 2026-06-05.
 - Review evidence should go under `docs/harness/canvas/` for complex changes.
 - Review artifacts should go under `docs/harness/reviews/`.
 - Quarterly evidence reports should go under `docs/harness/audits/`.
+- PR titles must not contain `[codex]`; `docs/harness/bin/pr-title-policy.sh` is the local guard.
 
 ## Next Useful Runs
 

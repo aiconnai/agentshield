@@ -103,6 +103,7 @@ for script in \
   docs/harness/bin/bootstrap.sh \
   docs/harness/bin/doctor.sh \
   docs/harness/bin/sensors.sh \
+  docs/harness/bin/pr-title-policy.sh \
   docs/harness/bin/review-gate.sh \
   docs/harness/bin/codex-gate.sh \
   docs/harness/bin/baseline.sh \
@@ -155,6 +156,11 @@ require_match "sensors mentions baseline" 'baseline\)' docs/harness/bin/sensors.
 require_match "sensors runs doctor" 'doctor\.sh' docs/harness/bin/sensors.sh
 require_match "sensors supports known issue flag" '--known-issue' docs/harness/bin/sensors.sh
 require_match "sensors supports exclusion flag" '--exclude-sensor' docs/harness/bin/sensors.sh
+require_match "PR title policy rejects codex marker" '\[codex\]' docs/harness/bin/pr-title-policy.sh
+require_match "sensors runs PR title policy" 'pr-title-policy\.sh' docs/harness/bin/sensors.sh
+require_match "README mentions PR title policy" 'PR title policy' docs/harness/README.md
+require_match "GATES mentions PR title policy" 'PR title policy' docs/harness/GATES.md
+require_match "CODE_REVIEW_POLICY mentions PR title policy" 'PR title policy' docs/harness/CODE_REVIEW_POLICY.md
 
 require_no_match "GitHub workflows do not execute harness scripts" 'docs/harness/bin' .github/workflows
 

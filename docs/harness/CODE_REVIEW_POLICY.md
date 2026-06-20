@@ -41,6 +41,7 @@ Reviewers must inspect for:
 - release binaries accidentally omitting expected `full` features;
 - offline-first or privacy regressions;
 - documentation claiming more than code or gates prove;
+- PR titles or PR automation that include the banned `[codex]` marker;
 - hidden scope creep against `docs/harness/WHAT_WE_DONT_DO.md`.
 
 ## Fake-Success Patterns
@@ -71,3 +72,5 @@ Complex triggers are defined in `docs/harness/GATES.md` and `docs/harness/canvas
 Harness script changes are process-critical. Reviewers must inspect them directly and must not rely only on generated prompt summaries.
 
 Changes to `docs/harness/bin/*` require independent post-review evidence. If independent evidence is missing, `review-gate.sh post` must fail before claiming review success.
+
+PR title policy changes must preserve the rule that pull request titles never contain `[codex]`.

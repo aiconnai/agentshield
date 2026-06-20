@@ -119,6 +119,7 @@ It is not a pass/fail gate and must not delete, archive, or rewrite files. Human
 - GitHub workflows do not execute `docs/harness/bin/*`;
 - mandatory policy files and read-order references are present;
 - review gate prompts include negative-scope and Review Canvas checks.
+- PR title policy rejects titles containing `[codex]`.
 
 Changes to `docs/harness/bin/*` require independent post-review evidence. A self-generated or missing review artifact is not authoritative for harness script changes.
 

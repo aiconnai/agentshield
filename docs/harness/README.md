@@ -11,6 +11,7 @@ The harness is local operational tooling. It is not production CI, and it must n
 | `bin/bootstrap.sh` | Orientation | Read-only, fast, prints branch/state and required read order |
 | `bin/doctor.sh` | Consistency checker | Validates harness files, references, script executability, and shell syntax |
 | `bin/sensors.sh` | Deterministic gates | No args means canonical full gate; modes are explicit developer aids |
+| `bin/pr-title-policy.sh` | PR title policy | Rejects PR titles containing `[codex]` |
 | `bin/review-gate.sh` | Independent review | General reviewer CLI gate with strict `REVIEW_VERDICT` artifacts |
 | `bin/codex-gate.sh` | Compatibility wrapper | Runs `review-gate.sh` with `REVIEWER_CLI=codex` |
 | `bin/baseline.sh` | Drift evidence | Writes cheap static repository facts to `.baseline-last` |
@@ -110,5 +111,6 @@ Exclusions are not a way to make production code look green.
 
 - Changes under `docs/harness/bin/*`, `INVARIANTS.md`, `GATES.md`, `CODE_REVIEW_POLICY.md`, or bootstrap read order require progress updates.
 - Changes under `docs/harness/bin/*` require independent post-review evidence. A self-generated or missing review artifact is not authoritative for harness script changes.
+- PR titles must not contain `[codex]`; use `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` or `--current-pr` before opening or updating a PR.
 - The harness does not rewrite `AGENTS.md`.
 - Generated review, progress, audit, and baseline artifacts are evidence, not source-of-truth scanner behavior.
