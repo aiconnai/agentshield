@@ -120,7 +120,10 @@ run_reviewer() {
   local prompt="$1"
   case "$REVIEWER_CLI" in
     codex)
-      codex exec "$prompt"
+      # Pass the prompt via stdin: codex-cli 0.140.0 intermittently treats a
+      # large positional prompt as a request to read more input from stdin and
+      # then exits with empty output. Piping the prompt avoids that path.
+      printf '%s' "$prompt" | codex exec
       ;;
     *)
       "$REVIEWER_CLI" "$prompt"
