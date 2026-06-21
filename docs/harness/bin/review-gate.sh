@@ -477,6 +477,10 @@ PROMPT_TEXT
           echo "FAIL: manual post-gate returned FAIL. See $OUTFILE" >&2
           exit 1
           ;;
+        *)
+          echo "FAIL: manual post-gate produced an unparseable verdict after saving review. See $OUTFILE" >&2
+          exit 1
+          ;;
       esac
     fi
 
