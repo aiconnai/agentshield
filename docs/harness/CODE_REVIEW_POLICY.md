@@ -18,6 +18,18 @@ REVIEW_VERDICT: FAIL
 
 The verdict must be followed by findings prefixed with `[BLOCKER]`, `[HIGH]`, `[MED]`, or `[LOW]` when findings exist.
 
+## Reviewer CLI Selection
+
+`review-gate.sh` selects the reviewer backend with `REVIEWER_CLI`. The default is `REVIEWER_CLI=codex`, and `docs/harness/bin/codex-gate.sh` remains the back-compat wrapper for callers that expect the Codex gate entrypoint.
+
+The Codex backend must run through `codex exec --sandbox read-only -C "$REPO_ROOT" -` with the review prompt passed on stdin. Empty reviewer output may be retried up to `REVIEWER_RETRY_ATTEMPTS` times, defaulting to 3. A non-empty output containing `REVIEW_VERDICT: FAIL` must be saved and enforced, not retried or masked. Non-empty output without a parseable verdict must also be saved and handled by the normal verdict parser.
+
+`REVIEWER_CLI=manual` is artifact-driven. Manual `pre` mode may write an advisory prompt artifact and exit 0, but it must not fabricate an automated PASS or FAIL. Manual `post` mode requires a supplied reviewer artifact, such as `--review-file=<path>`, containing a real `REVIEW_VERDICT` line.
+
+`claude`, `grok`, and `ollama` are reserved backend names. They must fail with a usage error unless the harness has a verified local command path and invocation for that backend; the gate must not fall back to generic `"$REVIEWER_CLI" "$prompt"` execution.
+
+On post-gate re-runs, the prompt must re-inject unresolved prior `[BLOCKER]` and `[HIGH]` findings for the same task under `## Prior unresolved findings (address or refute)`. `[MED]` and `[LOW]` findings are not re-injected.
+
 ## Severity Taxonomy
 
 | Severity | Meaning |
