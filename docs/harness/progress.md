@@ -953,7 +953,7 @@ No commands are recorded as verified unless they are run and logged using the `d
 ## A5 doctor drift checks - 2026-06-21
 
 - Created `docs/harness/canvas/2026-06-21-a5-doctor-drift-checks.md` before post-review because `doctor.sh` behavior changed.
-- Added conservative checks for the latest review artifact's `REVIEW_VERDICT` marker and AgentShield's `.sensors-last` PASS/FAIL token.
+- Added conservative checks for the latest review artifact's `REVIEW_VERDICT` marker and AgentShield's full `.sensors-last` `TIMESTAMP MODE PASS|FAIL` format.
 - Engram's SPEC sprint/active-plan drift checks were not ported because AgentShield does not define the same fields.
 
 - harness_verify:
@@ -969,7 +969,7 @@ No commands are recorded as verified unless they are run and logged using the `d
 - harness_verify:
   command: rtk proxy bash docs/harness/bin/doctor.sh
   exit_code: 0
-  output_summary: PASS: AgentShield harness doctor; latest review has parseable REVIEW_VERDICT; .sensors-last has parseable PASS/FAIL result
+  output_summary: PASS: AgentShield harness doctor; latest review has parseable REVIEW_VERDICT; .sensors-last has parseable TIMESTAMP MODE PASS|FAIL result
   passed: true
   evidence_path: none
   skipped_reason: none
@@ -997,19 +997,19 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: proves the latest-review verdict check is live against an existing artifact
 - harness_verify:
-  command: rtk proxy python3 -c "import pathlib,re; text=pathlib.Path('docs/harness/.sensors-last').read_text(); assert re.search(r'(^|\\s)(PASS|FAIL)(\\s|$)', text); print('SENSORS-LAST-FORMAT-OK', text.strip())"
+  command: rtk proxy python3 -c "import pathlib,re; text=pathlib.Path('docs/harness/.sensors-last').read_text(); assert re.search(r'^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z\\s+\\S+\\s+(PASS|FAIL)$', text); print('SENSORS-LAST-FORMAT-OK', text.strip())"
   exit_code: 0
-  output_summary: SENSORS-LAST-FORMAT-OK 2026-06-21T16:25:37Z quick PASS
+  output_summary: SENSORS-LAST-FORMAT-OK 2026-06-21T16:35:40Z quick PASS
   passed: true
   evidence_path: docs/harness/.sensors-last
   skipped_reason: none
   issue_numbers: A5
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
-  importance: proves the `.sensors-last` format check is live against the current snapshot
+  importance: proves the `.sensors-last` full-format check is live against the current snapshot
 - harness_verify:
   command: rtk proxy bash docs/harness/bin/sensors.sh quick
   exit_code: 0
-  output_summary: ALL SENSORS GREEN (quick, 2026-06-21T16:25:37Z)
+  output_summary: ALL SENSORS GREEN (quick, 2026-06-21T16:35:40Z)
   passed: true
   evidence_path: none
   skipped_reason: none

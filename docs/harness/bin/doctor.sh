@@ -122,10 +122,10 @@ check_sensors_last_format() {
     return
   fi
 
-  if rg -n -e '(^|[[:space:]])(PASS|FAIL)([[:space:]]|$)' docs/harness/.sensors-last >/dev/null 2>&1; then
-    ok ".sensors-last has parseable PASS/FAIL result"
+  if rg -n -e '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z[[:space:]]+[^[:space:]]+[[:space:]]+(PASS|FAIL)$' docs/harness/.sensors-last >/dev/null 2>&1; then
+    ok ".sensors-last has parseable TIMESTAMP MODE PASS|FAIL result"
   else
-    fail ".sensors-last missing parseable PASS/FAIL result"
+    fail ".sensors-last missing parseable TIMESTAMP MODE PASS|FAIL result"
   fi
 }
 
