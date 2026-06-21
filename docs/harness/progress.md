@@ -987,15 +987,29 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: JSON doctor mode remains a single valid pass object
 - harness_verify:
-  command: rtk proxy python3 -c "import pathlib,re; latest=sorted(pathlib.Path('docs/harness/reviews').glob('*.md'))[-1]; text=latest.read_text(); assert re.search(r'^REVIEW_VERDICT:\\s*(PASS|FAIL)\\s*$', text, re.M); print('LATEST-REVIEW-VERDICT-OK', latest)"
+  command: |
+    python3 - <<'PY'
+    import pathlib, subprocess
+    repo = pathlib.Path.cwd()
+    fixture = repo / "docs/harness/reviews/9999-12-31-a5-review-verdict-fixture.md"
+    fixture.write_text("REVIEW_VERDICT: PASS\n[LOW] temporary doctor fixture\n")
+    try:
+        cp = subprocess.run(["bash", "docs/harness/bin/doctor.sh"], cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output = cp.stdout + cp.stderr
+        assert cp.returncode == 0
+        assert f"latest review has parseable REVIEW_VERDICT: {fixture.relative_to(repo)}" in output
+    finally:
+        fixture.unlink(missing_ok=True)
+    print("LATEST-REVIEW-VERDICT-CHECK-OK")
+    PY
   exit_code: 0
-  output_summary: LATEST-REVIEW-VERDICT-OK docs/harness/reviews/2026-06-21-a4-review-gate-hardening-post-codex.md
+  output_summary: LATEST-REVIEW-VERDICT-CHECK-OK
   passed: true
-  evidence_path: docs/harness/reviews/2026-06-21-a4-review-gate-hardening-post-codex.md
+  evidence_path: generated then removed
   skipped_reason: none
   issue_numbers: A5
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
-  importance: proves the latest-review verdict check is live against an existing artifact
+  importance: proves the latest-review verdict check is live using a deterministic temporary artifact
 - harness_verify:
   command: rtk proxy python3 -c "import pathlib,re; text=pathlib.Path('docs/harness/.sensors-last').read_text(); assert re.search(r'^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z\\s+\\S+\\s+(PASS|FAIL)$', text); print('SENSORS-LAST-FORMAT-OK', text.strip())"
   exit_code: 0
