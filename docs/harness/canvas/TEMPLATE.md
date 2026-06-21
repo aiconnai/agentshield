@@ -30,9 +30,9 @@ Scope: <one sentence>
 
 ## Breakage Risk
 
-| Risk | Impact | Mitigation | Verification |
-|---|---|---|---|
-|  |  |  |  |
+| Risk | Impact | Mitigation | Rollback | Verification |
+|---|---|---|---|---|
+|  |  |  |  |  |
 
 ## Decision
 

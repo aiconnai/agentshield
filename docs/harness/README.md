@@ -107,6 +107,16 @@ Exclusions are not a way to make production code look green.
 - Trust workflows: suppressions, baselines, egress policy generation, optional runtime egress enforcement.
 - Distribution surfaces: GitHub Action, release binaries for 5 targets, VS Code extension.
 
+## Machine-readable Output
+
+`doctor.sh` supports a `--json` mode that emits a single JSON object to stdout using the `harness-json-v1` contract defined in [`JSON_OUTPUTS.md`](JSON_OUTPUTS.md). Human output remains the default.
+
+```bash
+bash docs/harness/bin/doctor.sh --json
+```
+
+Exit codes match human mode: `0` on pass, `1` on failure, `2` for unknown flags. See `JSON_OUTPUTS.md` for the full envelope schema and `sensors.sh` mode list.
+
 ## Notes
 
 - Changes under `docs/harness/bin/*`, `INVARIANTS.md`, `GATES.md`, `CODE_REVIEW_POLICY.md`, or bootstrap read order require progress updates.

@@ -14,11 +14,80 @@
 #   bash docs/harness/bin/sensors.sh vscode
 #   bash docs/harness/bin/sensors.sh baseline
 #   bash docs/harness/bin/sensors.sh audit
+#   bash docs/harness/bin/sensors.sh status [--json]
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
+
+usage() {
+  echo "Usage: $0 [full|quick|docs|mcp|fixtures|sarif|action|release|vscode|baseline|audit|status] [--exclude-sensor <name> --known-issue <path> --reason <text>]" >&2
+}
+
+status_usage_error() {
+  local json_mode="$1"
+  if [ "$json_mode" -eq 1 ]; then
+    printf '{"schema_version":"harness-json-v1","tool":"sensors","mode":"status","status":"usage_error","exit_code":2,"summary":"usage error: unknown argument","failures":[],"failure_count":0}\n'
+  else
+    usage
+  fi
+  exit 2
+}
+
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\t'/\\t}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\n'/\\n}"
+  printf '%s' "$value"
+}
+
+case "${1:-}" in
+  status)
+    shift
+    STATUS_JSON=0
+    for arg in "$@"; do
+      case "$arg" in
+        --json) STATUS_JSON=1 ;;
+      esac
+    done
+    for arg in "$@"; do
+      case "$arg" in
+        --json) ;;
+        *) status_usage_error "$STATUS_JSON" ;;
+      esac
+    done
+
+    LAST_FILE="docs/harness/.sensors-last"
+    ts=""
+    mode=""
+    res=""
+    if [ -f "$LAST_FILE" ]; then
+      read -r ts mode res < "$LAST_FILE" || true
+    fi
+
+    status="warn"
+    case "$res" in
+      PASS) status="pass" ;;
+      FAIL) status="fail" ;;
+    esac
+
+    if [ "$STATUS_JSON" -eq 1 ]; then
+      summary="last sensors run: ${ts:-none} ${mode:-none} ${res:-none}"
+      summary_json="$(json_escape "$summary")"
+      ts_json="$(json_escape "${ts:-}")"
+      mode_json="$(json_escape "${mode:-}")"
+      printf '{"schema_version":"harness-json-v1","tool":"sensors","mode":"status","status":"%s","exit_code":0,"summary":"%s","last_timestamp":"%s","last_mode":"%s"}\n' \
+        "$status" "$summary_json" "$ts_json" "$mode_json"
+    else
+      echo "last sensors: ${ts:-none} ${mode:-none} ${res:-none}"
+    fi
+    exit 0
+    ;;
+esac
 
 MODE="full"
 if [ $# -gt 0 ] && [[ "${1:-}" != --* ]]; then
@@ -46,7 +115,7 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     *)
-      echo "Usage: $0 [full|quick|docs|mcp|fixtures|sarif|action|release|vscode|baseline|audit] [--exclude-sensor <name> --known-issue <path> --reason <text>]" >&2
+      usage
       exit 2
       ;;
   esac
@@ -369,7 +438,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "Usage: $0 [full|quick|docs|mcp|fixtures|sarif|action|release|vscode|baseline|audit] [--exclude-sensor <name> --known-issue <path> --reason <text>]" >&2
+    usage
     exit 2
     ;;
 esac

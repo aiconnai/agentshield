@@ -11,3 +11,8 @@ commit message and retry.
 MSG
   exit 1
 fi
+
+# Validate Conventional Commit format + AgentShield scope.
+if ! bash "$(dirname "$0")/../docs/harness/bin/check-commit-msg.sh" "$commit_msg_file"; then
+  exit 1
+fi
