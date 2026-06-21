@@ -949,3 +949,70 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A4
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: confirms generated A4 review artifacts were cleaned before staging
+
+## A5 doctor drift checks - 2026-06-21
+
+- Created `docs/harness/canvas/2026-06-21-a5-doctor-drift-checks.md` before post-review because `doctor.sh` behavior changed.
+- Added conservative checks for the latest review artifact's `REVIEW_VERDICT` marker and AgentShield's `.sensors-last` PASS/FAIL token.
+- Engram's SPEC sprint/active-plan drift checks were not ported because AgentShield does not define the same fields.
+
+- harness_verify:
+  command: rtk proxy bash -n docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: shell syntax OK
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A5
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: doctor remains parseable after adding drift checks
+- harness_verify:
+  command: rtk proxy bash docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: PASS: AgentShield harness doctor; latest review has parseable REVIEW_VERDICT; .sensors-last has parseable PASS/FAIL result
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A5
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: human doctor mode passes with live review and sensor drift checks
+- harness_verify:
+  command: rtk proxy bash docs/harness/bin/doctor.sh --json | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='pass'; print('JSON-OK')"
+  exit_code: 0
+  output_summary: JSON-OK
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A5
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: JSON doctor mode remains a single valid pass object
+- harness_verify:
+  command: rtk proxy python3 -c "import pathlib,re; latest=sorted(pathlib.Path('docs/harness/reviews').glob('*.md'))[-1]; text=latest.read_text(); assert re.search(r'^REVIEW_VERDICT:\\s*(PASS|FAIL)\\s*$', text, re.M); print('LATEST-REVIEW-VERDICT-OK', latest)"
+  exit_code: 0
+  output_summary: LATEST-REVIEW-VERDICT-OK docs/harness/reviews/2026-06-21-a4-review-gate-hardening-post-codex.md
+  passed: true
+  evidence_path: docs/harness/reviews/2026-06-21-a4-review-gate-hardening-post-codex.md
+  skipped_reason: none
+  issue_numbers: A5
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: proves the latest-review verdict check is live against an existing artifact
+- harness_verify:
+  command: rtk proxy python3 -c "import pathlib,re; text=pathlib.Path('docs/harness/.sensors-last').read_text(); assert re.search(r'(^|\\s)(PASS|FAIL)(\\s|$)', text); print('SENSORS-LAST-FORMAT-OK', text.strip())"
+  exit_code: 0
+  output_summary: SENSORS-LAST-FORMAT-OK 2026-06-21T16:25:37Z quick PASS
+  passed: true
+  evidence_path: docs/harness/.sensors-last
+  skipped_reason: none
+  issue_numbers: A5
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: proves the `.sensors-last` format check is live against the current snapshot
+- harness_verify:
+  command: rtk proxy bash docs/harness/bin/sensors.sh quick
+  exit_code: 0
+  output_summary: ALL SENSORS GREEN (quick, 2026-06-21T16:25:37Z)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A5
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: quick harness lane passes after doctor drift checks
