@@ -131,6 +131,20 @@ must fail when a skill file is untracked, missing frontmatter, or missing from
 the skill inventory. Local evidence under `.omo/` is ignored and must not be
 used as source-of-truth process state.
 
+## Commit Message Gate
+
+`docs/harness/bin/check-commit-msg.sh` validates Conventional Commits with AgentShield scopes:
+
+- **Format:** `type(scope): subject`
+- **Allowed types:** `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `ci`, `chore`, `revert`, `style`, `build`
+- **Required scopes:** `adapter`, `detector`, `parser`, `analysis`, `output`, `ir`, `cli`, `rules`, `config`, `harness`, `ci`, `docs`, `vscode`, `action`, `release`, `infra`, or task IDs like `ibvi-488`
+
+The script is invoked by `.githooks/commit-msg` on every `git commit`. It exits `0` on valid format, `1` on invalid format or scope, and `2` on usage errors. Manual pre-commit validation uses:
+
+```bash
+bash docs/harness/bin/check-commit-msg.sh --message "type(scope): subject"
+```
+
 ## Known-Issue Sensor Exclusions
 
 A sensor exclusion requires:
