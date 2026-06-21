@@ -1,6 +1,7 @@
 #![cfg(feature = "runtime-guard")]
 
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 fn run_mcp_proxy(input: &[u8]) -> Output {
@@ -21,12 +22,20 @@ fn run_mcp_proxy(input: &[u8]) -> Output {
 }
 
 fn run_mcp_proxy_transport(input: &[u8]) -> Output {
-    run_mcp_proxy_transport_with_server(input, "tests/fixtures/fake_mcp_server.py")
+    run_mcp_proxy_transport_with_server(input, &fixture_path("tests/fixtures/fake_mcp_server.py"))
 }
 
-fn run_mcp_proxy_transport_with_server(input: &[u8], server: &str) -> Output {
+fn fixture_path(relative: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
+}
+
+fn run_mcp_proxy_transport_with_server(input: &[u8], server: &Path) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_agentshield"))
-        .args(["guard", "--mcp-proxy", "--", python_command(), server])
+        .arg("guard")
+        .arg("--mcp-proxy")
+        .arg("--")
+        .arg(python_command())
+        .arg(server)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -159,7 +168,7 @@ fn mcp_proxy_transport_propagates_downstream_exit_code_when_no_call_blocked() {
 
     let output = run_mcp_proxy_transport_with_server(
         input.as_bytes(),
-        "tests/fixtures/fake_mcp_exit_server.py",
+        &fixture_path("tests/fixtures/fake_mcp_exit_server.py"),
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let response: serde_json::Value =
@@ -175,7 +184,7 @@ fn mcp_proxy_transport_fails_closed_when_downstream_does_not_exit_after_eof() {
 
     let output = run_mcp_proxy_transport_with_server(
         input.as_bytes(),
-        "tests/fixtures/fake_mcp_hanging_server.py",
+        &fixture_path("tests/fixtures/fake_mcp_hanging_server.py"),
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
 
