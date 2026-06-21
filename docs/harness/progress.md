@@ -1011,6 +1011,35 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: proves the latest-review verdict check is live using a deterministic temporary artifact
 - harness_verify:
+  command: |
+    python3 - <<'PY'
+    import pathlib, subprocess
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
+    manual_pre = reviews / "9999-12-31-a5-manual-pre-pre-manual.md"
+    manual_post = reviews / "9999-12-31-a5-manual-pre-post-manual.md"
+    manual_pre.write_text("# manual pre advisory prompt\n\nNo verdict is required here.\n")
+    manual_post.write_text("REVIEW_VERDICT: PASS\n[LOW] temporary manual post fixture\n")
+    try:
+        cp = subprocess.run(["bash", "docs/harness/bin/doctor.sh"], cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output = cp.stdout + cp.stderr
+        assert cp.returncode == 0
+        assert f"latest review has parseable REVIEW_VERDICT: {manual_post.relative_to(repo)}" in output
+        assert str(manual_pre.relative_to(repo)) not in output
+    finally:
+        manual_pre.unlink(missing_ok=True)
+        manual_post.unlink(missing_ok=True)
+    print("MANUAL-PRE-SKIP-OK")
+    PY
+  exit_code: 0
+  output_summary: MANUAL-PRE-SKIP-OK
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: A5
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: proves manual pre advisory prompts without REVIEW_VERDICT do not break doctor drift checks
+- harness_verify:
   command: rtk proxy python3 -c "import pathlib,re; text=pathlib.Path('docs/harness/.sensors-last').read_text(); assert re.search(r'^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z\\s+\\S+\\s+(PASS|FAIL)$', text); print('SENSORS-LAST-FORMAT-OK', text.strip())"
   exit_code: 0
   output_summary: SENSORS-LAST-FORMAT-OK 2026-06-21T16:42:31Z quick PASS

@@ -33,6 +33,7 @@ Scope: Add conservative drift checks to `doctor.sh` for latest review verdicts a
 |---|---|
 | Review artifact exists | `bash docs/harness/bin/doctor.sh` reports `latest review has parseable REVIEW_VERDICT: ...` and exits 0. |
 | No review artifact exists | Code trace: empty `find ... -name '*.md'` makes the check call `ok` and return without `fail`. |
+| Manual pre advisory prompt exists | Temporary fixture creates a no-verdict `*-pre-manual.md` and a verdict-bearing `*-post-manual.md`; doctor skips the manual pre prompt and selects the post artifact. |
 | `.sensors-last` exists with current AgentShield format | `bash docs/harness/bin/doctor.sh` reports `.sensors-last has parseable TIMESTAMP MODE PASS\|FAIL result` and exits 0. |
 | `.sensors-last` absent | Code trace: missing file makes the check call `ok` and return without `fail`. |
 | `.sensors-last` contains multiple lines | Temporary fixture writes `BROKEN\n2026-06-21T16:35:40Z quick PASS\n`; `doctor.sh --json` returns one failure and does not split the failure message. |

@@ -103,7 +103,7 @@ require_no_match() {
 check_latest_review_verdict() {
   local latest
 
-  latest="$(find docs/harness/reviews -maxdepth 1 -type f -name '*.md' -print 2>/dev/null | sort | tail -n 1)"
+  latest="$(find docs/harness/reviews -maxdepth 1 -type f -name '*.md' ! -name '*-pre-manual.md' -print 2>/dev/null | sort | tail -n 1)"
   if [ -z "$latest" ]; then
     ok "latest review verdict check skipped: no review artifacts"
     return
