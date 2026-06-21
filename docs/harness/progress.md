@@ -1147,3 +1147,77 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A6
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: quick harness lane passes for docs-only A6
+
+## Final broad review fixes - 2026-06-21
+
+- Final broad review evidence found two MED findings in harness scripts:
+  - `review-gate.sh` manual post path had no defensive fallback for an
+    unexpected parsed verdict.
+  - `check-commit-msg.sh` silently ignored unknown non-file arguments.
+- Fixed `review-gate.sh` to fail closed if manual post-gate verdict parsing
+  ever returns a value other than PASS or FAIL.
+- Fixed `check-commit-msg.sh` to reject unknown non-file arguments with exit 2
+  while preserving the commit-msg hook file-path invocation.
+- Added Review Canvas:
+  `docs/harness/canvas/2026-06-21-final-broad-review-fixes.md`.
+
+- harness_verify:
+  command: rtk proxy bash -n docs/harness/bin/check-commit-msg.sh && rtk proxy bash -n docs/harness/bin/review-gate.sh
+  exit_code: 0
+  output_summary: shell syntax OK for both changed harness scripts
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: final-broad-review
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies changed scripts remain parseable
+- harness_verify:
+  command: rtk proxy bash docs/harness/bin/check-commit-msg.sh --message "docs(harness): final broad review fixes"
+  exit_code: 0
+  output_summary: OK commit message
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: final-broad-review
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: valid manual --message path still passes
+- harness_verify:
+  command: rtk proxy bash -c 'set +e; bash docs/harness/bin/check-commit-msg.sh --message "docs(harness): final broad review fixes" --typo-flag >/tmp/as-unknown-arg.out 2>&1; ec=$?; cat /tmp/as-unknown-arg.out; test "$ec" -eq 2'
+  exit_code: 0
+  output_summary: unknown non-file argument exits 2
+  passed: true
+  evidence_path: /tmp/as-unknown-arg.out
+  skipped_reason: none
+  issue_numbers: final-broad-review
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: proves typo flags no longer silently succeed
+- harness_verify:
+  command: rtk proxy bash -c 'tmp=$(mktemp); printf "%s\n" "docs(harness): final broad review fixes" > "$tmp"; bash docs/harness/bin/check-commit-msg.sh "$tmp"; rm -f "$tmp"'
+  exit_code: 0
+  output_summary: OK commit message from temp COMMIT_EDITMSG file
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: final-broad-review
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: preserves git commit-msg hook file-path behavior
+- harness_verify:
+  command: rtk proxy bash -c 'tmp=$(mktemp); printf "%s\n%s\n" "REVIEW_VERDICT: PASS" "[LOW] manual post smoke artifact" > "$tmp"; HARNESS_SCRIPT_REVIEW_EVIDENCE=docs/harness/reviews/2026-06-21-final-harness-parity-evidence-claude.md REVIEWER_CLI=manual bash docs/harness/bin/review-gate.sh post final-broad-fixes-manual-smoke --review-file="$tmp"; rm -f "$tmp" docs/harness/reviews/2026-06-21-final-broad-fixes-manual-smoke-post-manual.md docs/harness/reviews/2026-06-21-final-broad-fixes-manual-smoke-post-manual.md.raw'
+  exit_code: 0
+  output_summary: manual post-gate PASS with explicit review file
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: final-broad-review
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies normal manual PASS path still exits before automated reviewer branch
+- harness_verify:
+  command: rtk proxy bash docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: PASS: AgentShield harness doctor
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: final-broad-review
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: doctor passes after final broad-review fixes

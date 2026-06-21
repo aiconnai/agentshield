@@ -20,6 +20,10 @@ while [ "$#" -gt 0 ]; do
     *)
       if [ -f "$1" ]; then
         MSG="$(cat "$1")"
+      else
+        echo "ERROR: unknown argument or message file not found: $1" >&2
+        echo "Usage: check-commit-msg.sh --message 'type(scope): subject'  or  path/to/COMMIT_EDITMSG" >&2
+        exit 2
       fi
       shift
       ;;
