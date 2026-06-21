@@ -1095,7 +1095,7 @@ No commands are recorded as verified unless they are run and logged using the `d
 
 - Replaced duplicated stale project-guide content in `AGENTS.md` with a thin pointer to canonical `CLAUDE.md`.
 - Preserved AGENTS-specific guidance for Huly and RTK check-loop usage.
-- No Review Canvas required: docs-only task, no harness behavior change.
+- Added `docs/harness/canvas/2026-06-21-a6-agents-md-reconcile.md` after post-gate flagged the >200-line docs diff as complex.
 
 - harness_verify:
   command: rtk proxy grep -nE "12 detectors|v0\.1\.0|4 adapters" AGENTS.md || echo "no stale version facts"
@@ -1117,6 +1117,16 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A6
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: verifies AGENTS-specific framing remains while project facts defer to CLAUDE.md
+- harness_verify:
+  command: rtk proxy grep -n "Review Canvas: A6 AGENTS.md reconciliation\|Rollback\|Approaches Considered" docs/harness/canvas/2026-06-21-a6-agents-md-reconcile.md
+  exit_code: 0
+  output_summary: A6 canvas exists with approaches and rollback coverage
+  passed: true
+  evidence_path: docs/harness/canvas/2026-06-21-a6-agents-md-reconcile.md
+  skipped_reason: none
+  issue_numbers: A6
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: satisfies complex-change canvas requirement for the >200-line AGENTS.md diff
 - harness_verify:
   command: rtk proxy bash docs/harness/bin/doctor.sh
   exit_code: 0
