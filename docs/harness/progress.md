@@ -1090,3 +1090,50 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A5
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: quick harness lane passes after doctor drift checks
+
+## A6 AGENTS.md reconciliation - 2026-06-21
+
+- Replaced duplicated stale project-guide content in `AGENTS.md` with a thin pointer to canonical `CLAUDE.md`.
+- Preserved AGENTS-specific guidance for Huly and RTK check-loop usage.
+- No Review Canvas required: docs-only task, no harness behavior change.
+
+- harness_verify:
+  command: rtk proxy grep -nE "12 detectors|v0\.1\.0|4 adapters" AGENTS.md || echo "no stale version facts"
+  exit_code: 0
+  output_summary: no stale version facts
+  passed: true
+  evidence_path: AGENTS.md
+  skipped_reason: none
+  issue_numbers: A6
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies stale AGENTS.md project-version facts were removed
+- harness_verify:
+  command: rtk proxy test -f CLAUDE.md && rtk proxy grep -n "Authoritative Project Guide\|CLAUDE.md\|Huly Skill\|RTK Usage" AGENTS.md
+  exit_code: 0
+  output_summary: AGENTS.md points to CLAUDE.md and retains Huly Skill plus RTK Usage sections
+  passed: true
+  evidence_path: AGENTS.md
+  skipped_reason: none
+  issue_numbers: A6
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies AGENTS-specific framing remains while project facts defer to CLAUDE.md
+- harness_verify:
+  command: rtk proxy bash docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: PASS: AgentShield harness doctor
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A6
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: doctor passes after docs-only reconciliation
+- harness_verify:
+  command: rtk proxy bash docs/harness/bin/sensors.sh quick
+  exit_code: 0
+  output_summary: ALL SENSORS GREEN (quick, 2026-06-21T17:31:49Z)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A6
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: quick harness lane passes for docs-only A6
