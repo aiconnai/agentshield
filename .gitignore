@@ -4,6 +4,7 @@ Cargo.lock
 *.swo
 .DS_Store
 .orchestrator/
+.omo/
 .env
 .worktrees/
 .superpowers/

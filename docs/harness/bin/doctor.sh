@@ -155,6 +155,7 @@ require_file docs/harness/INVARIANTS.md
 require_file docs/harness/WHAT_WE_DONT_DO.md
 require_file docs/harness/GATES.md
 require_file docs/harness/CODE_REVIEW_POLICY.md
+require_file docs/harness/SKILLS.md
 require_file docs/harness/VERIFICATION_MANIFEST.md
 require_file docs/harness/progress.md
 require_file docs/harness/progress/harness-foundation.md
@@ -195,6 +196,7 @@ require_match "bootstrap mentions CODE_REVIEW_POLICY.md" 'CODE_REVIEW_POLICY\.md
 require_match "README mentions JSON_OUTPUTS.md" 'JSON_OUTPUTS\.md' docs/harness/README.md
 require_match "README mentions WHAT_WE_DONT_DO.md" 'WHAT_WE_DONT_DO\.md' docs/harness/README.md
 require_match "README mentions CODE_REVIEW_POLICY.md" 'CODE_REVIEW_POLICY\.md' docs/harness/README.md
+require_match "README mentions SKILLS.md" 'SKILLS\.md' docs/harness/README.md
 require_match "README mentions Review Canvas" 'Review Canvas' docs/harness/README.md
 require_match "README mentions doctor.sh" 'doctor\.sh' docs/harness/README.md
 require_match "README mentions baseline.sh" 'baseline\.sh' docs/harness/README.md
@@ -247,12 +249,63 @@ require_match "sensors runs PR title policy" 'pr-title-policy\.sh' docs/harness/
 require_match "README mentions PR title policy" 'PR title policy' docs/harness/README.md
 require_match "GATES mentions PR title policy" 'PR title policy' docs/harness/GATES.md
 require_match "CODE_REVIEW_POLICY mentions PR title policy" 'PR title policy' docs/harness/CODE_REVIEW_POLICY.md
+require_match "SKILLS documents loop-engineering" '`loop-engineering`' docs/harness/SKILLS.md
+require_match "SKILLS documents personal skill location" '~/.codex/skills' docs/harness/SKILLS.md
+require_match ".gitignore ignores local OMO evidence" '^\.omo/$' .gitignore
 
 require_match "check-commit-msg lists adapter scope" 'adapter\|detector\|parser' docs/harness/bin/check-commit-msg.sh
 require_match "GATES mentions commit message gate" 'check-commit-msg' docs/harness/GATES.md
 
 require_no_match "GitHub workflows do not execute harness scripts" 'docs/harness/bin' .github/workflows
 
+check_repo_local_skills() {
+  local untracked
+  local skill_file
+  local skill_dir
+  local frontmatter
+
+  untracked="$(git ls-files --others --exclude-standard -- 'skills/*/SKILL.md' 2>/dev/null | tr '\n' ' ' || true)"
+  if [ -n "$untracked" ]; then
+    fail "untracked repo-local skills found: $untracked"
+  else
+    ok "repo-local skills are tracked or ignored"
+  fi
+
+  while IFS= read -r skill_file; do
+    skill_dir="$(basename "$(dirname "$skill_file")")"
+    if frontmatter="$(awk '
+      NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+      in_frontmatter && $0 == "---" { found_end = 1; exit }
+      in_frontmatter { print }
+      END { if (!found_end) exit 1 }
+    ' "$skill_file")"; then
+      ok "skill has closed frontmatter: $skill_file"
+    else
+      fail "skill has closed frontmatter: $skill_file"
+      continue
+    fi
+
+    if printf '%s\n' "$frontmatter" | rg -n -e "^name:[[:space:]]*$skill_dir[[:space:]]*$" >/dev/null 2>&1; then
+      ok "skill has matching name: $skill_file"
+    else
+      fail "skill has matching name: $skill_file"
+    fi
+
+    if printf '%s\n' "$frontmatter" | rg -n -e '^description:[[:space:]].+' >/dev/null 2>&1; then
+      ok "skill has description: $skill_file"
+    else
+      fail "skill has description: $skill_file"
+    fi
+
+    if rg -n -e "\\\`$skill_dir\\\`" docs/harness/SKILLS.md >/dev/null 2>&1; then
+      ok "skill is inventoried: $skill_dir"
+    else
+      fail "skill is inventoried: $skill_dir"
+    fi
+  done < <(find skills -mindepth 2 -maxdepth 2 -name SKILL.md | sort)
+}
+
+check_repo_local_skills
 check_latest_review_verdict
 check_sensors_last_format
 
