@@ -182,6 +182,8 @@ require_match "review-gate runs Codex in read-only sandbox" '--sandbox read-only
 require_match "review-gate re-injects prior findings" 'Prior unresolved findings' docs/harness/bin/review-gate.sh
 require_match "review-gate supports manual reviewer flow" 'manual' docs/harness/bin/review-gate.sh
 require_match "review-gate rejects unsupported reviewer backends" 'not supported by this harness yet' docs/harness/bin/review-gate.sh
+require_match "review-gate sanitizes task ids for artifact paths" 'task_slug' docs/harness/bin/review-gate.sh
+require_match "review-gate saves nonzero reviewer output" 'review saved to' docs/harness/bin/review-gate.sh
 require_match "codex-gate delegates to review-gate" 'review-gate\.sh' docs/harness/bin/codex-gate.sh
 
 require_match "sensors mentions full" 'full\)' docs/harness/bin/sensors.sh

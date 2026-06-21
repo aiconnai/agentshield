@@ -102,6 +102,10 @@ DATE="$(date -u +%Y-%m-%d)"
 REVIEW_DIR="docs/harness/reviews"
 mkdir -p "$REVIEW_DIR"
 
+task_slug() {
+  printf '%s' "$TASK" | tr -c 'A-Za-z0-9_.-' '-'
+}
+
 review_slug() {
   printf '%s' "$REVIEWER_CLI" | tr -c 'A-Za-z0-9_.-' '-'
 }
@@ -206,7 +210,7 @@ write_manual_prompt() {
   local out="$2"
   local kind="$3"
 
-  {
+  if ! {
     echo "# manual $kind-gate advisory prompt for $TASK"
     echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "Reviewer CLI: manual"
@@ -217,7 +221,10 @@ write_manual_prompt() {
     echo '```text'
     printf '%s\n' "$prompt"
     echo '```'
-  } > "$out"
+  } > "$out"; then
+    echo "ERROR: failed to write manual $kind-gate prompt artifact: $out" >&2
+    return 1
+  fi
 }
 
 write_manual_review() {
@@ -243,7 +250,7 @@ prior_unresolved_findings() {
   local prior=""
   local findings=""
 
-  prior="$(find "$REVIEW_DIR" -maxdepth 1 -type f -name "*-${TASK}-post-*.md" ! -name "*.raw" -print 2>/dev/null | sort | tail -n 1)"
+  prior="$(find "$REVIEW_DIR" -maxdepth 1 -type f -name "*-$(task_slug)-post-*.md" ! -name "*.raw" -print 2>/dev/null | sort | tail -n 1)"
   if [ -n "$prior" ]; then
     findings="$(rg -N '^[[:space:]]*([-*][[:space:]]*)?\[(BLOCKER|HIGH)\]' "$prior" 2>/dev/null || true)"
   fi
@@ -286,7 +293,7 @@ parse_verdict() {
 
 case "$MODE" in
   pre)
-    OUTFILE="$REVIEW_DIR/${DATE}-${TASK}-pre-$(review_slug).md"
+    OUTFILE="$REVIEW_DIR/${DATE}-$(task_slug)-pre-$(review_slug).md"
     PROMPT="$(cat <<PROMPT_TEXT
 You are an independent advisory reviewer for the AgentShield Rust security scanner.
 
@@ -327,22 +334,21 @@ Then bullets prefixed [BLOCKER], [HIGH], [MED], or [LOW].
 PROMPT_TEXT
 )"
     if [ "$REVIEWER_CLI" = "manual" ]; then
-      write_manual_prompt "$PROMPT" "$OUTFILE" "pre"
+      write_manual_prompt "$PROMPT" "$OUTFILE" "pre" || exit 1
       echo "Manual pre-gate advisory prompt saved to $OUTFILE"
       exit 0
     fi
 
-    TMP_RAW="$(mktemp "${TMPDIR:-/tmp}/agentshield-review-gate-${TASK}.XXXXXX.raw")" || exit 3
+    TMP_RAW="$(mktemp "${TMPDIR:-/tmp}/agentshield-review-gate-$(task_slug).XXXXXX.raw")" || exit 3
     run_reviewer "$PROMPT" 2>&1 | tee "$TMP_RAW" >&2
     REVIEW_STATUS=${PIPESTATUS[0]}
-    if [ "$REVIEW_STATUS" -ne 0 ]; then
-      echo "FAIL: reviewer exited with status $REVIEW_STATUS; review not saved" >&2
-      rm -f "$TMP_RAW"
-      exit 1
-    fi
     cp "$TMP_RAW" "$OUTFILE.raw"
     write_review "$TMP_RAW" "$OUTFILE" "pre"
     rm -f "$TMP_RAW"
+    if [ "$REVIEW_STATUS" -ne 0 ]; then
+      echo "FAIL: reviewer exited with status $REVIEW_STATUS; review saved to $OUTFILE" >&2
+      exit 1
+    fi
     echo "Pre-gate saved to $OUTFILE"
     exit 0
     ;;
@@ -351,7 +357,7 @@ PROMPT_TEXT
     CHANGED_HARNESS="$(changed_harness_scripts)"
     require_harness_script_evidence "$CHANGED_HARNESS"
 
-    OUTFILE="$REVIEW_DIR/${DATE}-${TASK}-post-$(review_slug).md"
+    OUTFILE="$REVIEW_DIR/${DATE}-$(task_slug)-post-$(review_slug).md"
     EXCLUDE_PATHSPEC=":(exclude)docs/harness/reviews/*"
     DIRTY_NON_REVIEW="$(git status --porcelain -- ':(exclude)docs/harness/reviews/*' 2>/dev/null || true)"
 
@@ -424,19 +430,18 @@ PROMPT_TEXT
       esac
     fi
 
-    TMP_RAW="$(mktemp "${TMPDIR:-/tmp}/agentshield-review-gate-${TASK}.XXXXXX.raw")" || exit 3
+    TMP_RAW="$(mktemp "${TMPDIR:-/tmp}/agentshield-review-gate-$(task_slug).XXXXXX.raw")" || exit 3
     run_reviewer "$PROMPT" 2>&1 | tee "$TMP_RAW" >&2
     REVIEW_STATUS=${PIPESTATUS[0]}
-    if [ "$REVIEW_STATUS" -ne 0 ]; then
-      echo "FAIL: reviewer exited with status $REVIEW_STATUS; review not saved" >&2
-      rm -f "$TMP_RAW"
-      exit 1
-    fi
     cp "$TMP_RAW" "$OUTFILE.raw"
     write_review "$TMP_RAW" "$OUTFILE" "post"
     rm -f "$TMP_RAW"
-
     VERDICT="$(parse_verdict "$OUTFILE")"
+    if [ "$REVIEW_STATUS" -ne 0 ]; then
+      echo "FAIL: reviewer exited with status $REVIEW_STATUS; review saved to $OUTFILE; parsed verdict: ${VERDICT:-none}" >&2
+      exit 1
+    fi
+
     case "$VERDICT" in
       PASS)
         echo "OK: post-gate PASS ($OUTFILE)"
