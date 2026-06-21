@@ -575,7 +575,50 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: reserved unsupported backend does not fall through to generic command execution
 - harness_verify:
-  command: rtk proxy bash -lc '<temporary codex stub: first exec emits empty output, second emits REVIEW_VERDICT: PASS; run pre a4-retry-stub>'
+  command: |
+    python3 - <<'PY'
+    import os, pathlib, shutil, stat, subprocess, tempfile
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
+    for p in reviews.glob("*a4-retry-stub*"):
+        p.unlink()
+    stubdir = pathlib.Path(tempfile.mkdtemp())
+    log = pathlib.Path("/tmp/a4-retry-stub-args.log")
+    count = pathlib.Path("/tmp/a4-retry-stub-count.txt")
+    log.unlink(missing_ok=True)
+    count.unlink(missing_ok=True)
+    stub = stubdir / "codex"
+    stub.write_text("""#!/usr/bin/env bash
+    count=0
+    [ -f "$A4_STUB_COUNT" ] && count=$(cat "$A4_STUB_COUNT")
+    count=$((count + 1))
+    printf "%s\n" "$count" > "$A4_STUB_COUNT"
+    printf "%s\n" "$*" >> "$A4_STUB_LOG"
+    cat >/dev/null
+    [ "$count" -eq 1 ] && exit 0
+    printf "REVIEW_VERDICT: PASS\n[LOW] retry stub pass\n"
+    """)
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+    env = os.environ.copy()
+    env["PATH"] = f"{stubdir}:{env['PATH']}"
+    env["REVIEWER_CLI"] = "codex"
+    env["REVIEWER_RETRY_ATTEMPTS"] = "2"
+    env["A4_STUB_LOG"] = str(log)
+    env["A4_STUB_COUNT"] = str(count)
+    cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "pre", "a4-retry-stub"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output = cp.stdout + cp.stderr
+    for p in reviews.glob("*a4-retry-stub*"):
+        p.unlink()
+    shutil.rmtree(stubdir)
+    args = log.read_text()
+    calls = count.read_text().strip()
+    log.unlink(missing_ok=True)
+    count.unlink(missing_ok=True)
+    assert cp.returncode == 0 and calls == "2"
+    assert "exec --sandbox read-only -C /Users/ronaldo/Projects/_aiconnai/agentshield -" in args
+    assert "WARN: reviewer produced empty output" in output
+    print("RETRY-STUB-OK count=2")
+    PY
   exit_code: 0
   output_summary: retry warning emitted once; pre-gate saved; review_status=0; stub args recorded twice as `exec --sandbox read-only -C /Users/ronaldo/Projects/_aiconnai/agentshield -`; stub_count=2
   passed: true
@@ -585,7 +628,40 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: verifies retry-on-empty and exact read-only Codex invocation
 - harness_verify:
-  command: rtk proxy bash -lc '<temporary prior review artifact plus prompt-capturing codex stub; run post a4-prior-stub --range=HEAD..HEAD>'
+  command: |
+    python3 - <<'PY'
+    import os, pathlib, shutil, stat, subprocess, tempfile
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
+    for p in reviews.glob("*a4-prior-stub*"):
+        p.unlink()
+    prior = reviews / "2026-06-21-a4-prior-stub-post-codex.md"
+    prior.write_text("REVIEW_VERDICT: FAIL\n[BLOCKER] keep blocker finding\n- [HIGH] keep high finding\n[MED] drop med\n[LOW] drop low\n")
+    stubdir = pathlib.Path(tempfile.mkdtemp())
+    capture = pathlib.Path("/tmp/a4-prior-stub-prompt.md")
+    capture.unlink(missing_ok=True)
+    stub = stubdir / "codex"
+    stub.write_text("""#!/usr/bin/env bash
+    cat > "$A4_CAPTURE_PROMPT"
+    printf "REVIEW_VERDICT: PASS\n[LOW] prior stub pass\n"
+    """)
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+    env = os.environ.copy()
+    env["PATH"] = f"{stubdir}:{env['PATH']}"
+    env["REVIEWER_CLI"] = "codex"
+    env["A4_CAPTURE_PROMPT"] = str(capture)
+    cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "post", "a4-prior-stub", "--range=HEAD..HEAD"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    prompt = capture.read_text()
+    block = prompt.split("## Prior unresolved findings (address or refute)", 1)[1].split("Verdict format required:", 1)[0]
+    for p in reviews.glob("*a4-prior-stub*"):
+        p.unlink()
+    shutil.rmtree(stubdir)
+    capture.unlink(missing_ok=True)
+    assert cp.returncode == 0
+    assert "[BLOCKER] keep blocker finding" in block and "- [HIGH] keep high finding" in block
+    assert "[MED]" not in block and "[LOW]" not in block
+    print("PRIOR-STUB-OK blocker/high-only")
+    PY
   exit_code: 0
   output_summary: post-gate PASS; captured prior block contained `[BLOCKER] keep blocker finding` and `- [HIGH] keep high finding`; `[MED]` and `[LOW]` lines were absent
   passed: true
@@ -595,7 +671,40 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: verifies prior finding re-injection filters only BLOCKER/HIGH under the required heading
 - harness_verify:
-  command: rtk proxy bash -lc '<temporary codex stub emits REVIEW_VERDICT: FAIL on first call; run pre a4-fail-no-retry>'
+  command: |
+    python3 - <<'PY'
+    import os, pathlib, shutil, stat, subprocess, tempfile
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
+    for p in reviews.glob("*a4-fail-no-retry*"):
+        p.unlink()
+    stubdir = pathlib.Path(tempfile.mkdtemp())
+    count = pathlib.Path("/tmp/a4-fail-no-retry-count.txt")
+    count.unlink(missing_ok=True)
+    stub = stubdir / "codex"
+    stub.write_text("""#!/usr/bin/env bash
+    count=0
+    [ -f "$A4_STUB_COUNT" ] && count=$(cat "$A4_STUB_COUNT")
+    count=$((count + 1))
+    printf "%s\n" "$count" > "$A4_STUB_COUNT"
+    cat >/dev/null
+    printf "REVIEW_VERDICT: FAIL\n[HIGH] stub fail must not retry\n"
+    """)
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+    env = os.environ.copy()
+    env["PATH"] = f"{stubdir}:{env['PATH']}"
+    env["REVIEWER_CLI"] = "codex"
+    env["REVIEWER_RETRY_ATTEMPTS"] = "2"
+    env["A4_STUB_COUNT"] = str(count)
+    cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "pre", "a4-fail-no-retry"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    calls = count.read_text().strip()
+    for p in reviews.glob("*a4-fail-no-retry*"):
+        p.unlink()
+    shutil.rmtree(stubdir)
+    count.unlink(missing_ok=True)
+    assert cp.returncode == 0 and calls == "1"
+    print("FAIL-NO-RETRY-OK count=1")
+    PY
   exit_code: 0
   output_summary: pre-gate saved; review_status=0; stub_count=1
   passed: true
@@ -605,7 +714,25 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: verifies a real FAIL verdict is not retried or masked as empty output
 - harness_verify:
-  command: rtk proxy bash -lc '<temporary manual review file with REVIEW_VERDICT: PASS; run REVIEWER_CLI=manual post a4-manual-post-stub --range=HEAD..HEAD --review-file=<temp>>'
+  command: |
+    python3 - <<'PY'
+    import os, pathlib, subprocess, tempfile
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
+    for p in reviews.glob("*a4-manual-post-stub*"):
+        p.unlink()
+    fd, review_path = tempfile.mkstemp(prefix="a4-manual-review-", suffix=".md")
+    pathlib.Path(review_path).write_text("REVIEW_VERDICT: PASS\n[LOW] manual stub pass\n")
+    os.close(fd)
+    env = os.environ.copy()
+    env["REVIEWER_CLI"] = "manual"
+    cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "post", "a4-manual-post-stub", "--range=HEAD..HEAD", f"--review-file={review_path}"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    for p in reviews.glob("*a4-manual-post-stub*"):
+        p.unlink()
+    pathlib.Path(review_path).unlink(missing_ok=True)
+    assert cp.returncode == 0 and "OK: manual post-gate PASS" in (cp.stdout + cp.stderr)
+    print("MANUAL-POST-STUB-OK")
+    PY
   exit_code: 0
   output_summary: OK: manual post-gate PASS; review_status=0
   passed: true
@@ -624,6 +751,70 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A4
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: verifies manual post does not invent a verdict when no artifact is supplied
+- harness_verify:
+  command: |
+    python3 - <<'PY'
+    import os, pathlib, subprocess
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
+    for p in reviews.glob("*cq-slash-task*"):
+        p.unlink()
+    env = os.environ.copy()
+    env["REVIEWER_CLI"] = "manual"
+    cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "pre", "cq/slash-task"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    artifacts = list(reviews.glob("*cq-slash-task-pre-manual.md"))
+    fabricated = any("REVIEW_VERDICT: PASS" in p.read_text() for p in artifacts)
+    for p in reviews.glob("*cq-slash-task*"):
+        p.unlink()
+    assert cp.returncode == 0 and len(artifacts) == 1 and not fabricated
+    print("TASK-SLUG-OK cq-slash-task")
+    PY
+  exit_code: 0
+  output_summary: TASK-SLUG-OK cq-slash-task
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies task ids with slash cannot produce false-success artifact paths
+- harness_verify:
+  command: |
+    python3 - <<'PY'
+    import os, pathlib, shutil, stat, subprocess, tempfile
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
+    for p in reviews.glob("*a4-nonempty-nonzero*"):
+        p.unlink()
+    stubdir = pathlib.Path(tempfile.mkdtemp())
+    stub = stubdir / "codex"
+    stub.write_text("""#!/usr/bin/env bash
+    cat >/dev/null
+    printf "some non-empty error without verdict\n" >&2
+    exit 9
+    """)
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+    env = os.environ.copy()
+    env["PATH"] = f"{stubdir}:{env['PATH']}"
+    env["REVIEWER_CLI"] = "codex"
+    env["REVIEWER_RETRY_ATTEMPTS"] = "2"
+    cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "pre", "a4-nonempty-nonzero"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    artifacts = list(reviews.glob("*a4-nonempty-nonzero-pre-codex.md"))
+    text = artifacts[0].read_text() if artifacts else ""
+    for p in reviews.glob("*a4-nonempty-nonzero*"):
+        p.unlink()
+    shutil.rmtree(stubdir)
+    assert cp.returncode == 1 and "review saved to" in (cp.stdout + cp.stderr)
+    assert "REVIEW_VERDICT: FAIL" in text and "parseable REVIEW_VERDICT marker" in text
+    print("NONEMPTY-NONZERO-SAVED-OK")
+    PY
+  exit_code: 0
+  output_summary: NONEMPTY-NONZERO-SAVED-OK
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies non-empty reviewer output is saved even when reviewer exits nonzero
 - harness_verify:
   command: rtk proxy bash docs/harness/bin/sensors.sh quick
   exit_code: 0
