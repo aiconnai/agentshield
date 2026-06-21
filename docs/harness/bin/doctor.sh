@@ -100,6 +100,35 @@ require_no_match() {
   fi
 }
 
+check_latest_review_verdict() {
+  local latest
+
+  latest="$(find docs/harness/reviews -maxdepth 1 -type f -name '*.md' -print 2>/dev/null | sort | tail -n 1)"
+  if [ -z "$latest" ]; then
+    ok "latest review verdict check skipped: no review artifacts"
+    return
+  fi
+
+  if rg -n -e '^REVIEW_VERDICT:[[:space:]]*(PASS|FAIL)[[:space:]]*$' "$latest" >/dev/null 2>&1; then
+    ok "latest review has parseable REVIEW_VERDICT: $latest"
+  else
+    fail "latest review missing parseable REVIEW_VERDICT: $latest"
+  fi
+}
+
+check_sensors_last_format() {
+  if [ ! -f docs/harness/.sensors-last ]; then
+    ok ".sensors-last format check skipped: no sensor snapshot"
+    return
+  fi
+
+  if rg -n -e '(^|[[:space:]])(PASS|FAIL)([[:space:]]|$)' docs/harness/.sensors-last >/dev/null 2>&1; then
+    ok ".sensors-last has parseable PASS/FAIL result"
+  else
+    fail ".sensors-last missing parseable PASS/FAIL result"
+  fi
+}
+
 need_cmd rg
 need_cmd bash
 
@@ -207,6 +236,9 @@ require_match "check-commit-msg lists adapter scope" 'adapter\|detector\|parser'
 require_match "GATES mentions commit message gate" 'check-commit-msg' docs/harness/GATES.md
 
 require_no_match "GitHub workflows do not execute harness scripts" 'docs/harness/bin' .github/workflows
+
+check_latest_review_verdict
+check_sensors_last_format
 
 if [ "$JSON_MODE" -eq 1 ]; then
   status="pass"; [ "$FAILURES" -ne 0 ] && status="fail"
