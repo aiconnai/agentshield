@@ -171,11 +171,17 @@ require_match "CODE_REVIEW_POLICY mentions WHAT_WE_DONT_DO.md" 'WHAT_WE_DONT_DO\
 require_match "CODE_REVIEW_POLICY mentions Review Canvas" 'Review Canvas' docs/harness/CODE_REVIEW_POLICY.md
 require_match "CODE_REVIEW_POLICY mentions harness script changes" 'Harness script changes' docs/harness/CODE_REVIEW_POLICY.md
 require_match "CODE_REVIEW_POLICY mentions REVIEW_VERDICT" 'REVIEW_VERDICT' docs/harness/CODE_REVIEW_POLICY.md
+require_match "CODE_REVIEW_POLICY documents reviewer CLI selection" 'REVIEWER_CLI' docs/harness/CODE_REVIEW_POLICY.md
 
 require_match "review-gate mentions WHAT_WE_DONT_DO.md" 'WHAT_WE_DONT_DO\.md' docs/harness/bin/review-gate.sh
 require_match "review-gate mentions Review Canvas" 'Review Canvas' docs/harness/bin/review-gate.sh
 require_match "review-gate mentions docs/harness/bin" 'verify independent review evidence and inspect script behavior directly' docs/harness/bin/review-gate.sh
 require_match "review-gate requires REVIEW_VERDICT" 'REVIEW_VERDICT' docs/harness/bin/review-gate.sh
+require_match "review-gate supports retry-on-empty setting" 'REVIEWER_RETRY_ATTEMPTS' docs/harness/bin/review-gate.sh
+require_match "review-gate runs Codex in read-only sandbox" '--sandbox read-only' docs/harness/bin/review-gate.sh
+require_match "review-gate re-injects prior findings" 'Prior unresolved findings' docs/harness/bin/review-gate.sh
+require_match "review-gate supports manual reviewer flow" 'manual' docs/harness/bin/review-gate.sh
+require_match "review-gate rejects unsupported reviewer backends" 'not supported by this harness yet' docs/harness/bin/review-gate.sh
 require_match "codex-gate delegates to review-gate" 'review-gate\.sh' docs/harness/bin/codex-gate.sh
 
 require_match "sensors mentions full" 'full\)' docs/harness/bin/sensors.sh
