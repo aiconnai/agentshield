@@ -26,6 +26,7 @@ The harness is local operational tooling. It is not production CI, and it must n
 | `WHAT_WE_DONT_DO.md` | Feed-forward | Negative scope and anti-pattern policy |
 | `GATES.md` | Feedback | PASS/FAIL thresholds, sensor modes, review canvas, audit policy |
 | `CODE_REVIEW_POLICY.md` | Review | Severity taxonomy, fake-success patterns, output/security review rules |
+| `SKILLS.md` | Feed-forward | Repo-local skill inventory and promotion policy |
 | `VERIFICATION_MANIFEST.md` | Evidence | Convention for recording verification and skipped checks |
 | `known-issues/README.md` | Evidence | Contract for documented sensor exclusions |
 | `progress.md` | Memory | Short live state for active harness work |
@@ -82,6 +83,13 @@ Complex changes require a canvas under `docs/harness/canvas/YYYY-MM-DD-<task-id>
 
 A change is complex when it changes more than roughly 200 non-generated lines, touches multiple scanner surfaces, changes CLI/output contracts, changes release/action/VS Code behavior, changes harness gates, adds dependencies, or introduces a new parser/runtime/security/signing pattern.
 
+## Repo-Local Skills
+
+Repository skills live under `skills/<name>/SKILL.md` and are documented in
+`docs/harness/SKILLS.md`. They are harness inputs, not scratch files: new or
+changed skills require review like other process changes. Personal operator
+shortcuts belong in `~/.codex/skills`.
+
 ## Baseline And Audit
 
 `baseline.sh` records cheap static repository facts in `docs/harness/.baseline-last`. It is drift evidence, not proof that implementation is correct.
@@ -121,6 +129,7 @@ Exit codes match human mode: `0` on pass, `1` on failure, `2` for unknown flags.
 
 - Changes under `docs/harness/bin/*`, `INVARIANTS.md`, `GATES.md`, `CODE_REVIEW_POLICY.md`, or bootstrap read order require progress updates.
 - Changes under `docs/harness/bin/*` require independent post-review evidence. A self-generated or missing review artifact is not authoritative for harness script changes.
+- Untracked `skills/*/SKILL.md` files are not allowed; promote them deliberately or move them outside the repo.
 - PR titles must not contain `[codex]`; use `bash docs/harness/bin/pr-title-policy.sh --title "<title>"` or `--current-pr` before opening or updating a PR.
 - The harness does not rewrite `AGENTS.md`.
 - Generated review, progress, audit, and baseline artifacts are evidence, not source-of-truth scanner behavior.
