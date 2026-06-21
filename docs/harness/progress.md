@@ -851,6 +851,44 @@ No commands are recorded as verified unless they are run and logged using the `d
 - harness_verify:
   command: |
     python3 - <<'PY'
+    import os, pathlib, stat, subprocess, tempfile
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
+    for p in reviews.glob("*a4-manual-post-write-fail*"):
+        p.unlink()
+    stale = reviews / "2026-06-21-a4-manual-post-write-fail-post-manual.md"
+    stale.write_text("REVIEW_VERDICT: PASS\n[LOW] stale pass must not be reused\n")
+    fd, review_path = tempfile.mkstemp(prefix="a4-manual-fresh-", suffix=".md")
+    os.close(fd)
+    pathlib.Path(review_path).write_text("REVIEW_VERDICT: PASS\n[LOW] fresh manual pass\n")
+    old_mode = stat.S_IMODE(reviews.stat().st_mode)
+    reviews.chmod(0o500)
+    try:
+        env = os.environ.copy()
+        env["REVIEWER_CLI"] = "manual"
+        cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "post", "a4-manual-post-write-fail", "--range=HEAD..HEAD", f"--review-file={review_path}"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    finally:
+        reviews.chmod(old_mode)
+        pathlib.Path(review_path).unlink(missing_ok=True)
+    artifacts = list(reviews.glob("*a4-manual-post-write-fail*"))
+    for p in artifacts:
+        p.unlink()
+    assert cp.returncode == 1
+    assert "failed to save manual post-gate review artifact" in (cp.stdout + cp.stderr)
+    assert "OK: manual post-gate PASS" not in (cp.stdout + cp.stderr)
+    print("MANUAL-POST-WRITE-FAIL-OK")
+    PY
+  exit_code: 0
+  output_summary: MANUAL-POST-WRITE-FAIL-OK
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies manual post cannot parse a stale PASS artifact when saving the supplied review fails
+- harness_verify:
+  command: |
+    python3 - <<'PY'
     import os, pathlib, shutil, stat, subprocess, tempfile
     repo = pathlib.Path.cwd()
     reviews = repo / "docs/harness/reviews"
