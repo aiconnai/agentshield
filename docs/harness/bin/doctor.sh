@@ -184,6 +184,7 @@ require_match "review-gate supports manual reviewer flow" 'manual' docs/harness/
 require_match "review-gate rejects unsupported reviewer backends" 'not supported by this harness yet' docs/harness/bin/review-gate.sh
 require_match "review-gate sanitizes task ids for artifact paths" 'task_slug' docs/harness/bin/review-gate.sh
 require_match "review-gate writes manual prompts atomically" 'write_file_atomically' docs/harness/bin/review-gate.sh
+require_match "review-gate checks reviewer artifact saves" 'save_reviewer_artifacts' docs/harness/bin/review-gate.sh
 require_match "review-gate saves nonzero reviewer output" 'review saved to' docs/harness/bin/review-gate.sh
 require_match "codex-gate delegates to review-gate" 'review-gate\.sh' docs/harness/bin/codex-gate.sh
 

@@ -298,7 +298,24 @@ write_review() {
       echo "REVIEW_VERDICT: FAIL"
       echo "[BLOCKER] Review output did not contain a parseable REVIEW_VERDICT marker."
     fi
-  } > "$out"
+  } | write_file_atomically "$out"
+}
+
+save_reviewer_artifacts() {
+  local raw="$1"
+  local out="$2"
+  local kind="$3"
+
+  if ! cp "$raw" "$out.raw"; then
+    echo "FAIL: could not save raw reviewer transcript: $out.raw" >&2
+    return 1
+  fi
+  if ! write_review "$raw" "$out" "$kind"; then
+    echo "FAIL: could not save wrapped reviewer artifact: $out" >&2
+    rm -f "$out.raw"
+    return 1
+  fi
+  [ -f "$out" ] && [ -f "$out.raw" ]
 }
 
 parse_verdict() {
@@ -357,8 +374,10 @@ PROMPT_TEXT
     TMP_RAW="$(mktemp "${TMPDIR:-/tmp}/agentshield-review-gate-$(task_slug).XXXXXX.raw")" || exit 3
     run_reviewer "$PROMPT" 2>&1 | tee "$TMP_RAW" >&2
     REVIEW_STATUS=${PIPESTATUS[0]}
-    cp "$TMP_RAW" "$OUTFILE.raw"
-    write_review "$TMP_RAW" "$OUTFILE" "pre"
+    if ! save_reviewer_artifacts "$TMP_RAW" "$OUTFILE" "pre"; then
+      rm -f "$TMP_RAW"
+      exit 1
+    fi
     rm -f "$TMP_RAW"
     if [ "$REVIEW_STATUS" -ne 0 ]; then
       echo "FAIL: reviewer exited with status $REVIEW_STATUS; review saved to $OUTFILE" >&2
@@ -448,8 +467,10 @@ PROMPT_TEXT
     TMP_RAW="$(mktemp "${TMPDIR:-/tmp}/agentshield-review-gate-$(task_slug).XXXXXX.raw")" || exit 3
     run_reviewer "$PROMPT" 2>&1 | tee "$TMP_RAW" >&2
     REVIEW_STATUS=${PIPESTATUS[0]}
-    cp "$TMP_RAW" "$OUTFILE.raw"
-    write_review "$TMP_RAW" "$OUTFILE" "post"
+    if ! save_reviewer_artifacts "$TMP_RAW" "$OUTFILE" "post"; then
+      rm -f "$TMP_RAW"
+      exit 1
+    fi
     rm -f "$TMP_RAW"
     VERDICT="$(parse_verdict "$OUTFILE")"
     if [ "$REVIEW_STATUS" -ne 0 ]; then

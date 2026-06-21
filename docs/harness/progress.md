@@ -814,6 +814,46 @@ No commands are recorded as verified unless they are run and logged using the `d
     import os, pathlib, shutil, stat, subprocess, tempfile
     repo = pathlib.Path.cwd()
     reviews = repo / "docs/harness/reviews"
+    for p in reviews.glob("*cq-auto-write-fail*"):
+        p.unlink()
+    stubdir = pathlib.Path(tempfile.mkdtemp())
+    stub = stubdir / "codex"
+    stub.write_text("""#!/usr/bin/env bash
+    cat >/dev/null
+    printf "REVIEW_VERDICT: PASS\n[LOW] stub pass\n"
+    """)
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+    old_mode = stat.S_IMODE(reviews.stat().st_mode)
+    reviews.chmod(0o500)
+    try:
+        env = os.environ.copy()
+        env["PATH"] = f"{stubdir}:{env['PATH']}"
+        env["REVIEWER_CLI"] = "codex"
+        cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "pre", "cq-auto-write-fail"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    finally:
+        reviews.chmod(old_mode)
+        shutil.rmtree(stubdir)
+    artifacts = list(reviews.glob("*cq-auto-write-fail*"))
+    for p in artifacts:
+        p.unlink()
+    assert cp.returncode == 1 and not artifacts
+    assert "could not save raw reviewer transcript" in (cp.stdout + cp.stderr)
+    print("AUTO-WRITE-FAIL-OK")
+    PY
+  exit_code: 0
+  output_summary: AUTO-WRITE-FAIL-OK
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies automated reviewers cannot claim pre-gate success when raw/wrapped artifacts cannot be written
+- harness_verify:
+  command: |
+    python3 - <<'PY'
+    import os, pathlib, shutil, stat, subprocess, tempfile
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
     for p in reviews.glob("*a4-nonempty-nonzero*"):
         p.unlink()
     stubdir = pathlib.Path(tempfile.mkdtemp())
