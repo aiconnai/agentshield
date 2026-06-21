@@ -698,21 +698,26 @@ No commands are recorded as verified unless they are run and logged using the `d
     env["A4_STUB_COUNT"] = str(count)
     cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "pre", "a4-fail-no-retry"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     calls = count.read_text().strip()
-    for p in reviews.glob("*a4-fail-no-retry*"):
+    artifacts = list(reviews.glob("*a4-fail-no-retry*"))
+    assert cp.returncode == 1 and calls == "1"
+    assert artifacts, "expected saved review artifact"
+    wrapped = next(p for p in artifacts if p.suffix == ".md" and not p.name.endswith(".raw"))
+    text = wrapped.read_text()
+    assert "REVIEW_VERDICT: FAIL" in text and "[HIGH] stub fail must not retry" in text
+    for p in artifacts:
         p.unlink()
     shutil.rmtree(stubdir)
     count.unlink(missing_ok=True)
-    assert cp.returncode == 0 and calls == "1"
-    print("FAIL-NO-RETRY-OK count=1")
+    print("FAIL-NO-RETRY-ENFORCED count=1")
     PY
   exit_code: 0
-  output_summary: pre-gate saved; review_status=0; stub_count=1
+  output_summary: FAIL-NO-RETRY-ENFORCED count=1; pre-gate returned FAIL; stub_count=1
   passed: true
   evidence_path: generated then removed
   skipped_reason: none
   issue_numbers: A4
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
-  importance: verifies a real FAIL verdict is not retried or masked as empty output
+  importance: verifies a real automated pre FAIL verdict is saved, not retried, and enforced
 - harness_verify:
   command: |
     python3 - <<'PY'

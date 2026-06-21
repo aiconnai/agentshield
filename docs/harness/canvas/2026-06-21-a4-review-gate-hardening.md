@@ -38,7 +38,7 @@ Scope: Harden AgentShield's existing reviewer backend contract, retry behavior, 
 | Edge case | Evidence command or manual trace |
 |---|---|
 | Empty Codex output retry | Use a temporary `codex` stub earlier in `PATH` that emits empty output first, then `REVIEW_VERDICT: PASS`; verify args include `exec --sandbox read-only -C <repo> -`. |
-| Real FAIL verdict must not be retried or masked | Code trace: retry loop returns immediately on any non-empty output, including `REVIEW_VERDICT: FAIL`; existing parser then saves and enforces the FAIL. |
+| Real FAIL verdict must not be retried or masked | Code trace and stub test: retry loop returns immediately on any non-empty output, including `REVIEW_VERDICT: FAIL`; automated `pre`/`post` save and enforce the parsed FAIL. |
 | Unknown reviewer backend | Run with an unsupported arbitrary `REVIEWER_CLI` value and verify exit 2 with a usage error before review starts. |
 | Unsupported named backend | Run at least one of `REVIEWER_CLI=claude|grok|ollama` and verify exit 2 unless a real backend is implemented and locally verified. |
 | Manual backend behavior | Run `REVIEWER_CLI=manual ... pre a4-review-gate-hardening` and verify it writes an advisory prompt artifact, exits 0, and does not fabricate `REVIEW_VERDICT: PASS`. |

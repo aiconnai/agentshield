@@ -381,12 +381,26 @@ PROMPT_TEXT
       exit 1
     fi
     rm -f "$TMP_RAW"
+    VERDICT="$(parse_verdict "$OUTFILE")"
     if [ "$REVIEW_STATUS" -ne 0 ]; then
-      echo "FAIL: reviewer exited with status $REVIEW_STATUS; review saved to $OUTFILE" >&2
+      echo "FAIL: reviewer exited with status $REVIEW_STATUS; review saved to $OUTFILE; parsed verdict: ${VERDICT:-none}" >&2
       exit 1
     fi
-    echo "Pre-gate saved to $OUTFILE"
-    exit 0
+
+    case "$VERDICT" in
+      PASS)
+        echo "OK: pre-gate PASS ($OUTFILE)"
+        exit 0
+        ;;
+      FAIL)
+        echo "FAIL: pre-gate returned FAIL. See $OUTFILE" >&2
+        exit 1
+        ;;
+      *)
+        echo "FAIL: pre-gate output did not contain a parseable REVIEW_VERDICT. See $OUTFILE" >&2
+        exit 1
+        ;;
+    esac
     ;;
 
   post)
