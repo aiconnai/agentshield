@@ -503,3 +503,144 @@ No commands are recorded as verified unless they are run and logged using the `d
   issue_numbers: A3
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: JSON status mode reports unknown arguments as a machine-readable usage_error
+
+## A4 review-gate hardening - 2026-06-21
+
+- Created `docs/harness/canvas/2026-06-21-a4-review-gate-hardening.md` before script edits.
+- Scope was narrowed from blind Engram multi-CLI porting to AgentShield review-gate hardening:
+  preserve `REVIEWER_CLI=codex`, keep `codex-gate.sh` unchanged, run Codex through a read-only sandbox,
+  retry only empty reviewer output, keep manual review artifact-driven, and fail unsupported backends clearly.
+- Added post prompt re-injection for prior `[BLOCKER]` and `[HIGH]` findings under
+  `## Prior unresolved findings (address or refute)`.
+- Updated doctor and policy docs for the new reviewer backend contract.
+- Temporary `docs/harness/reviews/*a4-*` artifacts from local behavior tests were removed before staging.
+- harness_verify:
+  command: rtk proxy bash -n docs/harness/bin/review-gate.sh
+  exit_code: 0
+  output_summary: no output; shell syntax clean
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: changed review gate parses before behavior checks
+- harness_verify:
+  command: rtk proxy bash docs/harness/bin/doctor.sh
+  exit_code: 0
+  output_summary: PASS: AgentShield harness doctor; included new checks for REVIEWER_RETRY_ATTEMPTS, read-only Codex sandbox, prior finding re-injection, manual flow, unsupported backend handling, and policy documentation
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: validates harness references and A4 hardening markers
+- harness_verify:
+  command: rtk proxy env REVIEWER_CLI=manual bash docs/harness/bin/review-gate.sh pre a4-review-gate-hardening
+  exit_code: 0
+  output_summary: Manual pre-gate advisory prompt saved to docs/harness/reviews/2026-06-21-a4-review-gate-hardening-pre-manual.md
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies manual pre is artifact-driven and exits 0
+- harness_verify:
+  command: rtk proxy rg -n '^REVIEW_VERDICT:[[:space:]]*PASS[[:space:]]*$' docs/harness/reviews/2026-06-21-a4-review-gate-hardening-pre-manual.md
+  exit_code: 1
+  output_summary: no output; no fabricated final PASS marker in manual advisory artifact
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms manual pre did not invent an automated PASS
+- harness_verify:
+  command: rtk proxy env REVIEWER_CLI=bogus bash docs/harness/bin/review-gate.sh pre a4-unknown-backend
+  exit_code: 2
+  output_summary: "ERROR: unknown REVIEWER_CLI: bogus (supported: codex, manual; reserved but unsupported: claude, grok, ollama)"
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: unknown reviewer backend fails as usage error before review
+- harness_verify:
+  command: rtk proxy env REVIEWER_CLI=claude bash docs/harness/bin/review-gate.sh pre a4-unsupported-backend
+  exit_code: 2
+  output_summary: "ERROR: REVIEWER_CLI=claude is not supported by this harness yet; supply a verified backend implementation before using it."
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: reserved unsupported backend does not fall through to generic command execution
+- harness_verify:
+  command: rtk proxy bash -lc '<temporary codex stub: first exec emits empty output, second emits REVIEW_VERDICT: PASS; run pre a4-retry-stub>'
+  exit_code: 0
+  output_summary: retry warning emitted once; pre-gate saved; review_status=0; stub args recorded twice as `exec --sandbox read-only -C /Users/ronaldo/Projects/_aiconnai/agentshield -`; stub_count=2
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies retry-on-empty and exact read-only Codex invocation
+- harness_verify:
+  command: rtk proxy bash -lc '<temporary prior review artifact plus prompt-capturing codex stub; run post a4-prior-stub --range=HEAD..HEAD>'
+  exit_code: 0
+  output_summary: post-gate PASS; captured prior block contained `[BLOCKER] keep blocker finding` and `- [HIGH] keep high finding`; `[MED]` and `[LOW]` lines were absent
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies prior finding re-injection filters only BLOCKER/HIGH under the required heading
+- harness_verify:
+  command: rtk proxy bash -lc '<temporary codex stub emits REVIEW_VERDICT: FAIL on first call; run pre a4-fail-no-retry>'
+  exit_code: 0
+  output_summary: pre-gate saved; review_status=0; stub_count=1
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies a real FAIL verdict is not retried or masked as empty output
+- harness_verify:
+  command: rtk proxy bash -lc '<temporary manual review file with REVIEW_VERDICT: PASS; run REVIEWER_CLI=manual post a4-manual-post-stub --range=HEAD..HEAD --review-file=<temp>>'
+  exit_code: 0
+  output_summary: OK: manual post-gate PASS; review_status=0
+  passed: true
+  evidence_path: generated then removed
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies manual post accepts a supplied reviewer artifact instead of running an automated backend
+- harness_verify:
+  command: rtk proxy env REVIEWER_CLI=manual bash docs/harness/bin/review-gate.sh post a4-manual-post-missing --range=HEAD..HEAD
+  exit_code: 2
+  output_summary: "ERROR: REVIEWER_CLI=manual post requires --review-file=<path> with a reviewer artifact containing REVIEW_VERDICT"
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies manual post does not invent a verdict when no artifact is supplied
+- harness_verify:
+  command: rtk proxy bash docs/harness/bin/sensors.sh quick
+  exit_code: 0
+  output_summary: ALL SENSORS GREEN (quick, 2026-06-21T15:17:00Z)
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: quick harness lane passes after review-gate hardening
+- harness_verify:
+  command: rtk find 'a4-*' docs/harness/reviews
+  exit_code: 0
+  output_summary: "0 for 'a4-*'"
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: confirms generated A4 review artifacts were cleaned before staging
