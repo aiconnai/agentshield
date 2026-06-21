@@ -117,15 +117,31 @@ check_latest_review_verdict() {
 }
 
 check_sensors_last_format() {
+  local line_count
+  local ts=""
+  local mode=""
+  local result=""
+  local extra=""
+
   if [ ! -f docs/harness/.sensors-last ]; then
     ok ".sensors-last format check skipped: no sensor snapshot"
     return
   fi
 
-  if rg -n -e '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z[[:space:]]+[^[:space:]]+[[:space:]]+(PASS|FAIL)$' docs/harness/.sensors-last >/dev/null 2>&1; then
-    ok ".sensors-last has parseable TIMESTAMP MODE PASS|FAIL result"
+  line_count="$(awk 'END { print NR }' docs/harness/.sensors-last)"
+  if [ "$line_count" -ne 1 ]; then
+    fail ".sensors-last must contain exactly one TIMESTAMP MODE PASS or FAIL line"
+    return
+  fi
+
+  read -r ts mode result extra < docs/harness/.sensors-last || true
+  if [[ "$ts" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] &&
+    [ -n "$mode" ] &&
+    { [ "$result" = "PASS" ] || [ "$result" = "FAIL" ]; } &&
+    [ -z "$extra" ]; then
+    ok ".sensors-last has parseable TIMESTAMP MODE PASS or FAIL result"
   else
-    fail ".sensors-last missing parseable TIMESTAMP MODE PASS|FAIL result"
+    fail ".sensors-last missing parseable TIMESTAMP MODE PASS or FAIL result"
   fi
 }
 

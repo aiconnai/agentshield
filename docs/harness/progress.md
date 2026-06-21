@@ -969,7 +969,7 @@ No commands are recorded as verified unless they are run and logged using the `d
 - harness_verify:
   command: rtk proxy bash docs/harness/bin/doctor.sh
   exit_code: 0
-  output_summary: PASS: AgentShield harness doctor; latest review has parseable REVIEW_VERDICT; .sensors-last has parseable TIMESTAMP MODE PASS|FAIL result
+  output_summary: PASS: AgentShield harness doctor; latest review has parseable REVIEW_VERDICT; .sensors-last has parseable TIMESTAMP MODE PASS or FAIL result
   passed: true
   evidence_path: none
   skipped_reason: none
@@ -1013,7 +1013,7 @@ No commands are recorded as verified unless they are run and logged using the `d
 - harness_verify:
   command: rtk proxy python3 -c "import pathlib,re; text=pathlib.Path('docs/harness/.sensors-last').read_text(); assert re.search(r'^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z\\s+\\S+\\s+(PASS|FAIL)$', text); print('SENSORS-LAST-FORMAT-OK', text.strip())"
   exit_code: 0
-  output_summary: SENSORS-LAST-FORMAT-OK 2026-06-21T16:35:40Z quick PASS
+  output_summary: SENSORS-LAST-FORMAT-OK 2026-06-21T16:42:31Z quick PASS
   passed: true
   evidence_path: docs/harness/.sensors-last
   skipped_reason: none
@@ -1021,9 +1021,40 @@ No commands are recorded as verified unless they are run and logged using the `d
   workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
   importance: proves the `.sensors-last` full-format check is live against the current snapshot
 - harness_verify:
+  command: |
+    python3 - <<'PY'
+    import json, pathlib, subprocess
+    repo = pathlib.Path.cwd()
+    snapshot = repo / "docs/harness/.sensors-last"
+    original = snapshot.read_text() if snapshot.exists() else None
+    snapshot.write_text("BROKEN\n2026-06-21T16:35:40Z quick PASS\n")
+    try:
+        cp = subprocess.run(["bash", "docs/harness/bin/doctor.sh", "--json"], cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        data = json.loads(cp.stdout)
+        assert cp.returncode == 1
+        assert data["status"] == "fail"
+        assert data["failure_count"] == 1
+        assert len(data["failures"]) == 1
+        assert "PASS or FAIL" in data["failures"][0]
+    finally:
+        if original is None:
+            snapshot.unlink(missing_ok=True)
+        else:
+            snapshot.write_text(original)
+    print("SENSORS-LAST-MULTILINE-JSON-FAIL-OK")
+    PY
+  exit_code: 0
+  output_summary: SENSORS-LAST-MULTILINE-JSON-FAIL-OK
+  passed: true
+  evidence_path: generated then restored
+  skipped_reason: none
+  issue_numbers: A5
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: proves malformed multi-line `.sensors-last` fails without splitting one JSON failure into multiple failures
+- harness_verify:
   command: rtk proxy bash docs/harness/bin/sensors.sh quick
   exit_code: 0
-  output_summary: ALL SENSORS GREEN (quick, 2026-06-21T16:35:40Z)
+  output_summary: ALL SENSORS GREEN (quick, 2026-06-21T16:42:31Z)
   passed: true
   evidence_path: none
   skipped_reason: none
