@@ -110,6 +110,21 @@ review_slug() {
   printf '%s' "$REVIEWER_CLI" | tr -c 'A-Za-z0-9_.-' '-'
 }
 
+write_file_atomically() {
+  local out="$1"
+  local tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/agentshield-review-gate-write.XXXXXX")" || return 1
+  if ! cat > "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if ! mv "$tmp" "$out"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  [ -f "$out" ]
+}
+
 changed_harness_scripts() {
   local dirty_non_review
   dirty_non_review="$(git status --porcelain -- ':(exclude)docs/harness/reviews/*' 2>/dev/null || true)"
@@ -221,7 +236,7 @@ write_manual_prompt() {
     echo '```text'
     printf '%s\n' "$prompt"
     echo '```'
-  } > "$out"; then
+  } | write_file_atomically "$out"; then
     echo "ERROR: failed to write manual $kind-gate prompt artifact: $out" >&2
     return 1
   fi

@@ -780,6 +780,37 @@ No commands are recorded as verified unless they are run and logged using the `d
 - harness_verify:
   command: |
     python3 - <<'PY'
+    import os, pathlib, stat, subprocess
+    repo = pathlib.Path.cwd()
+    reviews = repo / "docs/harness/reviews"
+    for p in reviews.glob("*cq-write-fail*"):
+        p.unlink()
+    old_mode = stat.S_IMODE(reviews.stat().st_mode)
+    reviews.chmod(0o500)
+    try:
+        env = os.environ.copy()
+        env["REVIEWER_CLI"] = "manual"
+        cp = subprocess.run(["bash", "docs/harness/bin/review-gate.sh", "pre", "cq-write-fail"], cwd=repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    finally:
+        reviews.chmod(old_mode)
+    artifacts = list(reviews.glob("*cq-write-fail*"))
+    for p in artifacts:
+        p.unlink()
+    assert cp.returncode == 1 and not artifacts
+    assert "failed to write manual pre-gate prompt artifact" in (cp.stdout + cp.stderr)
+    print("MANUAL-WRITE-FAIL-OK")
+    PY
+  exit_code: 0
+  output_summary: MANUAL-WRITE-FAIL-OK
+  passed: true
+  evidence_path: none
+  skipped_reason: none
+  issue_numbers: A4
+  workspace: /Users/ronaldo/Projects/_aiconnai/agentshield
+  importance: verifies manual pre cannot claim success when the review artifact cannot be written
+- harness_verify:
+  command: |
+    python3 - <<'PY'
     import os, pathlib, shutil, stat, subprocess, tempfile
     repo = pathlib.Path.cwd()
     reviews = repo / "docs/harness/reviews"
