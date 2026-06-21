@@ -257,8 +257,10 @@ write_manual_review() {
     exit 2
   fi
 
-  cp "$review_file" "$out.raw"
-  write_review "$out.raw" "$out" "$kind"
+  if ! save_reviewer_artifacts "$review_file" "$out" "$kind"; then
+    echo "ERROR: failed to save manual $kind-gate review artifact: $out" >&2
+    exit 1
+  fi
 }
 
 prior_unresolved_findings() {
