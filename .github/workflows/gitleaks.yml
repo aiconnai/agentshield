@@ -1,0 +1,40 @@
+name: Gitleaks
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/src" \
+            zricethezav/gitleaks:v8.23.3 \
+            detect \
+              --source /src \
+              --verbose \
+              --redact \
+              --report-format sarif \
+              --report-path /src/gitleaks.sarif \
+              --exit-code 1
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
