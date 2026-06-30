@@ -392,6 +392,12 @@ Adapters translate framework-specific files into a unified intermediate represen
 
 ---
 
+## Security Policy
+
+Please report vulnerabilities privately. See [`SECURITY.md`](SECURITY.md) for supported versions, reporting guidance, and disclosure scope.
+
+---
+
 ## Development
 
 ```bash
