@@ -7,6 +7,12 @@
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
 
+
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)
+- [License](LICENSE)
 AgentShield is an offline Rust scanner for teams shipping tool-enabled agents
 across the current agent stack. Native adapters cover MCP servers, OpenClaw
 skills, Hermes Agent configs, CrewAI, LangChain/LangGraph, GPT Actions, and
@@ -66,6 +72,22 @@ AI agents are being connected to tools that can execute commands, read and write
 
 AgentShield catches these patterns with static analysis, framework adapters, policy evaluation, suppressions, baselines, egress policy generation, attestations, and SARIF output for GitHub Code Scanning.
 
+### Use it with general security scanners
+
+AgentShield complements general-purpose security tooling; it is not a replacement
+for SAST, secret scanning, or broad dependency analysis. A practical security
+stack is:
+
+| Tool | Primary coverage | Why keep AgentShield |
+|------|------------------|----------------------|
+| CodeQL | General SAST for code vulnerabilities and quality issues | CodeQL is broad; AgentShield models agent/tool surfaces such as MCP tools, prompts, tool schemas, and egress. |
+| Gitleaks | Hardcoded secrets across Git history and source files | Gitleaks is the right secret scanner; AgentShield focuses on secrets flowing through tools, logs, responses, and agent context. |
+| Semgrep | Custom SAST rules, language-specific checks, SCA, and security policy | Semgrep is flexible and broad; AgentShield ships opinionated agent/MCP detectors and a normalized IR for supported agent frameworks. |
+| AgentShield | MCP, agent tools, prompt surfaces, filesystem/network/process capabilities, egress policy, SARIF, and runtime guard experiments | This is the agent-specific layer that catches risks other scanners usually see only indirectly. |
+
+Use `agentshield ci install --suite` when you want a starter GitHub Actions
+workflow that runs CodeQL, Gitleaks, Semgrep CE, and AgentShield together.
+
 ### How it compares
 
 | Feature | AgentShield | mcp-scan | Invariant Labs |
@@ -119,6 +141,9 @@ agentshield scan . --ignore-tests --fail-on high --explain
 
 # Add a GitHub Actions workflow
 agentshield ci install
+
+# Add a broader security suite: CodeQL + Gitleaks + Semgrep CE + AgentShield
+agentshield ci install --suite
 
 # Adopt in an existing repo without blocking on known findings
 agentshield scan --write-baseline .agentshield-baseline.json
@@ -226,6 +251,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield scan [path] --explain` | Print a console-only gate, coverage, confidence, grouped findings, next-actions, and limits summary. |
 | `agentshield quickstart [path]` | Create first-run config, suggest CI setup, run the first scan, and explain the result. |
 | `agentshield ci install` | Generate a GitHub Actions workflow for AgentShield. |
+| `agentshield ci install --suite` | Generate a broader GitHub Actions workflow with CodeQL, Gitleaks, Semgrep CE, and AgentShield. |
 | `agentshield ci install --baseline <path>` | Generate a workflow that filters known findings through a baseline file. |
 | `agentshield list-rules` | List available detection rules as a table or JSON. |
 | `agentshield doctor [path]` | Print environment, config, compile-feature, and adapter diagnostics. |
