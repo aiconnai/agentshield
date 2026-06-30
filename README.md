@@ -7,6 +7,12 @@
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
 
+
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)
+- [License](LICENSE)
 AgentShield is an offline Rust scanner for teams shipping tool-enabled agents
 across the current agent stack. Native adapters cover MCP servers, OpenClaw
 skills, Hermes Agent configs, CrewAI, LangChain/LangGraph, GPT Actions, and
