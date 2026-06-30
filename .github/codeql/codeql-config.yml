@@ -1,0 +1,14 @@
+name: "Agentshield CodeQL config"
+
+queries:
+  - uses: security-and-quality
+
+query-filters:
+  - exclude:
+      id: js/insecure-temporary-file
+      # Optional noise filtering can be added here if needed.
+
+paths-ignore:
+  - "target/**"
+  - "docs/**"
+  - "**/fixtures/**"

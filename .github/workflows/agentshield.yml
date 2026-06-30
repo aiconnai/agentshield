@@ -1,0 +1,27 @@
+name: AgentShield
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run AgentShield
+        uses: aiconnai/agentshield@v0.8.7
+        with:
+          path: .
+          fail-on: high
+          ignore-tests: true
+          format: sarif
+          upload-sarif: true
