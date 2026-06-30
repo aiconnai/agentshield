@@ -4,11 +4,15 @@ Cargo.lock
 *.swo
 .DS_Store
 .orchestrator/
+.claude/
+.codegraph
 .omo/
 .env
 .worktrees/
 .superpowers/
 
+docs/harness/progress/
+docs/superpowers/plans/*.md
 docs/harness/.baseline-last
 docs/harness/.sensors-last
 docs/harness/.quarterly-audit-last
