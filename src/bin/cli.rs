@@ -21,7 +21,7 @@ use runtime::cmd_wrap;
 #[cfg(feature = "runtime-guard")]
 use runtime::{cmd_guard, cmd_mcp_proxy, cmd_mcp_proxy_transport};
 use scan::{cmd_scan, ScanArgs};
-use setup::{cmd_ci_install, cmd_doctor, cmd_init, cmd_quickstart};
+use setup::{cmd_ci_install, cmd_doctor, cmd_init, cmd_quickstart, CiInstallRequest};
 
 #[derive(Parser)]
 #[command(
@@ -268,9 +268,13 @@ enum CiCommand {
         #[arg(long, value_name = "PATH")]
         baseline: Option<String>,
 
-        /// Disable SARIF upload in the generated workflow
+        /// Disable AgentShield SARIF upload in the generated workflow
         #[arg(long)]
         no_sarif: bool,
+
+        /// Generate a broader security suite with CodeQL, Gitleaks, Semgrep CE, and AgentShield
+        #[arg(long)]
+        suite: bool,
     },
 }
 
@@ -316,15 +320,17 @@ fn main() {
                 include_tests,
                 baseline,
                 no_sarif,
-            } => cmd_ci_install(
+                suite,
+            } => cmd_ci_install(CiInstallRequest {
                 output,
                 force,
                 scan_path,
                 fail_on,
                 include_tests,
                 baseline,
-                no_sarif,
-            ),
+                upload_sarif: !no_sarif,
+                suite,
+            }),
         },
         Commands::ListRules { format } => cmd_list_rules(format),
         Commands::Init { force } => cmd_init(force),
