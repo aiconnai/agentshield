@@ -7,6 +7,17 @@ use agentshield::rules::Severity;
 use agentshield::ux::{CiInstallOptions, ExplainOptions};
 use agentshield::ScanOptions;
 
+pub(super) struct CiInstallRequest {
+    pub output: PathBuf,
+    pub force: bool,
+    pub scan_path: String,
+    pub fail_on: String,
+    pub include_tests: bool,
+    pub baseline: Option<String>,
+    pub upload_sarif: bool,
+    pub suite: bool,
+}
+
 pub(super) fn cmd_quickstart(
     path: PathBuf,
     force: bool,
@@ -72,43 +83,48 @@ pub(super) fn cmd_quickstart(
 }
 
 pub(super) fn cmd_ci_install(
-    output: PathBuf,
-    force: bool,
-    scan_path: String,
-    fail_on_str: String,
-    include_tests: bool,
-    baseline: Option<String>,
-    no_sarif: bool,
+    request: CiInstallRequest,
 ) -> Result<i32, agentshield::error::ShieldError> {
-    let fail_on = require_severity(&fail_on_str)?;
+    let fail_on = require_severity(&request.fail_on)?;
     let fail_on = fail_on.to_string();
 
-    if output.exists() && !force {
+    if request.output.exists() && !request.force {
         eprintln!(
             "{} already exists. Use --force to overwrite.",
-            output.display()
+            request.output.display()
         );
         return Ok(1);
     }
 
-    if let Some(parent) = non_empty_parent(&output) {
+    if let Some(parent) = non_empty_parent(&request.output) {
         std::fs::create_dir_all(parent)?;
     }
 
-    let workflow = agentshield::ux::github_actions_workflow(&CiInstallOptions {
+    let options = CiInstallOptions {
         fail_on: &fail_on,
-        ignore_tests: !include_tests,
-        scan_path: &scan_path,
-        baseline_path: baseline.as_deref(),
-        upload_sarif: !no_sarif,
-    });
-    std::fs::write(&output, workflow)?;
-    println!("Created {}", output.display());
-    println!("CI gate: scans `{scan_path}` and fails on `{fail_on}` findings or higher.");
-    if !no_sarif {
+        ignore_tests: !request.include_tests,
+        scan_path: &request.scan_path,
+        baseline_path: request.baseline.as_deref(),
+        upload_sarif: request.upload_sarif,
+    };
+    let workflow = if request.suite {
+        agentshield::ux::github_actions_security_suite_workflow(&options)
+    } else {
+        agentshield::ux::github_actions_workflow(&options)
+    };
+    std::fs::write(&request.output, workflow)?;
+    println!("Created {}", request.output.display());
+    if request.suite {
+        println!("Security suite: runs CodeQL, Gitleaks, Semgrep CE, and AgentShield.");
+    }
+    println!(
+        "AgentShield gate: scans `{}` and fails on `{fail_on}` findings or higher.",
+        request.scan_path
+    );
+    if request.upload_sarif {
         println!("SARIF upload: enabled for GitHub Code Scanning.");
     }
-    if let Some(baseline) = baseline {
+    if let Some(baseline) = request.baseline {
         println!("Baseline: filters known findings from `{baseline}`.");
     }
     Ok(0)

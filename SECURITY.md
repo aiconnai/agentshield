@@ -1,5 +1,7 @@
 # Security Policy
 
+AgentShield is a security-focused project. If you discover a security vulnerability, please report it privately so it can be handled before public disclosure.
+
 ## Supported Versions
 
 Security fixes are prioritized for the latest released version and the `main` branch. Older releases may receive fixes when the issue is severe and the patch can be applied safely.
@@ -15,11 +17,11 @@ Preferred reporting path:
 
 Include, when safe to share privately:
 
-- affected version or commit;
-- operating system and installation method;
+- affected component and version, or commit SHA;
+- attack scenario and impact;
+- reproduction steps and payload examples;
 - scanner command or integration path used;
-- minimal reproduction steps;
-- expected versus actual behavior;
+- files, logs, or commands that demonstrate the issue;
 - whether credentials, source code, or runtime data could be exposed.
 
 ## Scope
@@ -37,6 +39,8 @@ Out of scope:
 - placeholder tokens used by redaction tests;
 - findings that require malicious local filesystem access outside AgentShield's threat model.
 
-## Disclosure Process
+## What to Expect
 
-We aim to acknowledge credible private reports promptly, investigate impact, prepare a fix when needed, and publish release notes or an advisory once users have a safe upgrade path.
+- We aim to acknowledge reports quickly and will keep you informed of triage and fix status.
+- We may request additional details or a proof-of-concept patch.
+- Once fixed, we will publish disclosure details in release notes or an advisory when appropriate.

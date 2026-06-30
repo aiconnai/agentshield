@@ -1,6 +1,6 @@
 # Detection Rules
 
-AgentShield ships with 12 built-in detectors targeting the most common security
+AgentShield ships with 18 built-in detectors targeting the most common security
 issues in AI agent extensions. Each rule has an ID, severity, confidence level,
 and CWE mapping where applicable.
 
@@ -257,6 +257,138 @@ verification of package integrity.
 
 **Remediation:** Generate a lockfile: `poetry lock`, `uv lock`, `npm install`,
 `yarn install`, or `pip freeze > requirements.txt` with `--require-hashes`.
+
+---
+
+## SHIELD-013: Metadata SSRF
+
+| Field | Value |
+|-------|-------|
+| Severity | Critical |
+| CWE | [CWE-918](https://cwe.mitre.org/data/definitions/918.html) |
+| Category | SSRF |
+
+**What it detects:** Tool arguments flowing to HTTP requests that could target
+cloud metadata endpoints or private networks, plus literal requests to known
+metadata or private-network addresses.
+
+**Why it matters:** Metadata endpoints can expose cloud credentials, workload
+identity tokens, and instance configuration. A tool that proxies requests to
+these addresses can turn ordinary SSRF into credential theft.
+
+**Remediation:** Validate URLs against an allowlist before making requests.
+Block private IP ranges, link-local ranges, loopback addresses, and cloud
+metadata endpoints such as `169.254.169.254`.
+
+---
+
+## SHIELD-014: Download-Write-Execute Chain
+
+| Field | Value |
+|-------|-------|
+| Severity | Critical |
+| CWE | [CWE-494](https://cwe.mitre.org/data/definitions/494.html) |
+| Category | Supply Chain |
+
+**What it detects:** HTTP downloads that flow to file writes and then process
+execution, or the same high-risk combination appearing in one scan target.
+
+**Why it matters:** Downloading code, writing it to disk, and executing it is a
+classic supply-chain compromise path. It bypasses normal dependency review,
+lockfiles, and integrity checks.
+
+**Remediation:** Do not execute downloaded files directly. Use package managers
+with lockfiles where possible. If download logic is unavoidable, verify content
+with trusted checksums or signatures before writing or executing anything.
+
+---
+
+## SHIELD-015: Overbroad Filesystem Scope
+
+| Field | Value |
+|-------|-------|
+| Severity | High |
+| CWE | [CWE-552](https://cwe.mitre.org/data/definitions/552.html) |
+| Category | Arbitrary File Access |
+
+**What it detects:** File operations using overly broad paths such as root,
+home directories, glob-all patterns, path traversal patterns, interpolated
+paths, or unvalidated path parameters.
+
+**Why it matters:** Agent tools often run with the user's filesystem access. A
+tool that accepts broad or unscoped paths can expose private files, source code,
+SSH keys, environment files, or writeable locations outside the intended area.
+
+**Remediation:** Restrict file operations to explicit directories. Canonicalize
+paths and verify the resolved path remains inside the allowed scope. Reject
+root, home, absolute, traversal, and glob-all inputs unless explicitly intended.
+
+---
+
+## SHIELD-016: Unsafe Deserialization
+
+| Field | Value |
+|-------|-------|
+| Severity | Critical |
+| CWE | [CWE-502](https://cwe.mitre.org/data/definitions/502.html) |
+| Category | Code Injection |
+
+**What it detects:** Unsafe deserializers and code execution patterns such as
+`pickle.loads`, unsafe `yaml.load`, JavaScript VM execution, or `new Function`
+used for data parsing.
+
+**Why it matters:** Deserializing untrusted input with unsafe primitives can
+execute attacker-controlled code inside the tool process.
+
+**Remediation:** Use safe data formats and schema validation. Prefer JSON with
+validation, `yaml.safe_load()` or an explicit safe loader, and avoid VM/code
+execution APIs for deserialization.
+
+---
+
+## SHIELD-017: Archive Traversal (Zip Slip)
+
+| Field | Value |
+|-------|-------|
+| Severity | High |
+| CWE | [CWE-22](https://cwe.mitre.org/data/definitions/22.html) |
+| Category | Arbitrary File Access |
+
+**What it detects:** Archive extraction operations such as `extractall`,
+`unpack_archive`, `ZipFile.extract`, `TarFile.extract`, `tar.extract`, or
+related libraries without nearby path validation.
+
+**Why it matters:** Crafted archive entries can contain absolute paths or `..`
+segments. Extracting them without validation can write files outside the target
+directory, overwrite application files, or plant executable payloads.
+
+**Remediation:** Validate every extracted file path before writing. Resolve the
+destination path and ensure it stays within the intended directory using
+`os.path.commonpath()`, `os.path.realpath()`, `path.resolve()`, or equivalent.
+Reject absolute paths and entries containing traversal segments.
+
+---
+
+## SHIELD-018: Secret Leakage
+
+| Field | Value |
+|-------|-------|
+| Severity | High |
+| CWE | [CWE-532](https://cwe.mitre.org/data/definitions/532.html) |
+| Category | Data Exfiltration |
+
+**What it detects:** Secret-store or sensitive environment values flowing to
+logs or LLM responses without redaction, plus secret-like environment accesses
+near log or response sinks.
+
+**Why it matters:** Agent tools often return data directly to a model or write
+verbose diagnostics. Leaking secrets into logs, tool responses, or model context
+can expose credentials to users, third-party services, or later prompt context.
+
+**Remediation:** Redact or mask sensitive values before logging or returning
+responses. Use a secrets manager, keep raw secrets out of model-visible output,
+and centralize redaction helpers for tokens, API keys, passwords, and private
+keys.
 
 ---
 
