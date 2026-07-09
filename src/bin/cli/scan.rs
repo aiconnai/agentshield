@@ -86,7 +86,11 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         if let Some(fail_on_sev) = fail_on {
             cfg.policy.fail_on = fail_on_sev;
         }
-        report.verdict = cfg.policy.evaluate(&report.findings);
+        // Re-apply policy (ignore rules, overrides, suppressions) to the
+        // baseline-filtered findings before re-evaluating the verdict, so the
+        // verdict stays consistent with the rendered findings (issue #34).
+        let effective = cfg.policy.apply(&report.findings, &report.scan_root);
+        report.verdict = cfg.policy.evaluate(&effective);
     }
 
     if let Some(ref wb_path) = write_baseline_path {

@@ -5,7 +5,7 @@
 //! tainted to `Sanitized`. This eliminates false positives from internal
 //! helper functions that receive already-validated input from their callers.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::ir::ArgumentSource;
@@ -273,8 +273,33 @@ pub fn apply_cross_file_sanitization(
     // Phase 1: Build function definition map.
     // Key: function name → (file index, param names)
     let mut func_defs: HashMap<String, Vec<(usize, Vec<String>, bool)>> = HashMap::new();
+    // Per-file set of (param name, sink) that are UNAMBIGUOUSLY safe:
+    // every function in the file declaring `param_name` is itself proven
+    // safe for `sink`. Used to scope the downgrade to the proven-safe
+    // function and avoid clearing an UNSAFE sibling that shares the param
+    // name (issue #33). When two functions in a file share a param
+    // name but only one is proven safe, that (param, sink) is excluded.
+    let mut file_safe_param_sinks: HashMap<usize, HashSet<(String, SinkClass)>> = HashMap::new();
     for (idx, (_, parsed)) in parsed_files.iter().enumerate() {
         for def in &parsed.function_defs {
+            for param in &def.params {
+                file_safe_param_sinks
+                    .entry(idx)
+                    .or_default()
+                    .insert((param.clone(), SinkClass::Command));
+                file_safe_param_sinks
+                    .entry(idx)
+                    .or_default()
+                    .insert((param.clone(), SinkClass::FilePath));
+                file_safe_param_sinks
+                    .entry(idx)
+                    .or_default()
+                    .insert((param.clone(), SinkClass::NetworkUrl));
+                file_safe_param_sinks
+                    .entry(idx)
+                    .or_default()
+                    .insert((param.clone(), SinkClass::DynamicExec));
+            }
             func_defs.entry(def.name.clone()).or_default().push((
                 idx,
                 def.params.clone(),
@@ -297,7 +322,10 @@ pub fn apply_cross_file_sanitization(
 
     // Phase 3: Determine which functions have all-sanitized parameters per sink.
     // For each function with a definition AND call sites, check if every
-    // call site passes values safe for each sink category.
+    // call site passes values safe for each sink category. When a function is
+    // proven safe for a (param, sink), record it; if ANY function in the
+    // same file declaring that param is NOT proven safe, drop the
+    // (param, sink) from the unambiguous-safe set (issue #33).
     let mut params_to_downgrade: Vec<(usize, String, String, SinkClass)> = Vec::new();
 
     for (func_name, defs) in &func_defs {
@@ -325,6 +353,13 @@ pub fn apply_cross_file_sanitization(
                             func_name.clone(),
                             sink,
                         ));
+                    } else {
+                        // This function is NOT safe for this (param, sink), so the
+                        // param name is ambiguous within the file — remove it from
+                        // the unambiguous-safe set so no sibling gets downgraded.
+                        if let Some(set) = file_safe_param_sinks.get_mut(file_idx) {
+                            set.remove(&(param_name.clone(), sink));
+                        }
                     }
                 }
             }
@@ -332,7 +367,18 @@ pub fn apply_cross_file_sanitization(
     }
 
     // Phase 4: Downgrade operations in the target functions.
+    // Scope guard (issue #33): only downgrade a (param, sink) that is in
+    // the file's unambiguous-safe set — i.e. EVERY function in that file
+    // declaring the param name was proven safe for that sink. If an unsafe
+    // sibling shares the param name, the entry was removed in Phase 3 and
+    // we leave the argument tainted.
     for (file_idx, param_name, func_name, sink) in &params_to_downgrade {
+        let safe = file_safe_param_sinks
+            .get(file_idx)
+            .is_some_and(|set| set.contains(&(param_name.clone(), *sink)));
+        if !safe {
+            continue;
+        }
         let (_, parsed) = &mut parsed_files[*file_idx];
         // Encode the exact sink this downgrade was proven safe for, so the
         // label round-trips through `sanitizer_allows_sink` and clears taint
@@ -829,5 +875,78 @@ mod tests {
         assert_eq!(result.downgraded_count, 1); // Only src
         assert!(!files[1].1.file_operations[0].path_arg.is_tainted()); // src: safe
         assert!(files[1].1.file_operations[1].path_arg.is_tainted()); // dest: still tainted
+    }
+
+    #[test]
+    fn unsafe_sibling_with_shared_param_stays_tainted() {
+        // Issue #33: two functions in the same file share a param name
+        // (`path`). `safeRead` is only ever called with a sanitized
+        // value, but `rawRead` is called with a tainted parameter. The
+        // unsafe sibling must NOT be downgraded even though the safe one
+        // is.
+        let mut file_a = ParsedFile::default();
+        // safeRead is called with a sanitized path
+        file_a.call_sites.push(CallSite {
+            callee: "safeRead".into(),
+            arguments: vec![ArgumentSource::Sanitized {
+                sanitizer: "validatePath".into(),
+            }],
+            caller: Some("handler".into()),
+            location: loc("index.ts", 5),
+        });
+        // rawRead is called with a TAINTED parameter
+        file_a.call_sites.push(CallSite {
+            callee: "rawRead".into(),
+            arguments: vec![ArgumentSource::Parameter {
+                name: "path".into(),
+            }],
+            caller: Some("handler".into()),
+            location: loc("index.ts", 9),
+        });
+
+        let mut file_b = ParsedFile::default();
+        file_b.function_defs.push(FunctionDef {
+            name: "safeRead".into(),
+            params: vec!["path".into()],
+            is_exported: true,
+            location: loc("lib.ts", 1),
+        });
+        file_b.function_defs.push(FunctionDef {
+            name: "rawRead".into(),
+            params: vec!["path".into()],
+            is_exported: true,
+            location: loc("lib.ts", 10),
+        });
+        // safeRead's op (should downgrade)
+        file_b.file_operations.push(FileOperation {
+            path_arg: ArgumentSource::Parameter {
+                name: "path".into(),
+            },
+            operation: FileOpType::Read,
+            location: loc("lib.ts", 3),
+        });
+        // rawRead's op (must stay tainted)
+        file_b.file_operations.push(FileOperation {
+            path_arg: ArgumentSource::Parameter {
+                name: "path".into(),
+            },
+            operation: FileOpType::Read,
+            location: loc("lib.ts", 12),
+        });
+
+        let mut files = vec![
+            (PathBuf::from("index.ts"), file_a),
+            (PathBuf::from("lib.ts"), file_b),
+        ];
+
+        let result = apply_cross_file_sanitization(&mut files);
+
+        // `path` is shared between a safe and an unsafe function in the
+        // same file, so ownership is ambiguous. The conservative fix (issue
+        // #33) refuses to downgrade either, which correctly keeps the
+        // unsafe sibling's operation tainted (no false negative).
+        assert_eq!(result.downgraded_count, 0);
+        assert!(files[1].1.file_operations[0].path_arg.is_tainted()); // safeRead: stays tainted (ambiguous)
+        assert!(files[1].1.file_operations[1].path_arg.is_tainted()); // rawRead: stays tainted (unsafe sibling protected)
     }
 }

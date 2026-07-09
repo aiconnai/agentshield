@@ -8,8 +8,7 @@ use std::path::PathBuf;
 use super::data_surface::*;
 use super::execution_surface::*;
 use super::tool_surface::ToolSurface;
-use super::ArgumentSource;
-use super::SourceLocation;
+use super::{ArgumentSource, SinkClass, SourceLocation};
 
 /// Build a `DataSurface` from tool definitions and execution surface.
 ///
@@ -123,7 +122,7 @@ fn build_taint_paths(sources: &[TaintSource], execution: &ExecutionSurface) -> V
 
     // Commands with tainted args
     for cmd in &execution.commands {
-        if cmd.command_arg.is_tainted() {
+        if cmd.command_arg.is_tainted_for_sink(SinkClass::Command) {
             let source = resolve_source(sources, &cmd.command_arg, &cmd.location);
             paths.push(TaintPath {
                 source,
@@ -140,7 +139,7 @@ fn build_taint_paths(sources: &[TaintSource], execution: &ExecutionSurface) -> V
 
     // Network operations with tainted URL args
     for net in &execution.network_operations {
-        if net.url_arg.is_tainted() {
+        if net.url_arg.is_tainted_for_sink(SinkClass::NetworkUrl) {
             let source = resolve_source(sources, &net.url_arg, &net.location);
             paths.push(TaintPath {
                 source,
@@ -157,7 +156,9 @@ fn build_taint_paths(sources: &[TaintSource], execution: &ExecutionSurface) -> V
 
     // File write operations with tainted path args
     for file_op in &execution.file_operations {
-        if matches!(file_op.operation, FileOpType::Write) && file_op.path_arg.is_tainted() {
+        if matches!(file_op.operation, FileOpType::Write)
+            && file_op.path_arg.is_tainted_for_sink(SinkClass::FilePath)
+        {
             let source = resolve_source(sources, &file_op.path_arg, &file_op.location);
             paths.push(TaintPath {
                 source,
@@ -174,7 +175,10 @@ fn build_taint_paths(sources: &[TaintSource], execution: &ExecutionSurface) -> V
 
     // Dynamic exec with tainted code args
     for dyn_exec in &execution.dynamic_exec {
-        if dyn_exec.code_arg.is_tainted() {
+        if dyn_exec
+            .code_arg
+            .is_tainted_for_sink(SinkClass::DynamicExec)
+        {
             let source = resolve_source(sources, &dyn_exec.code_arg, &dyn_exec.location);
             paths.push(TaintPath {
                 source,
@@ -464,7 +468,12 @@ mod tests {
     }
 
     #[test]
-    fn test_no_taint_path_for_sanitized() {
+    fn test_sanitized_mismatched_sink_still_tainted() {
+        // A `Sanitized` arg only suppresses a taint path when its sanitizer
+        // matches the sink category. `validateCommand` is NOT a recognized
+        // command sanitizer (the design only honors Path→FilePath and
+        // Network→NetworkUrl), so the command sink stays tainted and a
+        // taint path is still produced (issue #36).
         let execution = ExecutionSurface {
             commands: vec![CommandInvocation {
                 function: "subprocess.run".to_string(),
@@ -480,8 +489,31 @@ mod tests {
 
         assert_eq!(surface.sinks.len(), 1);
         assert!(
+            !surface.taint_paths.is_empty(),
+            "sanitizer that does not match the sink must not suppress the taint path"
+        );
+    }
+
+    #[test]
+    fn test_sanitized_matching_sink_suppresses_path() {
+        // A path sanitizer on a FilePath (write) sink IS recognized, so the
+        // taint path is suppressed.
+        let execution = ExecutionSurface {
+            file_operations: vec![FileOperation {
+                operation: FileOpType::Write,
+                path_arg: ArgumentSource::Sanitized {
+                    sanitizer: "validatePath".to_string(),
+                },
+                location: make_location(5),
+            }],
+            ..Default::default()
+        };
+
+        let surface = build_data_surface(&[], &execution);
+
+        assert!(
             surface.taint_paths.is_empty(),
-            "sanitized args should not produce taint paths"
+            "matching sanitizer should suppress the taint path"
         );
     }
 
