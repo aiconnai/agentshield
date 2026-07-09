@@ -1,0 +1,9 @@
+# Synthetic test fixtures in tests/runtime_redaction.rs — these exercise the
+# redaction detector itself and are not live credentials (a truncated PEM
+# block, a Google API key with the literal "EXAMPLE" placeholder, and the
+# jwt.io example JWT payload used twice). Verified by manual review; see the
+# PR that introduced this file for the full analysis.
+4d7d5a3ee209aa5704af52e80f02561b51c03009:tests/runtime_redaction.rs:jwt:53
+4d7d5a3ee209aa5704af52e80f02561b51c03009:tests/runtime_redaction.rs:private-key:63
+4d7d5a3ee209aa5704af52e80f02561b51c03009:tests/runtime_redaction.rs:gcp-api-key:124
+4d7d5a3ee209aa5704af52e80f02561b51c03009:tests/runtime_redaction.rs:jwt:572
