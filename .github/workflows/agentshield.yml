@@ -21,6 +21,7 @@ jobs:
         uses: aiconnai/agentshield@v0.8.7
         with:
           path: .
+          config: .agentshield.toml
           fail-on: high
           ignore-tests: true
           format: sarif

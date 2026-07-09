@@ -1,0 +1,11 @@
+[scan]
+# Skip test files (tests/, __tests__/, *.test.ts, etc.) before parsing.
+ignore_tests = true
+
+# docs/ contains prose that documents detector patterns (e.g. SHIELD-016's
+# rule page mentions `pickle.loads`/`yaml.load` as examples) and harness
+# maintenance scripts that use backticks as literal string delimiters in
+# log messages, not as shell command substitution. Both trip detectors on
+# text that isn't executable application code. Verified false-positive via
+# manual review; see PR that introduced this config for the full analysis.
+exclude = ["docs/**"]

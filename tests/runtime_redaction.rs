@@ -50,7 +50,8 @@ fn bearer_token_redaction_preserves_bearer_but_removes_token_value() {
 
 #[test]
 fn jwt_like_token_redaction_removes_original_token() {
-    let token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    // Synthetic JWT (jwt.io example payload) fed to the redactor under test — not a live credential.
+    let token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"; // gitleaks:allow
     let report = redact_text(&format!("jwt={token}"));
 
     assert_eq!(report.redactions[0].kind, RedactionKind::JwtToken);
@@ -60,7 +61,8 @@ fn jwt_like_token_redaction_removes_original_token() {
 
 #[test]
 fn pem_private_key_redaction_removes_multiline_block() {
-    let key = "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASC\nAQ8AMIIBCgKCAQEAu\n-----END PRIVATE KEY-----";
+    // Truncated, non-functional PEM block fed to the redactor under test — not a live key.
+    let key = "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASC\nAQ8AMIIBCgKCAQEAu\n-----END PRIVATE KEY-----"; // gitleaks:allow
     let report = redact_text(&format!("loaded\n{key}\ndone"));
 
     assert_eq!(report.redactions[0].kind, RedactionKind::PemPrivateKey);
@@ -121,7 +123,8 @@ fn slack_token_redaction_covers_supported_prefixes() {
 
 #[test]
 fn google_api_key_redaction_removes_original_key() {
-    let key = "AIzaSyEXAMPLE_EXAMPLE_EXAMPLE_EXAMPLE00";
+    // Placeholder key (literal "EXAMPLE" in the value) fed to the redactor under test — not a live key.
+    let key = "AIzaSyEXAMPLE_EXAMPLE_EXAMPLE_EXAMPLE00"; // gitleaks:allow
     let report = redact_text(&format!("google_api_key={key}"));
 
     assert_eq!(report.redactions[0].kind, RedactionKind::GoogleApiKey);
@@ -569,7 +572,8 @@ fn benign_dotted_strings_are_not_redacted_as_jwt() {
 
 #[test]
 fn real_jwt_is_still_redacted() {
-    let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    // Synthetic JWT (jwt.io example payload) fed to the redactor under test — not a live credential.
+    let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"; // gitleaks:allow
     let report = redact_text(&format!("token {jwt}"));
     assert_eq!(report.redactions[0].kind, RedactionKind::JwtToken);
     assert!(!report.redacted_text.contains(jwt));
