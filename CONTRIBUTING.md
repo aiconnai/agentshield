@@ -13,7 +13,7 @@ Thanks for helping improve AgentShield.
 - Install Rust and run:
 
 ```bash
-git clone https://github.com/limaronaldo/agentshield.git
+git clone https://github.com/aiconnai/agentshield.git
 cd agentshield
 cargo build --release
 ```

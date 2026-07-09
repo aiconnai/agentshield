@@ -328,7 +328,7 @@ impl EgressPolicy {
     /// Generate a starter policy TOML string for `agentshield init --egress`.
     pub fn starter_toml() -> &'static str {
         r#"# AgentShield Egress Policy
-# See: https://github.com/limaronaldo/agentshield
+# See: https://github.com/aiconnai/agentshield
 
 schema_version = 1
 

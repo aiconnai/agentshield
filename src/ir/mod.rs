@@ -154,7 +154,7 @@ pub enum ArgumentSource {
 /// sink, and a type coercion (`str()`/`Number()`) does not sanitize any
 /// injection sink. Detectors pass the sink they guard so a `Sanitized` argument
 /// is only treated as safe when its sanitizer category matches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SinkClass {
     /// Shell/command execution.
     Command,

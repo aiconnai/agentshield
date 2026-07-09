@@ -218,7 +218,7 @@ Created as part of this test. 5-platform binary release:
 - `agentshield-v0.2.3-aarch64-apple-darwin.tar.gz`
 - `agentshield-v0.2.3-x86_64-pc-windows-msvc.zip`
 
-Release: https://github.com/limaronaldo/agentshield/releases/tag/v0.2.3
+Release: https://github.com/aiconnai/agentshield/releases/tag/v0.2.3
 
 ---
 
@@ -448,6 +448,6 @@ agentshield certify . --sign-key key.bin --output attestation.json
 - Project: AgentShield - Security Scanner for AI Agent Extensions
 - Project ID: bafa5ae7-f48a-4a45-8ec8-14f49fcac779 (IBVI org)
 - Team: IBVI (e792ad0a-a7d5-4927-b7ef-4fe22dde0fd4)
-- Repo: https://github.com/limaronaldo/agentshield
+- Repo: https://github.com/aiconnai/agentshield
 - v0.1.0 issues: Done (RML-1062..1091, migrated from MBRAS IBVI-311..340)
 - v0.2.0 issues: IBVI-481..488 (created Feb 20, 2026)

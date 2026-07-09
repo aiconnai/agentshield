@@ -298,4 +298,4 @@ The signal-to-noise ratio improved from 0.53 to 0.99 — nearly every finding is
 
 ### v0.2.3 Release
 
-5-platform binary release published: https://github.com/limaronaldo/agentshield/releases/tag/v0.2.3
+5-platform binary release published: https://github.com/aiconnai/agentshield/releases/tag/v0.2.3

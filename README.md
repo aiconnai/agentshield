@@ -2,7 +2,7 @@
 
 **Find risky behavior in MCP and AI agent extensions before they ship.**
 
-[![CI](https://github.com/limaronaldo/agentshield/actions/workflows/ci.yml/badge.svg)](https://github.com/limaronaldo/agentshield/actions/workflows/ci.yml)
+[![CI](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml/badge.svg)](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
@@ -131,7 +131,7 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 
 ```bash
 # Install the current release from GitHub with the full feature set
-cargo install --git https://github.com/limaronaldo/agentshield --tag v0.8.7 --features full --force
+cargo install --git https://github.com/aiconnai/agentshield --tag v0.8.7 --features full --force
 
 # First-run setup: config + explained first scan
 agentshield quickstart
@@ -165,7 +165,7 @@ you need the latest release line before crates.io has been updated.
 
 ### Pre-built binaries
 
-Download from the [latest release](https://github.com/limaronaldo/agentshield/releases/latest) for Linux, macOS, and Windows targets.
+Download from the [latest release](https://github.com/aiconnai/agentshield/releases/latest) for Linux, macOS, and Windows targets.
 
 For container consumers, the release image tag is:
 
@@ -193,7 +193,7 @@ gh auth token | docker login ghcr.io -u "$(gh api user --jq .login)" --password-
 ### From source
 
 ```bash
-git clone https://github.com/limaronaldo/agentshield.git
+git clone https://github.com/aiconnai/agentshield.git
 cd agentshield
 cargo build --release
 ./target/release/agentshield scan /path/to/agent-extension
