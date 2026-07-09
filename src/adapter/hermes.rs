@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::analysis::cross_file::apply_cross_file_sanitization;
+use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::execution_surface::{
@@ -384,7 +385,7 @@ fn parse_mcp_servers_from_yaml(
 
         for var_name in server.env_vars {
             execution.env_accesses.push(EnvAccess {
-                is_sensitive: looks_sensitive(&var_name),
+                is_sensitive: looks_sensitive_name(&var_name),
                 var_name: ArgumentSource::Literal(var_name),
                 location: location.clone(),
             });
@@ -392,7 +393,7 @@ fn parse_mcp_servers_from_yaml(
 
         for header_name in server.headers {
             execution.env_accesses.push(EnvAccess {
-                is_sensitive: looks_sensitive(&header_name),
+                is_sensitive: looks_sensitive_name(&header_name),
                 var_name: ArgumentSource::Literal(format!("header:{header_name}")),
                 location: location.clone(),
             });
@@ -532,19 +533,6 @@ fn clean_scalar(value: &str) -> String {
         .trim_matches('"')
         .trim_matches('\'')
         .to_string()
-}
-
-fn looks_sensitive(name: &str) -> bool {
-    let upper = name.to_uppercase();
-    upper.contains("KEY")
-        || upper.contains("SECRET")
-        || upper.contains("TOKEN")
-        || upper.contains("PASSWORD")
-        || upper.contains("CREDENTIAL")
-        || upper.contains("AUTH")
-        || upper.starts_with("AWS_")
-        || upper.starts_with("GH_")
-        || upper.starts_with("GITHUB_")
 }
 
 use sha2::Digest;
