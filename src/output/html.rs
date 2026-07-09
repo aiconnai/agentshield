@@ -186,7 +186,7 @@ pub fn render(
 
   <footer>
     Scanned <strong>{target}</strong> with
-    <a href="https://github.com/limaronaldo/agentshield">AgentShield</a> {version}
+    <a href="https://github.com/aiconnai/agentshield">AgentShield</a> {version}
     — threshold: {threshold}
   </footer>
 </div>

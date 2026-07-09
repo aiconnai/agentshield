@@ -21,7 +21,7 @@ AgentShield CLI must be installed:
 cargo install agent-shield
 
 # Or download from releases
-# https://github.com/limaronaldo/agentshield/releases/latest
+# https://github.com/aiconnai/agentshield/releases/latest
 ```
 
 ## Extension Settings
@@ -102,6 +102,6 @@ Suppressions are managed by the AgentShield CLI using each finding's stable fing
 
 ## Links
 
-- [AgentShield on GitHub](https://github.com/limaronaldo/agentshield)
-- [Detection Rules Documentation](https://github.com/limaronaldo/agentshield/blob/main/docs/RULES.md)
+- [AgentShield on GitHub](https://github.com/aiconnai/agentshield)
+- [Detection Rules Documentation](https://github.com/aiconnai/agentshield/blob/main/docs/RULES.md)
 - [GitHub Action](https://github.com/marketplace/actions/agentshield-security-scanner)

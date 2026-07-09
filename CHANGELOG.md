@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP scans now count TypeScript/JavaScript SDK `server.tool(...)` declarations
   as discovered tools in coverage summaries.
 - `agentshield ci install` no longer generates a workflow that points to the
-  nonexistent `limaronaldo/agentshield@v1` action ref.
+  nonexistent `aiconnai/agentshield@v1` action ref.
 - `agentshield ci install` now generates workflows with the canonical
   `aiconnai/agentshield@main` action ref.
 - The GitHub Action now resolves release assets from the canonical
@@ -273,9 +273,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Typosquat detection via Levenshtein distance against popular packages
   - Unpinned dependency version detection
 
-[0.2.4]: https://github.com/limaronaldo/agentshield/releases/tag/v0.2.4
-[0.2.3]: https://github.com/limaronaldo/agentshield/releases/tag/v0.2.3
-[0.2.2]: https://github.com/limaronaldo/agentshield/releases/tag/v0.2.2
-[0.2.1]: https://github.com/limaronaldo/agentshield/releases/tag/v0.2.1
-[0.2.0]: https://github.com/limaronaldo/agentshield/releases/tag/v0.2.0
-[0.1.0]: https://github.com/limaronaldo/agentshield/releases/tag/v0.1.0
+[0.2.4]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.4
+[0.2.3]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.3
+[0.2.2]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.2
+[0.2.1]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.1
+[0.2.0]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.0
+[0.1.0]: https://github.com/aiconnai/agentshield/releases/tag/v0.1.0
