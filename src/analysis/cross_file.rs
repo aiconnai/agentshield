@@ -281,24 +281,37 @@ pub fn apply_cross_file_sanitization(
     // name but only one is proven safe, that (param, sink) is excluded.
     let mut file_safe_param_sinks: HashMap<usize, HashSet<(String, SinkClass)>> = HashMap::new();
     for (idx, (_, parsed)) in parsed_files.iter().enumerate() {
+        let has_cmd = !parsed.commands.is_empty();
+        let has_file = !parsed.file_operations.is_empty();
+        let has_net = !parsed.network_operations.is_empty();
+        let has_exec = !parsed.dynamic_exec.is_empty();
+
         for def in &parsed.function_defs {
             for param in &def.params {
-                file_safe_param_sinks
-                    .entry(idx)
-                    .or_default()
-                    .insert((param.clone(), SinkClass::Command));
-                file_safe_param_sinks
-                    .entry(idx)
-                    .or_default()
-                    .insert((param.clone(), SinkClass::FilePath));
-                file_safe_param_sinks
-                    .entry(idx)
-                    .or_default()
-                    .insert((param.clone(), SinkClass::NetworkUrl));
-                file_safe_param_sinks
-                    .entry(idx)
-                    .or_default()
-                    .insert((param.clone(), SinkClass::DynamicExec));
+                if has_cmd {
+                    file_safe_param_sinks
+                        .entry(idx)
+                        .or_default()
+                        .insert((param.clone(), SinkClass::Command));
+                }
+                if has_file {
+                    file_safe_param_sinks
+                        .entry(idx)
+                        .or_default()
+                        .insert((param.clone(), SinkClass::FilePath));
+                }
+                if has_net {
+                    file_safe_param_sinks
+                        .entry(idx)
+                        .or_default()
+                        .insert((param.clone(), SinkClass::NetworkUrl));
+                }
+                if has_exec {
+                    file_safe_param_sinks
+                        .entry(idx)
+                        .or_default()
+                        .insert((param.clone(), SinkClass::DynamicExec));
+                }
             }
             func_defs.entry(def.name.clone()).or_default().push((
                 idx,

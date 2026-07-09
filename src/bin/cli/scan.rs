@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use agentshield::baseline::{BaselineEntry, BaselineFile};
 use agentshield::config::{Config, ScanPathFilter};
@@ -45,10 +45,15 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         ));
     }
 
+    let config_path = config
+        .clone()
+        .unwrap_or_else(|| path.join(".agentshield.toml"));
+    let mut cfg = Config::load(&config_path)?;
+
     let fail_on = parse_optional_severity(fail_on_str.as_deref());
-    let effective_ignore_tests = effective_ignore_tests(&path, config.as_ref(), ignore_tests)?;
+    let effective_ignore_tests = ignore_tests || cfg.scan.ignore_tests;
     let effective_path_filter =
-        effective_path_filter(&path, config.as_ref(), effective_ignore_tests)?;
+        ScanPathFilter::from_scan_config(&cfg.scan, effective_ignore_tests)?;
     let path_filter_summary = effective_path_filter.summary();
 
     let options = ScanOptions {
@@ -78,11 +83,6 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
             let fp = f.fingerprint(&report.scan_root);
             !baseline.contains(&fp)
         });
-        let config_path = options
-            .config_path
-            .clone()
-            .unwrap_or_else(|| path.join(".agentshield.toml"));
-        let mut cfg = agentshield::config::Config::load(&config_path)?;
         if let Some(fail_on_sev) = fail_on {
             cfg.policy.fail_on = fail_on_sev;
         }
@@ -147,30 +147,6 @@ fn parse_optional_severity(value: Option<&str>) -> Option<Severity> {
         }
         sev
     })
-}
-
-fn effective_ignore_tests(
-    path: &Path,
-    config_path: Option<&PathBuf>,
-    cli_ignore_tests: bool,
-) -> Result<bool, agentshield::error::ShieldError> {
-    let resolved_config_path = config_path
-        .cloned()
-        .unwrap_or_else(|| path.join(".agentshield.toml"));
-    let config = Config::load(&resolved_config_path)?;
-    Ok(cli_ignore_tests || config.scan.ignore_tests)
-}
-
-fn effective_path_filter(
-    path: &Path,
-    config_path: Option<&PathBuf>,
-    ignore_tests: bool,
-) -> Result<ScanPathFilter, agentshield::error::ShieldError> {
-    let resolved_config_path = config_path
-        .cloned()
-        .unwrap_or_else(|| path.join(".agentshield.toml"));
-    let config = Config::load(&resolved_config_path)?;
-    ScanPathFilter::from_scan_config(&config.scan, ignore_tests)
 }
 
 fn write_rendered(
