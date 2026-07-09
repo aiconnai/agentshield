@@ -13,13 +13,13 @@ pub struct RuntimeInstallDetector;
 
 static INSTALL_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
     vec![
-        Regex::new(r"pip\s+install").unwrap(),
-        Regex::new(r"pip3\s+install").unwrap(),
-        Regex::new(r"npm\s+install").unwrap(),
-        Regex::new(r"npm\s+i\b").unwrap(),
-        Regex::new(r"uv\s+pip\s+install").unwrap(),
-        Regex::new(r"yarn\s+add").unwrap(),
-        Regex::new(r"pnpm\s+add").unwrap(),
+        Regex::new(r"pip\s+install").expect("static regex pattern is valid"),
+        Regex::new(r"pip3\s+install").expect("static regex pattern is valid"),
+        Regex::new(r"npm\s+install").expect("static regex pattern is valid"),
+        Regex::new(r"npm\s+i\b").expect("static regex pattern is valid"),
+        Regex::new(r"uv\s+pip\s+install").expect("static regex pattern is valid"),
+        Regex::new(r"yarn\s+add").expect("static regex pattern is valid"),
+        Regex::new(r"pnpm\s+add").expect("static regex pattern is valid"),
     ]
 });
 

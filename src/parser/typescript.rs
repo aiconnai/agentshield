@@ -116,12 +116,14 @@ static SENSITIVE_ENV_VARS: Lazy<Regex> = Lazy::new(|| {
 });
 
 // Template literal with interpolation: `...${expr}...`
-static TEMPLATE_LITERAL_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$\{[^}]+\}").unwrap());
+static TEMPLATE_LITERAL_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\$\{[^}]+\}").expect("static regex pattern is valid"));
 
 // Sanitizer assignment: const validPath = await validatePath(x)
 // Captures: (1) variable name, (2) function name (possibly dotted)
 static SANITIZER_ASSIGN_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?:const|let|var)\s+(\w+)\s*=\s*(?:await\s+)?(\w+(?:\.\w+)*)\s*\(").unwrap()
+    Regex::new(r"(?:const|let|var)\s+(\w+)\s*=\s*(?:await\s+)?(\w+(?:\.\w+)*)\s*\(")
+        .expect("static regex pattern is valid")
 });
 
 // ── tree-sitter AST parser ──────────────────────────────────────
@@ -669,19 +671,21 @@ fn classify_argument_with_sanitizers(
 // ── Regex fallback parser (when typescript feature is disabled) ──
 
 #[cfg(not(feature = "typescript"))]
-static CALL_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?m)(\w+(?:\.\w+)*)\s*\(([^)]*)\)").unwrap());
+static CALL_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?m)(\w+(?:\.\w+)*)\s*\(([^)]*)\)").expect("static regex pattern is valid")
+});
 
 #[cfg(not(feature = "typescript"))]
 static ENV_ACCESS_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)process\.env\s*(?:\[\s*["']([^"']+)["']\s*\]|\.([A-Z_][A-Z0-9_]*))"#).unwrap()
+    Regex::new(r#"(?m)process\.env\s*(?:\[\s*["']([^"']+)["']\s*\]|\.([A-Z_][A-Z0-9_]*))"#)
+        .expect("static regex pattern is valid")
 });
 
 #[cfg(not(feature = "typescript"))]
 static FUNC_DEF_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r"(?m)(?:(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(([^)]*)\)\s*(?:=>|:\s*\w+\s*=>)|(\w+)\s*\(([^)]*)\)\s*(?::\s*\w+\s*)?\{)"
-    ).unwrap()
+    ).expect("static regex pattern is valid")
 });
 
 #[cfg(not(feature = "typescript"))]
