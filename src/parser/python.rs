@@ -5,6 +5,7 @@ use regex::Regex;
 
 use super::{CallSite, FunctionDef, LanguageParser, ParsedFile};
 use crate::analysis::cross_file::{sanitizer_category, sanitizer_label, SanitizerCategory};
+use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::error::Result;
 use crate::ir::execution_surface::*;
 use crate::ir::{ArgumentSource, Language, SourceLocation};
@@ -74,10 +75,6 @@ static HTTP_CLIENT_CTX_RE: Lazy<Regex> = Lazy::new(|| {
 
 static DYNAMIC_EXEC_PATTERNS: Lazy<Vec<&str>> =
     Lazy::new(|| vec!["eval", "exec", "compile", "__import__"]);
-
-static SENSITIVE_ENV_VARS: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)(AWS_|SECRET|TOKEN|PASSWORD|API_KEY|PRIVATE_KEY|CREDENTIALS|AUTH)").unwrap()
-});
 
 static FILE_READ_PATTERNS: Lazy<Vec<&str>> = Lazy::new(|| vec!["open", "pathlib.Path"]);
 
@@ -192,7 +189,7 @@ impl LanguageParser for PythonParser {
                     .or_else(|| cap.get(3))
                     .map(|m| m.as_str().to_string())
                     .unwrap_or_default();
-                let is_sensitive = SENSITIVE_ENV_VARS.is_match(&var_name);
+                let is_sensitive = looks_sensitive_name(&var_name);
                 parsed.env_accesses.push(EnvAccess {
                     var_name: ArgumentSource::Literal(var_name),
                     is_sensitive,
