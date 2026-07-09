@@ -31,8 +31,9 @@ static SUBPROCESS_PATTERNS: Lazy<Vec<&str>> = Lazy::new(|| {
 
 // GitPython's `repo.git.*` methods are dynamic dispatchers that execute
 // `git <method> ...` as shell commands. We match the `.git.` segment.
-static GITPYTHON_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?m)(\w+)\.git\.(\w+)\s*\(([^)]*)\)").unwrap());
+static GITPYTHON_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?m)(\w+)\.git\.(\w+)\s*\(([^)]*)\)").expect("static regex pattern is valid")
+});
 
 static NETWORK_PATTERNS: Lazy<Vec<&str>> = Lazy::new(|| {
     vec![
@@ -70,7 +71,7 @@ static HTTP_CLIENT_CTX_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r"(?m)async\s+with\s+(?:\w+\.)*(?:AsyncClient|ClientSession)\s*\([^)]*\)\s+as\s+(\w+)",
     )
-    .unwrap()
+    .expect("static regex pattern is valid")
 });
 
 static DYNAMIC_EXEC_PATTERNS: Lazy<Vec<&str>> =
@@ -79,30 +80,35 @@ static DYNAMIC_EXEC_PATTERNS: Lazy<Vec<&str>> =
 static FILE_READ_PATTERNS: Lazy<Vec<&str>> = Lazy::new(|| vec!["open", "pathlib.Path"]);
 
 // Regex to find function calls with arguments: func_name(args)
-static CALL_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?m)(\w+(?:\.\w+)*)\s*\(([^)]*)\)").unwrap());
+static CALL_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?m)(\w+(?:\.\w+)*)\s*\(([^)]*)\)").expect("static regex pattern is valid")
+});
 
 // Regex to find the start of a multi-line call: func_name( with no closing )
 // Captures the function name so we can match it against patterns, then look
 // ahead to the next line(s) for the first argument.
 static PARTIAL_CALL_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(\w+(?:\.\w+)*)\s*\(\s*$").unwrap());
+    Lazy::new(|| Regex::new(r"(\w+(?:\.\w+)*)\s*\(\s*$").expect("static regex pattern is valid"));
 
 // Regex to find os.environ / os.getenv patterns
 static ENV_ACCESS_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r#"(?m)os\.(?:environ\s*(?:\[\s*["']([^"']+)["']\s*\]|\.get\s*\(\s*["']([^"']+)["'])|getenv\s*\(\s*["']([^"']+)["']\s*\))"#,
     )
-    .unwrap()
+    .expect("static regex pattern is valid")
 });
 
 // Regex to find function definitions and their parameters
-static FUNC_DEF_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?m)^\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)").unwrap());
+static FUNC_DEF_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?m)^\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)")
+        .expect("static regex pattern is valid")
+});
 
 // Sanitizer assignment: valid_path = validate_path(x) or valid_path = await validate_path(x)
-static SANITIZER_ASSIGN_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(\w+)\s*=\s*(?:await\s+)?(\w+(?:\.\w+)*)\s*\(").unwrap());
+static SANITIZER_ASSIGN_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(\w+)\s*=\s*(?:await\s+)?(\w+(?:\.\w+)*)\s*\(")
+        .expect("static regex pattern is valid")
+});
 
 impl LanguageParser for PythonParser {
     fn language(&self) -> Language {
