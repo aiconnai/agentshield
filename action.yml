@@ -81,6 +81,10 @@ runs:
             v*) ;;
             *) VERSION="v$VERSION" ;;
           esac
+          if [ "$VERSION" = "v" ] || [ -z "$VERSION" ]; then
+            echo "::error::Version input is empty or invalid after normalization."
+            exit 1
+          fi
         fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
