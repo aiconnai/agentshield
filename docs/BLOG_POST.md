@@ -4,7 +4,7 @@
 
 ---
 
-We built [AgentShield](https://github.com/limaronaldo/agentshield), an open-source security scanner for AI agent extensions, and pointed it at some of the most popular MCP servers on GitHub. The results were eye-opening: **126 security findings** across 19 scan targets, including a critical arbitrary code execution vulnerability in a server with 17,000 stars.
+We built [AgentShield](https://github.com/aiconnai/agentshield), an open-source security scanner for AI agent extensions, and pointed it at some of the most popular MCP servers on GitHub. The results were eye-opening: **126 security findings** across 19 scan targets, including a critical arbitrary code execution vulnerability in a server with 17,000 stars.
 
 ## The Problem
 
@@ -173,7 +173,7 @@ agentshield scan /path/to/mcp-server
 
 ```yaml
 # .github/workflows/security.yml
-- uses: limaronaldo/agentshield@v0.2.3
+- uses: aiconnai/agentshield@v0.2.3
   with:
     path: .
     fail-on: high
@@ -193,7 +193,7 @@ Run MCP servers in containers or with restricted filesystem access. Don't give a
 
 ## About AgentShield
 
-[AgentShield](https://github.com/limaronaldo/agentshield) is a free, open-source, offline-first security scanner for AI agent extensions. It ships as a single ~1 MiB binary with:
+[AgentShield](https://github.com/aiconnai/agentshield) is a free, open-source, offline-first security scanner for AI agent extensions. It ships as a single ~1 MiB binary with:
 
 - **18 built-in detectors** covering OWASP-style vulnerabilities adapted for AI tools
 - **7 framework/client adapters:** MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules
@@ -214,16 +214,16 @@ brew tap limaronaldo/engram && brew install agentshield
 cargo install agent-shield
 
 # Via Docker
-docker run ghcr.io/limaronaldo/agentshield:v0.2.3 scan /project
+docker run ghcr.io/aiconnai/agentshield:v0.2.3 scan /project
 ```
 
 Or use the GitHub Action:
 
 ```yaml
-- uses: limaronaldo/agentshield@v0.2.3
+- uses: aiconnai/agentshield@v0.2.3
 ```
 
-Star the repo if you find it useful: [github.com/limaronaldo/agentshield](https://github.com/limaronaldo/agentshield)
+Star the repo if you find it useful: [github.com/aiconnai/agentshield](https://github.com/aiconnai/agentshield)
 
 ---
 
