@@ -6,6 +6,7 @@ use regex::Regex;
 
 use super::{CallSite, FunctionDef, FunctionParam, LanguageParser, ParsedFile};
 use crate::analysis::cross_file::{sanitizer_category, sanitizer_label, SanitizerCategory};
+use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::error::Result;
 use crate::ir::execution_surface::*;
 use crate::ir::{ArgumentSource, Language, SourceLocation};
@@ -109,10 +110,6 @@ static DYNAMIC_EXEC_PATTERNS: Lazy<Vec<&str>> = Lazy::new(|| {
         "vm.runInThisContext",
         "vm.runInNewContext",
     ]
-});
-
-static SENSITIVE_ENV_VARS: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)(AWS_|SECRET|TOKEN|PASSWORD|API_KEY|PRIVATE_KEY|CREDENTIALS|AUTH)").unwrap()
 });
 
 // Template literal with interpolation: `...${expr}...`
@@ -393,7 +390,7 @@ fn walk_node(
         if text.starts_with("process.env") {
             let var_name = extract_env_var_name(node, source);
             if let Some(name) = &var_name {
-                let is_sensitive = SENSITIVE_ENV_VARS.is_match(name);
+                let is_sensitive = looks_sensitive_name(name);
                 parsed.env_accesses.push(EnvAccess {
                     var_name: ArgumentSource::Literal(name.clone()),
                     is_sensitive,
@@ -762,7 +759,7 @@ impl LanguageParser for TypeScriptParser {
                     .or_else(|| cap.get(2))
                     .map(|m| m.as_str().to_string())
                     .unwrap_or_default();
-                let is_sensitive = SENSITIVE_ENV_VARS.is_match(&var_name);
+                let is_sensitive = looks_sensitive_name(&var_name);
                 parsed.env_accesses.push(EnvAccess {
                     var_name: ArgumentSource::Literal(var_name),
                     is_sensitive,

@@ -8,6 +8,7 @@
 
 use std::path::Path;
 
+use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::execution_surface::{CommandInvocation, EnvAccess, ExecutionSurface};
@@ -160,7 +161,7 @@ fn parse_mcp_servers(
         // Emit EnvAccess entries for every declared env var
         if let Some(env_map) = server_cfg.get("env").and_then(|v| v.as_object()) {
             for (var_name, _var_value) in env_map {
-                let is_sensitive = looks_sensitive(var_name);
+                let is_sensitive = looks_sensitive_name(var_name);
                 execution.env_accesses.push(EnvAccess {
                     var_name: ArgumentSource::Literal(var_name.clone()),
                     is_sensitive,
@@ -169,20 +170,6 @@ fn parse_mcp_servers(
             }
         }
     }
-}
-
-/// Heuristic: a variable name looks sensitive if it contains common secret keywords.
-fn looks_sensitive(name: &str) -> bool {
-    let upper = name.to_uppercase();
-    upper.contains("KEY")
-        || upper.contains("SECRET")
-        || upper.contains("TOKEN")
-        || upper.contains("PASSWORD")
-        || upper.contains("CREDENTIAL")
-        || upper.contains("AUTH")
-        || upper.starts_with("AWS_")
-        || upper.starts_with("GH_")
-        || upper.starts_with("GITHUB_")
 }
 
 /// Read a file as a `SourceFile` entry. Returns `None` if the file cannot be read.
