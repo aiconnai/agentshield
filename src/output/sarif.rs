@@ -16,8 +16,8 @@ pub fn render(findings: &[Finding], target_name: &str, scan_root: &Path) -> Resu
         .map(|f| &f.rule_id)
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
-        .map(|rule_id| {
-            let finding = findings.iter().find(|f| &f.rule_id == rule_id).unwrap();
+        .filter_map(|rule_id| findings.iter().find(|f| &f.rule_id == rule_id))
+        .map(|finding| {
             let mut rule = json!({
                 "id": finding.rule_id,
                 "name": finding.rule_name,

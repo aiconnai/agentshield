@@ -10,18 +10,24 @@ use crate::ir::{ArgumentSource, Language, SourceLocation};
 
 pub struct ShellParser;
 
-static CURL_WGET_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?m)\b(curl|wget)\s+").unwrap());
+static CURL_WGET_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?m)\b(curl|wget)\s+").expect("static regex pattern is valid"));
 
-static EVAL_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?m)\beval\s+").unwrap());
+static EVAL_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?m)\beval\s+").expect("static regex pattern is valid"));
 
 static INSTALL_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?m)\b(pip3?\s+install|npm\s+install|npm\s+i\b|yarn\s+add|pnpm\s+add)").unwrap()
+    Regex::new(r"(?m)\b(pip3?\s+install|npm\s+install|npm\s+i\b|yarn\s+add|pnpm\s+add)")
+        .expect("static regex pattern is valid")
 });
 
-static BACKTICK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"`[^`]+`").unwrap());
+static BACKTICK_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"`[^`]+`").expect("static regex pattern is valid"));
 
-static SENSITIVE_VAR_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)\$\{?(AWS_|SECRET|TOKEN|PASSWORD|API_KEY|PRIVATE_KEY)").unwrap());
+static SENSITIVE_VAR_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)\$\{?(AWS_|SECRET|TOKEN|PASSWORD|API_KEY|PRIVATE_KEY)")
+        .expect("static regex pattern is valid")
+});
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ShellQuoteState {
