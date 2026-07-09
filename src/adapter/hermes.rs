@@ -35,12 +35,18 @@ impl super::Adapter for HermesAgentAdapter {
     }
 
     fn detect(&self, root: &Path) -> bool {
-        root.join(".hermes.md").exists()
-            || looks_like_hermes_config(&root.join("config.yaml"))
-            || looks_like_hermes_config(&root.join(".hermes").join("config.yaml"))
+        let has_other_hermes_artifact = root.join(".hermes.md").exists()
             || has_profile_config(root)
             || has_hermes_skill_tree(root)
-            || has_optional_mcp_catalog(root)
+            || has_optional_mcp_catalog(root);
+
+        // `.hermes/config.yaml` is a Hermes-specific path, so `model:` alone
+        // is trusted there. A bare top-level `config.yaml` is generic enough
+        // (ML/CI configs use `model:` too) that `model:` only counts when
+        // paired with another Hermes artifact already found above.
+        has_other_hermes_artifact
+            || looks_like_hermes_config(&root.join("config.yaml"), has_other_hermes_artifact)
+            || looks_like_hermes_config(&root.join(".hermes").join("config.yaml"), true)
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
@@ -131,17 +137,38 @@ fn contains_config_interpolation(value: &str) -> bool {
     INTERPOLATION_RE.is_match(value)
 }
 
-fn looks_like_hermes_config(path: &Path) -> bool {
+/// Does this YAML file look like a Hermes config?
+///
+/// `mcp_servers`/`skills`/`terminal`/`gateway`/`sessions` are strong,
+/// Hermes-specific top-level keys. `model` alone is too generic (ML/CI
+/// configs use it too) and is only trusted when `trust_model_alone` is set
+/// by the caller — i.e. the path itself is Hermes-specific (`.hermes/`,
+/// `profiles/*/`) or another Hermes artifact was already found.
+fn looks_like_hermes_config(path: &Path, trust_model_alone: bool) -> bool {
     let Ok(content) = std::fs::read_to_string(path) else {
         return false;
     };
 
-    content.contains("mcp_servers:")
-        || content.contains("skills:")
-        || content.contains("terminal:")
-        || content.contains("gateway:")
-        || content.contains("sessions:")
-        || content.contains("model:")
+    has_top_level_key(&content, "mcp_servers")
+        || has_top_level_key(&content, "skills")
+        || has_top_level_key(&content, "terminal")
+        || has_top_level_key(&content, "gateway")
+        || has_top_level_key(&content, "sessions")
+        || (trust_model_alone && has_top_level_key(&content, "model"))
+}
+
+/// Does `content` contain `key:` as an unindented, uncommented top-level
+/// YAML mapping key? Avoids matching the key inside comments, nested
+/// mappings, or string values.
+fn has_top_level_key(content: &str, key: &str) -> bool {
+    content.lines().any(|line| {
+        !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && line
+                .trim_start()
+                .strip_prefix(key)
+                .is_some_and(|rest| rest.starts_with(':'))
+    })
 }
 
 fn has_profile_config(root: &Path) -> bool {
@@ -152,7 +179,7 @@ fn has_profile_config(root: &Path) -> bool {
 
     entries
         .flatten()
-        .any(|entry| looks_like_hermes_config(&entry.path().join("config.yaml")))
+        .any(|entry| looks_like_hermes_config(&entry.path().join("config.yaml"), true))
 }
 
 fn has_hermes_skill_tree(root: &Path) -> bool {
@@ -587,6 +614,51 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/mcp_servers/safe_calculator");
         assert!(!adapter.detect(&dir));
+    }
+
+    #[test]
+    fn test_bare_model_key_alone_does_not_detect_hermes() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("config.yaml"), "model: gpt-4\n").unwrap();
+
+        let adapter = HermesAgentAdapter;
+        assert!(
+            !adapter.detect(temp.path()),
+            "a generic config.yaml with only `model:` should not be detected as Hermes"
+        );
+    }
+
+    #[test]
+    fn test_model_key_under_hermes_dir_detects_hermes() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(temp.path().join(".hermes")).unwrap();
+        std::fs::write(
+            temp.path().join(".hermes").join("config.yaml"),
+            "model: gpt-4\n",
+        )
+        .unwrap();
+
+        let adapter = HermesAgentAdapter;
+        assert!(
+            adapter.detect(temp.path()),
+            ".hermes/config.yaml with `model:` should be detected as Hermes"
+        );
+    }
+
+    #[test]
+    fn test_mcp_servers_key_detects_hermes() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            temp.path().join("config.yaml"),
+            "mcp_servers:\n  svc:\n    command: npx\n",
+        )
+        .unwrap();
+
+        let adapter = HermesAgentAdapter;
+        assert!(
+            adapter.detect(temp.path()),
+            "a config.yaml with `mcp_servers:` should be detected as Hermes"
+        );
     }
 
     #[test]
