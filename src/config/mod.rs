@@ -262,7 +262,7 @@ impl Config {
     /// Generate a starter config file.
     pub fn starter_toml() -> &'static str {
         r#"# AgentShield configuration
-# See https://github.com/limaronaldo/agentshield for documentation.
+# See https://github.com/aiconnai/agentshield for documentation.
 
 [policy]
 # Minimum severity to fail the scan (info, low, medium, high, critical).

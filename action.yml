@@ -36,7 +36,7 @@ inputs:
     required: false
     default: 'false'
   version:
-    description: 'AgentShield version to use (default: latest)'
+    description: 'AgentShield version to use (default: latest). Accepts a version with or without a "v" prefix, e.g. v0.8.0 or 0.8.0.'
     required: false
     default: 'latest'
   binary-path:
@@ -75,6 +75,16 @@ runs:
           fi
         else
           VERSION="${{ inputs.version }}"
+          # Normalize: release archives are named with a 'v' prefix (e.g. v0.8.0).
+          # Prepend it if the user omitted it.
+          case "$VERSION" in
+            v*) ;;
+            *) VERSION="v$VERSION" ;;
+          esac
+          if [ "$VERSION" = "v" ] || [ -z "$VERSION" ]; then
+            echo "::error::Version input is empty or invalid after normalization."
+            exit 1
+          fi
         fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 

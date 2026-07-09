@@ -84,7 +84,7 @@ pub fn render(findings: &[Finding], target_name: &str, scan_root: &Path) -> Resu
             "tool": {
                 "driver": {
                     "name": "AgentShield",
-                    "informationUri": "https://github.com/limaronaldo/agentshield",
+                    "informationUri": "https://github.com/aiconnai/agentshield",
                     "version": env!("CARGO_PKG_VERSION"),
                     "semanticVersion": env!("CARGO_PKG_VERSION"),
                     "rules": rules,

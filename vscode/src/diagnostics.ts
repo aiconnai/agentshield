@@ -3,7 +3,7 @@ import { Finding, Severity, AgentShieldReport } from "./types";
 import { resolveFilePath } from "./scanner";
 
 const RULES_URL =
-  "https://github.com/limaronaldo/agentshield/blob/main/docs/RULES.md";
+  "https://github.com/aiconnai/agentshield/blob/main/docs/RULES.md";
 
 /**
  * Map AgentShield severity to VS Code DiagnosticSeverity.

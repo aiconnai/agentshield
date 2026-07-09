@@ -40,9 +40,8 @@ agentshield/
 │   │   └── json_schema.rs        # JSON Schema → ToolSurface
 │   ├── analysis/                 # Static analysis
 │   │   ├── mod.rs                # Module exports
-│   │   ├── capability.rs         # Capability escalation scoring
 │   │   ├── cross_file.rs         # Cross-file sanitizer-aware validation (v0.2.2)
-│   │   └── supply_chain.rs       # Typosquat detection
+│   │   └── sensitivity.rs        # Sensitive-name heuristics (pub(crate))
 │   ├── rules/                    # Detection engine
 │   │   ├── mod.rs                # RuleEngine, Detector trait
 │   │   ├── finding.rs            # Finding, Severity, Evidence structs
