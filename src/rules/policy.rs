@@ -110,7 +110,7 @@ impl Policy {
             if s.is_expired() {
                 eprintln!(
                     "warning: suppression for fingerprint {} has expired (expires: {})",
-                    &s.fingerprint,
+                    s.fingerprint,
                     s.expires.as_deref().unwrap_or("unknown"),
                 );
             } else {

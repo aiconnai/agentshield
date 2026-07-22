@@ -384,6 +384,11 @@ such as `legacy/` as matching that directory's contents.
 | Shell | Regex parser | always on |
 | JSON Schema / OpenAPI-style schemas | Schema parser | always on |
 
+Go, Ruby, Java, and Rust source files are not execution-parsed or included in
+the normalized execution surface in this release. They may be scanned by other
+tools in a security stack, but AgentShield does not claim language-level source
+or taint coverage for them yet.
+
 TypeScript tree-sitter support is feature-gated; the Python compatibility flag keeps existing build commands stable:
 
 ```bash
