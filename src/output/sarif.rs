@@ -46,6 +46,15 @@ pub fn render(findings: &[Finding], target_name: &str, scan_root: &Path) -> Resu
             // locations and pass through.
             let loc = f.location.as_ref()?;
 
+            let mut region = json!({
+                "startLine": loc.line,
+                "startColumn": loc.column + 1,
+            });
+            if let (Some(end_line), Some(end_column)) = (loc.end_line, loc.end_column) {
+                region["endLine"] = json!(end_line);
+                region["endColumn"] = json!(end_column + 1);
+            }
+
             let mut result = json!({
                 "ruleId": f.rule_id,
                 "level": severity_to_sarif_level(f.severity),
@@ -55,10 +64,7 @@ pub fn render(findings: &[Finding], target_name: &str, scan_root: &Path) -> Resu
                         "artifactLocation": {
                             "uri": loc.file.display().to_string(),
                         },
-                        "region": {
-                            "startLine": loc.line,
-                            "startColumn": loc.column.max(1),
-                        },
+                        "region": region,
                     },
                 }],
             });
@@ -106,5 +112,44 @@ fn severity_to_sarif_level(severity: Severity) -> &'static str {
         Severity::Critical | Severity::High => "error",
         Severity::Medium => "warning",
         Severity::Low | Severity::Info => "note",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use super::render;
+    use crate::ir::SourceLocation;
+    use crate::rules::{AttackCategory, Confidence, Finding, Severity};
+
+    #[test]
+    fn renders_one_based_start_and_end_columns() {
+        let finding = Finding {
+            rule_id: "SHIELD-003".into(),
+            rule_name: "SSRF".into(),
+            severity: Severity::High,
+            confidence: Confidence::High,
+            attack_category: AttackCategory::Ssrf,
+            message: "tainted URL".into(),
+            location: Some(SourceLocation {
+                file: PathBuf::from("src/server.py"),
+                line: 12,
+                column: 4,
+                end_line: Some(12),
+                end_column: Some(20),
+            }),
+            evidence: vec![],
+            taint_path: None,
+            remediation: None,
+            cwe_id: None,
+        };
+
+        let rendered = render(&[finding], "fixture", Path::new(".")).unwrap();
+        let region = &serde_json::from_str::<serde_json::Value>(&rendered).unwrap()["runs"][0]
+            ["results"][0]["locations"][0]["physicalLocation"]["region"];
+        assert_eq!(region["startColumn"], 5);
+        assert_eq!(region["endColumn"], 21);
+        assert_eq!(region["endLine"], 12);
     }
 }

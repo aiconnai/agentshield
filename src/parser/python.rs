@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use super::{CallSite, FunctionDef, LanguageParser, ParsedFile};
+use super::{CallSite, FunctionDef, FunctionParam, LanguageParser, ParsedFile};
 use crate::analysis::cross_file::{sanitizer_category, sanitizer_label, SanitizerCategory};
 use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::error::Result;
@@ -142,6 +142,11 @@ impl LanguageParser for PythonParser {
             let params_str = &cap[2];
             // In Python, functions starting with _ are conventionally private
             let is_exported = !func_name.starts_with('_');
+            let func_line = content[..cap.get(0).map(|m| m.start()).unwrap_or(0)]
+                .lines()
+                .count()
+                + 1;
+            let function_location = loc(&file_path, func_line);
 
             let mut func_params = Vec::new();
             for param in params_str.split(',') {
@@ -150,20 +155,19 @@ impl LanguageParser for PythonParser {
                 if !param.is_empty() && param != "self" && param != "cls" {
                     param_names.insert(param.to_string());
                     func_params.push(param.to_string());
+                    parsed.function_params.push(FunctionParam {
+                        function_name: func_name.to_string(),
+                        param_name: param.to_string(),
+                        location: function_location.clone(),
+                    });
                 }
             }
-
-            // Find line number for this function def
-            let func_line = content[..cap.get(0).map(|m| m.start()).unwrap_or(0)]
-                .lines()
-                .count()
-                + 1;
 
             parsed.function_defs.push(FunctionDef {
                 name: func_name.to_string(),
                 params: func_params,
                 is_exported,
-                location: loc(&file_path, func_line),
+                location: function_location,
             });
         }
 
@@ -177,13 +181,35 @@ impl LanguageParser for PythonParser {
         // Collect lines for look-ahead on multi-line calls
         let lines: Vec<&str> = content.lines().collect();
 
-        // Scan line by line for patterns
+        // Scan line by line for patterns. Keep the enclosing function context
+        // so Python call sites have the same caller metadata as TypeScript.
+        let mut current_functions: Vec<(String, usize)> = Vec::new();
         for (line_idx, line) in lines.iter().enumerate() {
             let line_num = line_idx + 1;
             let trimmed = line.trim();
+            let indent = line.len() - line.trim_start().len();
+
+            if !trimmed.is_empty() {
+                while current_functions
+                    .last()
+                    .is_some_and(|(_, function_indent)| indent <= *function_indent)
+                {
+                    current_functions.pop();
+                }
+            }
+            if let Some(cap) = FUNC_DEF_RE.captures(line) {
+                current_functions.push((cap[1].to_string(), indent));
+            }
 
             // Skip comments
             if trimmed.starts_with('#') {
+                continue;
+            }
+
+            // A definition header has the same `name(args)` shape as a call
+            // for the regex below. It establishes scope, but is not a call
+            // site and must not participate in cross-file analysis.
+            if FUNC_DEF_RE.is_match(line) {
                 continue;
             }
 
@@ -207,6 +233,14 @@ impl LanguageParser for PythonParser {
             for cap in CALL_RE.captures_iter(line) {
                 let func_name = &cap[1];
                 let args_str = &cap[2];
+                let call_range = cap.get(0).expect("call capture");
+                let call_location = loc_from_range(
+                    &file_path,
+                    line_num,
+                    line,
+                    call_range.start(),
+                    call_range.end(),
+                );
 
                 let arg_source = classify_argument(args_str, &param_names, &parsed.sanitized_vars);
 
@@ -218,8 +252,8 @@ impl LanguageParser for PythonParser {
                 parsed.call_sites.push(CallSite {
                     callee: func_name.to_string(),
                     arguments: all_args,
-                    caller: None, // Could be improved with indentation tracking
-                    location: loc(&file_path, line_num),
+                    caller: current_functions.last().map(|(name, _)| name.clone()),
+                    location: call_location.clone(),
                 });
 
                 // Subprocess/command execution
@@ -230,7 +264,7 @@ impl LanguageParser for PythonParser {
                     parsed.commands.push(CommandInvocation {
                         function: func_name.to_string(),
                         command_arg: arg_source.clone(),
-                        location: loc(&file_path, line_num),
+                        location: call_location.clone(),
                     });
                 }
 
@@ -258,7 +292,7 @@ impl LanguageParser for PythonParser {
                         url_arg: arg_source.clone(),
                         method,
                         sends_data,
-                        location: loc(&file_path, line_num),
+                        location: call_location.clone(),
                     });
                 }
 
@@ -267,7 +301,7 @@ impl LanguageParser for PythonParser {
                     parsed.dynamic_exec.push(DynamicExec {
                         function: func_name.to_string(),
                         code_arg: arg_source.clone(),
-                        location: loc(&file_path, line_num),
+                        location: call_location.clone(),
                     });
                 }
 
@@ -288,7 +322,7 @@ impl LanguageParser for PythonParser {
                     parsed.file_operations.push(FileOperation {
                         operation: op_type,
                         path_arg: arg_source.clone(),
-                        location: loc(&file_path, line_num),
+                        location: call_location.clone(),
                     });
                 }
 
@@ -320,7 +354,7 @@ impl LanguageParser for PythonParser {
                                 url_arg: arg_source.clone(),
                                 method: http_method,
                                 sends_data,
-                                location: loc(&file_path, line_num),
+                                location: call_location.clone(),
                             });
                         }
                     }
@@ -333,10 +367,17 @@ impl LanguageParser for PythonParser {
                 let full_call = format!("{}.git.{}", &cap[1], &cap[2]);
                 let args_str = &cap[3];
                 let arg_source = classify_argument(args_str, &param_names, &parsed.sanitized_vars);
+                let call_range = cap.get(0).expect("GitPython call capture");
                 parsed.commands.push(CommandInvocation {
                     function: full_call,
                     command_arg: arg_source,
-                    location: loc(&file_path, line_num),
+                    location: loc_from_range(
+                        &file_path,
+                        line_num,
+                        line,
+                        call_range.start(),
+                        call_range.end(),
+                    ),
                 });
             }
 
@@ -348,6 +389,15 @@ impl LanguageParser for PythonParser {
             // where CALL_RE fails because `(` and `)` are on different lines.
             if let Some(cap) = PARTIAL_CALL_RE.captures(trimmed) {
                 let func_name = &cap[1];
+                let call_range = cap.get(1).expect("partial call name capture");
+                let trim_offset = line.find(trimmed).unwrap_or_default();
+                let call_location = loc_from_range(
+                    &file_path,
+                    line_num,
+                    line,
+                    trim_offset + call_range.start(),
+                    trim_offset + call_range.end(),
+                );
                 // Look ahead to find the first argument on the next non-empty line
                 let first_arg_str = lines
                     .get(line_idx + 1)
@@ -355,6 +405,13 @@ impl LanguageParser for PythonParser {
                     .unwrap_or("");
                 let arg_source =
                     classify_argument(first_arg_str, &param_names, &parsed.sanitized_vars);
+
+                parsed.call_sites.push(CallSite {
+                    callee: func_name.to_string(),
+                    arguments: vec![arg_source.clone()],
+                    caller: current_functions.last().map(|(name, _)| name.clone()),
+                    location: call_location.clone(),
+                });
 
                 // Check all pattern categories for partial calls
                 if SUBPROCESS_PATTERNS
@@ -364,7 +421,7 @@ impl LanguageParser for PythonParser {
                     parsed.commands.push(CommandInvocation {
                         function: func_name.to_string(),
                         command_arg: arg_source.clone(),
-                        location: loc(&file_path, line_num),
+                        location: call_location.clone(),
                     });
                 }
                 if NETWORK_PATTERNS
@@ -388,14 +445,14 @@ impl LanguageParser for PythonParser {
                         url_arg: arg_source.clone(),
                         method,
                         sends_data,
-                        location: loc(&file_path, line_num),
+                        location: call_location.clone(),
                     });
                 }
                 if DYNAMIC_EXEC_PATTERNS.contains(&func_name) {
                     parsed.dynamic_exec.push(DynamicExec {
                         function: func_name.to_string(),
                         code_arg: arg_source.clone(),
-                        location: loc(&file_path, line_num),
+                        location: call_location.clone(),
                     });
                 }
                 if FILE_READ_PATTERNS
@@ -405,7 +462,7 @@ impl LanguageParser for PythonParser {
                     parsed.file_operations.push(FileOperation {
                         operation: FileOpType::Read,
                         path_arg: arg_source.clone(),
-                        location: loc(&file_path, line_num),
+                        location: call_location.clone(),
                     });
                 }
 
@@ -432,7 +489,7 @@ impl LanguageParser for PythonParser {
                                 url_arg: arg_source.clone(),
                                 method: http_method,
                                 sends_data,
-                                location: loc(&file_path, line_num),
+                                location: call_location.clone(),
                             });
                         }
                     }
@@ -531,8 +588,24 @@ fn loc(file: &Path, line: usize) -> SourceLocation {
         file: file.to_path_buf(),
         line,
         column: 0,
-        end_line: None,
-        end_column: None,
+        end_line: Some(line),
+        end_column: Some(0),
+    }
+}
+
+fn loc_from_range(
+    file: &Path,
+    line: usize,
+    source_line: &str,
+    start_byte: usize,
+    end_byte: usize,
+) -> SourceLocation {
+    SourceLocation {
+        file: file.to_path_buf(),
+        line,
+        column: source_line[..start_byte].chars().count(),
+        end_line: Some(line),
+        end_column: Some(source_line[..end_byte].chars().count()),
     }
 }
 
@@ -752,6 +825,47 @@ def _internal_helper(x):
             .find(|d| d.name == "_internal_helper");
         assert!(helper.is_some());
         assert!(!helper.unwrap().is_exported); // underscore prefix = private
+    }
+
+    #[test]
+    fn records_nested_and_method_params_with_locations() {
+        let code = r#"
+class Handler:
+    def handle(self, url: str):
+        def inner(path: str):
+            return open(path)
+        return inner(url)
+"#;
+        let parsed = PythonParser
+            .parse_file(Path::new("handler.py"), code)
+            .unwrap();
+
+        let handle = parsed
+            .function_defs
+            .iter()
+            .find(|def| def.name == "handle")
+            .unwrap();
+        let inner = parsed
+            .function_defs
+            .iter()
+            .find(|def| def.name == "inner")
+            .unwrap();
+        assert_eq!(handle.params, vec!["url"]);
+        assert_eq!(inner.params, vec!["path"]);
+        assert!(parsed
+            .function_params
+            .iter()
+            .any(|param| param.function_name == "inner" && param.param_name == "path"));
+        assert_eq!(inner.location.end_line, Some(inner.location.line));
+
+        let inner_call = parsed
+            .call_sites
+            .iter()
+            .find(|site| site.callee == "inner")
+            .unwrap();
+        assert_eq!(inner_call.caller.as_deref(), Some("handle"));
+        assert_eq!(inner_call.location.end_line, Some(inner_call.location.line));
+        assert!(inner_call.location.column > 0);
     }
 
     #[test]
