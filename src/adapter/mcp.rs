@@ -86,9 +86,7 @@ impl super::Adapter for McpAdapter {
                 if binding.handler_resolved {
                     project_observed_execution(&mut tool, &binding.execution);
                 }
-                // Positive evidence is usable for stealth detection, but B.0.1
-                // does not prove observation completeness for overclaim.
-                tool.capability_observation_complete = false;
+                tool.capability_observation_complete = binding.observation_complete;
                 tool
             })
             .collect::<Vec<_>>();
@@ -228,6 +226,7 @@ enum McpToolHandler {
 struct McpToolOperationBinding {
     execution: ExecutionSurface,
     handler_resolved: bool,
+    observation_complete: bool,
     resolved_callees: Vec<String>,
 }
 
@@ -239,6 +238,7 @@ impl McpToolOperationBinding {
                 && self.execution.network_operations.is_empty()
                 && self.execution.env_accesses.is_empty()
                 && self.execution.dynamic_exec.is_empty()
+                && !self.observation_complete
                 && self.resolved_callees.is_empty())
     }
 }
@@ -319,6 +319,7 @@ fn bind_mcp_tool_operations(
                 return McpToolOperationBinding {
                     execution: ExecutionSurface::default(),
                     handler_resolved: false,
+                    observation_complete: false,
                     resolved_callees: Vec::new(),
                 };
             };
@@ -340,9 +341,14 @@ fn bind_mcp_tool_operations(
                     .map(|(name, span)| (span.clone(), Some(name.clone()))),
             );
 
+            let execution = execution_within_scopes(parsed_files, &scopes);
+            let observation_complete =
+                binding_observation_complete(parsed_files, &scopes, &resolved_callees, &execution);
+
             McpToolOperationBinding {
-                execution: execution_within_scopes(parsed_files, &scopes),
+                execution,
                 handler_resolved: true,
+                observation_complete,
                 resolved_callees: resolved_callees.into_iter().map(|(name, _)| name).collect(),
             }
         })
@@ -359,6 +365,7 @@ fn bind_mcp_tool_operations(
         .map(|_| McpToolOperationBinding {
             execution: ExecutionSurface::default(),
             handler_resolved: false,
+            observation_complete: false,
             resolved_callees: Vec::new(),
         })
         .collect()
@@ -467,6 +474,58 @@ fn execution_within_scopes(
         );
     }
     execution
+}
+
+#[cfg(feature = "typescript")]
+fn binding_observation_complete(
+    parsed_files: &[(PathBuf, parser::ParsedFile)],
+    scopes: &[(SourceLocation, Option<String>)],
+    resolved_callees: &[(String, SourceLocation)],
+    execution: &ExecutionSurface,
+) -> bool {
+    if !execution.dynamic_exec.is_empty() {
+        return false;
+    }
+
+    parsed_files
+        .iter()
+        .flat_map(|(_, parsed)| parsed.call_sites.iter())
+        .filter(|call_site| {
+            scopes.iter().any(|(span, function_name)| {
+                operation_belongs_to_scope(
+                    &call_site.location,
+                    span,
+                    function_name.as_deref(),
+                    parsed_files,
+                )
+            })
+        })
+        .all(|call_site| {
+            call_is_modeled(call_site, execution)
+                || resolved_callees
+                    .iter()
+                    .any(|(name, _)| name == &call_site.callee)
+        })
+}
+
+#[cfg(feature = "typescript")]
+fn call_is_modeled(call_site: &parser::CallSite, execution: &ExecutionSurface) -> bool {
+    execution
+        .commands
+        .iter()
+        .any(|operation| operation.location == call_site.location)
+        || execution
+            .file_operations
+            .iter()
+            .any(|operation| operation.location == call_site.location)
+        || execution
+            .network_operations
+            .iter()
+            .any(|operation| operation.location == call_site.location)
+        || execution
+            .env_accesses
+            .iter()
+            .any(|operation| operation.location == call_site.location)
 }
 
 #[cfg(feature = "typescript")]
@@ -1442,9 +1501,11 @@ async function handleFetch(url: string) {
 
         assert_eq!(bindings.len(), 2);
         assert!(bindings[0].handler_resolved);
+        assert!(bindings[0].observation_complete);
         assert_eq!(bindings[0].execution.file_operations.len(), 1);
         assert!(bindings[0].execution.network_operations.is_empty());
         assert!(bindings[1].handler_resolved);
+        assert!(bindings[1].observation_complete);
         assert!(bindings[1].execution.file_operations.is_empty());
         assert_eq!(bindings[1].execution.network_operations.len(), 1);
     }
@@ -1478,6 +1539,7 @@ async function fetchThroughClient(url: string) {
 
         assert_eq!(bindings.len(), 1);
         assert!(bindings[0].handler_resolved);
+        assert!(bindings[0].observation_complete);
         assert_eq!(bindings[0].resolved_callees, vec!["fetchThroughClient"]);
         assert_eq!(bindings[0].execution.file_operations.len(), 1);
         assert_eq!(bindings[0].execution.network_operations.len(), 1);
@@ -1513,11 +1575,61 @@ async function secondHop() {
 
         assert_eq!(bindings.len(), 1);
         assert!(bindings[0].handler_resolved);
+        assert!(!bindings[0].observation_complete);
         assert_eq!(bindings[0].resolved_callees, vec!["firstHop"]);
         assert!(
             bindings[0].execution.network_operations.is_empty(),
             "depth-2 operations must not be attributed to the tool"
         );
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn opaque_call_keeps_operation_observation_incomplete() {
+        use crate::parser::LanguageParser;
+
+        let path = Path::new("src/server.ts");
+        let content = r#"
+server.registerTool("report", { description: "Fetch URLs" }, handleReport)
+
+async function handleReport(url: string) {
+  return externalClient(url)
+}
+"#;
+        let declarations = extract_mcp_tool_declarations_from_source(path, content);
+        let parsed = parser::typescript::TypeScriptParser
+            .parse_file(path, content)
+            .unwrap();
+
+        let bindings = bind_mcp_tool_operations(&declarations, &[(path.to_path_buf(), parsed)]);
+
+        assert_eq!(bindings.len(), 1);
+        assert!(bindings[0].handler_resolved);
+        assert!(!bindings[0].observation_complete);
+        assert!(bindings[0].execution.network_operations.is_empty());
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn dynamic_execution_keeps_operation_observation_incomplete() {
+        use crate::parser::LanguageParser;
+
+        let path = Path::new("src/server.ts");
+        let content = r#"
+server.registerTool("evaluate", { description: "Evaluate arbitrary code" }, handleEval)
+function handleEval(code: string) { return eval(code) }
+"#;
+        let declarations = extract_mcp_tool_declarations_from_source(path, content);
+        let parsed = parser::typescript::TypeScriptParser
+            .parse_file(path, content)
+            .unwrap();
+
+        let bindings = bind_mcp_tool_operations(&declarations, &[(path.to_path_buf(), parsed)]);
+
+        assert_eq!(bindings.len(), 1);
+        assert!(bindings[0].handler_resolved);
+        assert!(!bindings[0].observation_complete);
+        assert_eq!(bindings[0].execution.dynamic_exec.len(), 1);
     }
 
     #[cfg(feature = "typescript")]
@@ -1545,6 +1657,7 @@ async function handleReport() {
 
         assert_eq!(bindings.len(), 1);
         assert!(bindings[0].handler_resolved);
+        assert!(bindings[0].observation_complete);
         assert!(bindings[0].resolved_callees.is_empty());
         assert!(
             bindings[0].execution.network_operations.is_empty(),
@@ -1586,6 +1699,7 @@ async function handleReport() {
 
         assert_eq!(bindings.len(), 1);
         assert!(!bindings[0].handler_resolved);
+        assert!(!bindings[0].observation_complete);
         assert!(bindings[0].execution.file_operations.is_empty());
         assert!(bindings[0].execution.network_operations.is_empty());
     }
@@ -1614,6 +1728,7 @@ async function handleReport() {
 
         assert_eq!(bindings.len(), 1);
         assert!(bindings[0].handler_resolved);
+        assert!(bindings[0].observation_complete);
         assert_eq!(bindings[0].execution.file_operations.len(), 1);
     }
 
@@ -1636,6 +1751,7 @@ function run() { return readFile("report.txt") }
 
         assert_eq!(bindings.len(), 1);
         assert!(!bindings[0].handler_resolved);
+        assert!(!bindings[0].observation_complete);
         assert!(bindings[0].execution.file_operations.is_empty());
     }
 
@@ -1686,8 +1802,8 @@ function handleFetch(url: string) { return fetch(url) }
             fetch.observed_capabilities,
             std::collections::BTreeSet::from([Capability::NetworkEgress])
         );
-        assert!(!read.capability_observation_complete);
-        assert!(!fetch.capability_observation_complete);
+        assert!(read.capability_observation_complete);
+        assert!(fetch.capability_observation_complete);
     }
 
     #[cfg(not(feature = "typescript"))]

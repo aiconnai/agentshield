@@ -494,6 +494,39 @@ fn walk_node(
         }
     }
 
+    // Constructors are executable too. Record every `new` expression as a call
+    // site so capability observation cannot be marked complete when an
+    // unmodeled constructor remains in a bound handler. `new Function(...)` is
+    // additionally a modeled dynamic-execution operation.
+    if kind == "new_expression" {
+        if let Some(constructor_node) = node.child_by_field_name("constructor") {
+            let constructor_name = resolve_call_name(constructor_node, source);
+            let args_node = node.child_by_field_name("arguments");
+            let all_arg_sources =
+                classify_all_arguments(args_node, source, param_names, &parsed.sanitized_vars);
+            let code_arg = all_arg_sources
+                .first()
+                .cloned()
+                .unwrap_or(ArgumentSource::Unknown);
+            let location = loc(file_path, node);
+
+            parsed.call_sites.push(CallSite {
+                callee: constructor_name.clone(),
+                arguments: all_arg_sources,
+                caller: find_enclosing_function(node, source),
+                location: location.clone(),
+            });
+
+            if constructor_name == "Function" {
+                parsed.dynamic_exec.push(DynamicExec {
+                    function: constructor_name,
+                    code_arg,
+                    location,
+                });
+            }
+        }
+    }
+
     // Recurse into children (skip already-processed subtrees)
     for i in 0..node.named_child_count() {
         if let Some(child) = node.named_child(i) {
