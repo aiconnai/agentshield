@@ -1,6 +1,6 @@
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-015: Overbroad Filesystem Scope
@@ -54,6 +54,7 @@ impl Detector for OverbroadFsDetector {
             default_severity: Severity::High,
             attack_category: AttackCategory::ArbitraryFileAccess,
             cwe_id: Some("CWE-552".into()),
+            owasp_mcp: Some(OwaspMcp::ExcessiveScope),
         }
     }
 

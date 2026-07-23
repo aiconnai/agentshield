@@ -1,6 +1,6 @@
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -32,6 +32,7 @@ impl Detector for RuntimeInstallDetector {
             default_severity: Severity::High,
             attack_category: AttackCategory::SupplyChain,
             cwe_id: Some("CWE-829".into()),
+            owasp_mcp: Some(OwaspMcp::SupplyChain),
         }
     }
 

@@ -2,7 +2,7 @@ use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::ir::execution_surface::FileOpType;
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-014: Download-Write-Execute Chain
@@ -22,6 +22,7 @@ impl Detector for DownloadExecDetector {
             default_severity: Severity::Critical,
             attack_category: AttackCategory::SupplyChain,
             cwe_id: Some("CWE-494".into()),
+            owasp_mcp: Some(OwaspMcp::SupplyChain),
         }
     }
 

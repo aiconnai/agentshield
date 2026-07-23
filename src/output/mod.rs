@@ -44,10 +44,24 @@ pub fn render(
     target_name: &str,
     scan_root: &Path,
 ) -> Result<String> {
+    render_with_metadata(findings, verdict, format, target_name, scan_root, &[])
+}
+
+/// Render findings with registry metadata for enriched formats such as SARIF.
+pub fn render_with_metadata(
+    findings: &[Finding],
+    verdict: &PolicyVerdict,
+    format: OutputFormat,
+    target_name: &str,
+    scan_root: &Path,
+    rule_metadata: &[crate::rules::RuleMetadata],
+) -> Result<String> {
     match format {
         OutputFormat::Console => Ok(console::render(findings, verdict, scan_root)),
         OutputFormat::Json => json::render(findings, verdict, scan_root),
-        OutputFormat::Sarif => sarif::render(findings, target_name, scan_root),
+        OutputFormat::Sarif => {
+            sarif::render_with_metadata(findings, target_name, scan_root, rule_metadata)
+        }
         OutputFormat::Html => html::render(findings, verdict, target_name, scan_root),
     }
 }

@@ -11,17 +11,18 @@ pub(super) fn cmd_list_rules(format_str: String) -> Result<i32, agentshield::err
         }
         _ => {
             println!(
-                "{:<12} {:<28} {:<10} {:<8} CATEGORY",
-                "ID", "NAME", "SEVERITY", "CWE"
+                "{:<12} {:<28} {:<10} {:<8} {:<7} CATEGORY",
+                "ID", "NAME", "SEVERITY", "CWE", "OWASP"
             );
-            println!("{}", "-".repeat(80));
+            println!("{}", "-".repeat(88));
             for rule in &rules {
                 println!(
-                    "{:<12} {:<28} {:<10} {:<8} {}",
+                    "{:<12} {:<28} {:<10} {:<8} {:<7} {}",
                     rule.id,
                     rule.name,
                     rule.default_severity.to_string(),
                     rule.cwe_id.as_deref().unwrap_or("-"),
+                    rule.owasp_mcp.map(|c| c.code()).unwrap_or("-"),
                     rule.attack_category,
                 );
             }

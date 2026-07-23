@@ -1,7 +1,7 @@
 use crate::ir::execution_surface::FileOpType;
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-006: Self-Modification
@@ -23,6 +23,7 @@ impl Detector for SelfModificationDetector {
             default_severity: Severity::High,
             attack_category: AttackCategory::SelfModification,
             cwe_id: Some("CWE-506".into()),
+            owasp_mcp: Some(OwaspMcp::MaliciousUpdate),
         }
     }
 

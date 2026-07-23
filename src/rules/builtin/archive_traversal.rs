@@ -1,6 +1,6 @@
 use crate::ir::{ScanTarget, SinkClass};
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-017: Archive Traversal (Zip Slip)
@@ -65,6 +65,7 @@ impl Detector for ArchiveTraversalDetector {
             default_severity: Severity::High,
             attack_category: AttackCategory::ArbitraryFileAccess,
             cwe_id: Some("CWE-22".into()),
+            owasp_mcp: Some(OwaspMcp::ExcessiveScope),
         }
     }
 

@@ -1,6 +1,6 @@
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-010: Typosquat Detection
@@ -98,6 +98,7 @@ impl Detector for TyposquatDetector {
             default_severity: Severity::Medium,
             attack_category: AttackCategory::SupplyChain,
             cwe_id: Some("CWE-506".into()),
+            owasp_mcp: Some(OwaspMcp::SupplyChain),
         }
     }
 

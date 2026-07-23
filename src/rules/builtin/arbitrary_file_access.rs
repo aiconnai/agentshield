@@ -1,6 +1,6 @@
 use crate::ir::{ArgumentSource, ScanTarget, SinkClass};
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-004: Arbitrary File Access
@@ -18,6 +18,7 @@ impl Detector for ArbitraryFileAccessDetector {
             default_severity: Severity::High,
             attack_category: AttackCategory::ArbitraryFileAccess,
             cwe_id: Some("CWE-22".into()),
+            owasp_mcp: Some(OwaspMcp::ExcessiveScope),
         }
     }
 

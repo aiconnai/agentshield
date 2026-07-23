@@ -1,7 +1,7 @@
 use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-002: Credential Exfiltration
@@ -31,6 +31,7 @@ impl Detector for CredentialExfilDetector {
             default_severity: Severity::Critical,
             attack_category: AttackCategory::CredentialExfiltration,
             cwe_id: Some("CWE-522".into()),
+            owasp_mcp: Some(OwaspMcp::DataExfiltration),
         }
     }
 

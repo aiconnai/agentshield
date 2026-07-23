@@ -1,6 +1,6 @@
 use crate::ir::{ScanTarget, SourceLocation};
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-012: No Lockfile
@@ -19,6 +19,7 @@ impl Detector for NoLockfileDetector {
             default_severity: Severity::Low,
             attack_category: AttackCategory::SupplyChain,
             cwe_id: None,
+            owasp_mcp: Some(OwaspMcp::SupplyChain),
         }
     }
 
