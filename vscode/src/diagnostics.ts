@@ -43,7 +43,7 @@ function makeRange(
 /**
  * Convert a single Finding into a VS Code Diagnostic.
  */
-function findingToDiagnostic(finding: Finding): vscode.Diagnostic {
+export function findingToDiagnostic(finding: Finding): vscode.Diagnostic {
   const loc = finding.location!;
   const range = makeRange(loc.line, loc.column, loc.end_line, loc.end_column);
 
