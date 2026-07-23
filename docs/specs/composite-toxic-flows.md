@@ -70,6 +70,8 @@ O MVP emite `High`. Escalonar um finding individual para `Critical` exige prova
 adicional de que o destino cruza uma trust/authorization boundary (por exemplo,
 destino controlado pelo atacante ou explicitamente fora da policy permitida).
 `sends_data = true` sozinho não prova essa boundary e não autoriza escalation.
+C.1 v1 sempre emite `High`; escalation para `Critical` fica pós-MVP e exige
+contrato, representação de boundary e fixtures próprios.
 
 O teste de integridade `all_builtin_rules_have_owasp_mcp_mapping` deve continuar
 verde quando SHIELD-020 for registrado.
@@ -306,6 +308,12 @@ Inserir linhas/comentários ou mover a mesma expressão dentro do owner não mud
 o anchor. Duas expressões semanticamente distintas, mesmo na mesma tool/file,
 não compartilham anchor.
 
+Limite de estabilidade v1: inserir ou remover uma operação byte-identical antes
+de outra operação com o mesmo anchor normalizado no mesmo owner pode alterar o
+ordinal das operações seguintes e, portanto, seus fingerprints/suppressions.
+Esse churn é aceitável para duplicatas semanticamente indistinguíveis; C.0/C.1
+não devem prometer estabilidade além dessa fronteira.
+
 Primeira evidence, usada pelo fingerprint:
 
 ```text
@@ -373,6 +381,8 @@ Metamorphic tests:
 
 - renomear local preserva finding count e flow semantics;
 - inserir linhas/comentários preserva fingerprint;
+- inserir/remover operação byte-identical anterior pode rotacionar fingerprints
+  posteriores conforme o limite de estabilidade v1;
 - trocar body pelo valor não relacionado remove o finding;
 - mover o send para outra tool remove o finding;
 - adicionar reads/requests não relacionados não altera cardinalidade;
