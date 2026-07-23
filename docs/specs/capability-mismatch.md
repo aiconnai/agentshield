@@ -1,6 +1,7 @@
 # Spec: Capability / Description Mismatch (SHIELD-019)
 
-Status: implemented for MCP TypeScript stealth detection; overclaim remains gated
+Status: implemented for MCP TypeScript stealth and conservatively complete overclaim detection
+
 Scope: modelo normalizado de capabilities no IR, projeção determinística por tool e
 detector SHIELD-019. Sem LLM, score, discovery local ou novos toxic flows.
 
