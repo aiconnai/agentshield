@@ -40,7 +40,7 @@ impl super::Adapter for McpAdapter {
 
         let mut source_files = Vec::new();
         let mut execution = ExecutionSurface::default();
-        let mut tool_declarations = Vec::new();
+        let mut tools = Vec::new();
 
         // Collect source files
         collect_source_files_with_filter(root, filter, &mut source_files)?;
@@ -49,7 +49,7 @@ impl super::Adapter for McpAdapter {
                 source_file.language,
                 Language::TypeScript | Language::JavaScript
             ) {
-                tool_declarations.extend(extract_mcp_tool_declarations_from_source(
+                tools.extend(extract_mcp_tools_from_source(
                     &source_file.path,
                     &source_file.content,
                 ));
@@ -69,18 +69,6 @@ impl super::Adapter for McpAdapter {
         // Phase 2: Cross-file sanitizer-aware analysis — downgrade operations
         // in functions that are only called with sanitized arguments.
         apply_cross_file_sanitization(&mut parsed_files);
-
-        // Preserve per-tool handler operation bindings for capability projection.
-        // The public ToolSurface remains unchanged until the capability IR lands.
-        let operation_bindings = bind_mcp_tool_operations(&tool_declarations, &parsed_files);
-        debug_assert_eq!(operation_bindings.len(), tool_declarations.len());
-        debug_assert!(operation_bindings
-            .iter()
-            .all(McpToolOperationBinding::is_consistent));
-        let mut tools = tool_declarations
-            .into_iter()
-            .map(|declaration| declaration.tool)
-            .collect::<Vec<_>>();
 
         // Phase 3: Merge parsed results into execution surface.
         for (_, parsed) in parsed_files {
@@ -197,6 +185,13 @@ pub fn is_test_file(path: &Path) -> bool {
     false
 }
 
+fn extract_mcp_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
+    extract_mcp_tool_declarations_from_source(path, content)
+        .into_iter()
+        .map(|declaration| declaration.tool)
+        .collect()
+}
+
 #[derive(Debug, Clone)]
 struct McpToolDeclaration {
     tool: ToolSurface,
@@ -210,6 +205,9 @@ enum McpToolHandler {
 }
 
 #[derive(Debug, Clone)]
+// This is the tested handoff shape for capability projection. It is deliberately
+// not computed by `load()` until the IR has storage for per-tool observations.
+#[allow(dead_code)]
 struct McpToolOperationBinding {
     execution: ExecutionSurface,
     handler_resolved: bool,
@@ -220,18 +218,6 @@ struct McpToolOperationBinding {
 struct ResolvedMcpHandler {
     span: SourceLocation,
     caller: Option<String>,
-}
-
-impl McpToolOperationBinding {
-    fn is_consistent(&self) -> bool {
-        self.handler_resolved
-            || (self.execution.commands.is_empty()
-                && self.execution.file_operations.is_empty()
-                && self.execution.network_operations.is_empty()
-                && self.execution.env_accesses.is_empty()
-                && self.execution.dynamic_exec.is_empty()
-                && self.resolved_callees.is_empty())
-    }
 }
 
 fn extract_mcp_tool_declarations_from_source(
@@ -288,6 +274,7 @@ fn extract_mcp_tool_declarations_from_source(
 }
 
 #[cfg(feature = "typescript")]
+#[allow(dead_code)] // Consumed when per-tool capability storage lands.
 fn bind_mcp_tool_operations(
     declarations: &[McpToolDeclaration],
     parsed_files: &[(PathBuf, parser::ParsedFile)],
@@ -330,6 +317,7 @@ fn bind_mcp_tool_operations(
 }
 
 #[cfg(not(feature = "typescript"))]
+#[allow(dead_code)] // Keeps the next consumer conservative in no-TS builds.
 fn bind_mcp_tool_operations(
     declarations: &[McpToolDeclaration],
     _parsed_files: &[(PathBuf, parser::ParsedFile)],
@@ -1530,6 +1518,93 @@ async function handleReport() {
             bindings[0].execution.network_operations.is_empty(),
             "an uncalled nested function is not part of handler execution"
         );
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn ambiguous_named_handler_stays_unresolved() {
+        use crate::parser::LanguageParser;
+
+        let registration_path = Path::new("src/server.ts");
+        let registration =
+            r#"server.registerTool("report", { description: "Report" }, handleReport)"#;
+        let first_path = Path::new("src/first.ts");
+        let first = "function handleReport() { return readFile('report.txt') }";
+        let second_path = Path::new("src/second.ts");
+        let second = "function handleReport() { return fetch('https://example.com') }";
+
+        let declarations =
+            extract_mcp_tool_declarations_from_source(registration_path, registration);
+        let parsed_files = vec![
+            (
+                first_path.to_path_buf(),
+                parser::typescript::TypeScriptParser
+                    .parse_file(first_path, first)
+                    .unwrap(),
+            ),
+            (
+                second_path.to_path_buf(),
+                parser::typescript::TypeScriptParser
+                    .parse_file(second_path, second)
+                    .unwrap(),
+            ),
+        ];
+
+        let bindings = bind_mcp_tool_operations(&declarations, &parsed_files);
+
+        assert_eq!(bindings.len(), 1);
+        assert!(!bindings[0].handler_resolved);
+        assert!(bindings[0].execution.file_operations.is_empty());
+        assert!(bindings[0].execution.network_operations.is_empty());
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn resolves_named_handler_across_source_files() {
+        use crate::parser::LanguageParser;
+
+        let registration_path = Path::new("src/server.ts");
+        let registration =
+            r#"server.registerTool("report", { description: "Report" }, handleReport)"#;
+        let handler_path = Path::new("src/handlers.ts");
+        let handler = "function handleReport() { return readFile('report.txt') }";
+
+        let declarations =
+            extract_mcp_tool_declarations_from_source(registration_path, registration);
+        let parsed_files = vec![(
+            handler_path.to_path_buf(),
+            parser::typescript::TypeScriptParser
+                .parse_file(handler_path, handler)
+                .unwrap(),
+        )];
+
+        let bindings = bind_mcp_tool_operations(&declarations, &parsed_files);
+
+        assert_eq!(bindings.len(), 1);
+        assert!(bindings[0].handler_resolved);
+        assert_eq!(bindings[0].execution.file_operations.len(), 1);
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn dotted_named_handler_stays_unresolved_without_member_resolution() {
+        use crate::parser::LanguageParser;
+
+        let path = Path::new("src/server.ts");
+        let content = r#"
+server.registerTool("report", { description: "Report" }, handlers.run)
+function run() { return readFile("report.txt") }
+"#;
+        let declarations = extract_mcp_tool_declarations_from_source(path, content);
+        let parsed = parser::typescript::TypeScriptParser
+            .parse_file(path, content)
+            .unwrap();
+
+        let bindings = bind_mcp_tool_operations(&declarations, &[(path.to_path_buf(), parsed)]);
+
+        assert_eq!(bindings.len(), 1);
+        assert!(!bindings[0].handler_resolved);
+        assert!(bindings[0].execution.file_operations.is_empty());
     }
 
     #[cfg(not(feature = "typescript"))]
