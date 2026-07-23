@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use crate::analysis::cross_file::apply_cross_file_sanitization;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
-use crate::ir::capability::{project_declared_permissions, project_observed_execution};
+use crate::ir::capability::{
+    project_declared_description, project_declared_permissions, project_observed_execution,
+};
 use crate::ir::execution_surface::ExecutionSurface;
 use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
@@ -114,6 +116,7 @@ impl super::Adapter for McpAdapter {
         }
         for tool in &mut tools {
             project_declared_permissions(tool);
+            project_declared_description(tool);
         }
 
         let (dependencies, provenance) = if super::mcp_metadata::same_path(root, &metadata_root) {
@@ -1735,7 +1738,7 @@ function handleFetch(url: string) { return fetch(url) }
   "tools": [
     {
       "name": "fetch_url",
-      "description": "Fetch content from a URL",
+      "description": "Fetch URLs",
       "inputSchema": {"properties": {"url": {"type": "string"}}}
     },
     {
@@ -1763,10 +1766,26 @@ function handleFetch(url: string) { return fetch(url) }
             fetch.declared_capabilities,
             std::collections::BTreeSet::from([Capability::NetworkEgress])
         );
-        assert!(fetch
-            .capability_declarations
-            .iter()
-            .all(|declaration| { declaration.source == CapabilityDeclarationSource::Permission }));
+        assert_eq!(
+            fetch
+                .capability_declarations
+                .iter()
+                .filter(|declaration| {
+                    declaration.source == CapabilityDeclarationSource::Description
+                })
+                .count(),
+            1
+        );
+        assert_eq!(
+            fetch
+                .capability_declarations
+                .iter()
+                .filter(|declaration| {
+                    declaration.source == CapabilityDeclarationSource::Permission
+                })
+                .count(),
+            1
+        );
         assert!(schema_only.declared_capabilities.is_empty());
         assert!(schema_only.capability_declarations.is_empty());
     }

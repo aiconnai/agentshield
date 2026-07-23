@@ -1,5 +1,6 @@
 mod arbitrary_file_access;
 mod archive_traversal;
+mod capability_mismatch;
 mod command_injection;
 mod credential_exfil;
 mod download_exec;
@@ -20,7 +21,7 @@ mod unsafe_deser_patterns;
 
 use super::Detector;
 
-/// Returns all built-in detectors (18 rules: SHIELD-001..018).
+/// Returns all built-in detectors (19 rules: SHIELD-001..019).
 pub fn all_detectors() -> Vec<Box<dyn Detector>> {
     vec![
         Box::new(command_injection::CommandInjectionDetector),
@@ -41,5 +42,6 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(unsafe_deser::UnsafeDeserDetector),
         Box::new(archive_traversal::ArchiveTraversalDetector),
         Box::new(secret_leakage::SecretLeakageDetector),
+        Box::new(capability_mismatch::CapabilityMismatchDetector),
     ]
 }

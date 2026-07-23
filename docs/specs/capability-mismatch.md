@@ -1,6 +1,6 @@
 # Spec: Capability / Description Mismatch (SHIELD-019)
 
-Status: proposed (PR B — Análise semântica)
+Status: implemented for MCP TypeScript stealth detection; overclaim remains gated
 Scope: modelo normalizado de capabilities no IR, projeção determinística por tool e
 detector SHIELD-019. Sem LLM, score, discovery local ou novos toxic flows.
 
