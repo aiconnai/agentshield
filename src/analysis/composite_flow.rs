@@ -103,6 +103,13 @@ mod typescript {
         fs_read_functions: BTreeSet<String>,
         fs_namespaces: BTreeSet<String>,
         axios_names: BTreeSet<String>,
+        local_functions: BTreeMap<String, RelativeImport>,
+    }
+
+    #[derive(Clone)]
+    struct RelativeImport {
+        module: String,
+        exported: String,
     }
 
     #[derive(Clone)]
@@ -221,10 +228,13 @@ mod typescript {
                 return;
             }
             let import_text = text(node, source);
-            let is_fs = import_text.contains("from \"node:fs")
-                || import_text.contains("from 'node:fs")
-                || import_text.contains("from \"fs")
-                || import_text.contains("from 'fs");
+            let Some(module) = import_module(node, source) else {
+                return;
+            };
+            let is_fs = matches!(
+                module.as_str(),
+                "fs" | "fs/promises" | "node:fs" | "node:fs/promises"
+            );
             if is_fs {
                 if let Some((clause, _)) = import_text.split_once(" from ") {
                     let clause = clause.trim_start_matches("import").trim();
@@ -251,7 +261,7 @@ mod typescript {
                     }
                 }
             }
-            if import_text.contains("from \"axios\"") || import_text.contains("from 'axios'") {
+            if module == "axios" {
                 if let Some((clause, _)) = import_text.split_once(" from ") {
                     let local = clause.trim_start_matches("import").trim();
                     if !local.is_empty() && !local.starts_with(['{', '*']) {
@@ -259,8 +269,48 @@ mod typescript {
                     }
                 }
             }
+            if module.starts_with('.') {
+                for (exported, local) in named_imports(import_text) {
+                    imports.local_functions.insert(
+                        local,
+                        RelativeImport {
+                            module: module.clone(),
+                            exported,
+                        },
+                    );
+                }
+            }
         });
         imports
+    }
+
+    fn import_module(node: Node<'_>, source: &str) -> Option<String> {
+        let module = node.child_by_field_name("source")?;
+        Some(text(module, source).trim_matches(['\'', '"']).to_string())
+    }
+
+    fn named_imports(import_text: &str) -> Vec<(String, String)> {
+        let Some(start) = import_text.find('{') else {
+            return Vec::new();
+        };
+        let Some(end) = import_text[start + 1..]
+            .find('}')
+            .map(|offset| start + 1 + offset)
+        else {
+            return Vec::new();
+        };
+        import_text[start + 1..end]
+            .split(',')
+            .filter_map(|item| {
+                let mut parts = item.split_whitespace();
+                let exported = parts.next()?.to_string();
+                let local = match (parts.next(), parts.next()) {
+                    (Some("as"), Some(alias)) => alias.to_string(),
+                    _ => exported.clone(),
+                };
+                Some((exported, local))
+            })
+            .collect()
     }
 
     impl Analyzer<'_> {
@@ -316,6 +366,11 @@ mod typescript {
             let Some(body) = function_body(function) else {
                 return Vec::new();
             };
+            if contains_opaque_control_flow(body, true)
+                || has_ambiguous_shadowing(function, unit.content)
+            {
+                return Vec::new();
+            }
             let mut events = Vec::new();
             collect_events(body, body, &mut events);
             events.sort_by_key(Node::start_byte);
@@ -476,7 +531,7 @@ mod typescript {
 
             if depth == 0 {
                 let callee = call_name(expression, unit.content)?;
-                let matches = unique_function(&callee, self.units)?;
+                let matches = unique_function(&callee, self.units, unit_index)?;
                 let seeds = helper_seeds(
                     matches.node,
                     self.units[matches.unit_index].path,
@@ -559,7 +614,7 @@ mod typescript {
             let Some(callee) = call_name(call, unit.content) else {
                 return;
             };
-            let Some(function) = unique_function(&callee, self.units) else {
+            let Some(function) = unique_function(&callee, self.units, unit_index) else {
                 return;
             };
             let seeds = helper_seeds(
@@ -688,6 +743,12 @@ mod typescript {
         caller_scope: &ScopeId,
     ) -> Option<Lineage> {
         let body = function_body(function)?;
+        if contains_opaque_control_flow(body, false)
+            || has_ambiguous_shadowing(function, unit.content)
+            || top_level_return_count(body) != 1
+        {
+            return None;
+        }
         let mut variables = seed;
         let mut events = Vec::new();
         collect_events(body, body, &mut events);
@@ -817,23 +878,97 @@ mod typescript {
     fn unique_function<'tree>(
         name: &str,
         units: &'tree [ParsedUnit<'_>],
+        caller_unit_index: usize,
     ) -> Option<FunctionMatch<'tree>> {
         if name.contains('.') {
             return None;
         }
+        let caller = &units[caller_unit_index];
+        let same_file = functions_named(name, caller_unit_index, caller);
+        if same_file.len() == 1 {
+            return same_file.into_iter().next();
+        }
+        if !same_file.is_empty() {
+            return None;
+        }
+
+        let import = caller.imports.local_functions.get(name)?;
         let mut matches = Vec::new();
         for (unit_index, unit) in units.iter().enumerate() {
+            if unit_index == caller_unit_index
+                || !relative_import_targets(caller.path, &import.module, unit.path)
+            {
+                continue;
+            }
             walk(unit.tree.root_node(), &mut |node| {
-                if is_function(node) && function_name(node, unit.content).as_deref() == Some(name) {
+                if is_function(node)
+                    && function_is_top_level(node)
+                    && is_exported_function(node)
+                    && function_name(node, unit.content).as_deref() == Some(&import.exported)
+                {
                     matches.push(FunctionMatch {
                         unit_index,
                         node,
-                        owner: name.to_string(),
+                        owner: import.exported.clone(),
                     });
                 }
             });
         }
         (matches.len() == 1).then(|| matches.remove(0))
+    }
+
+    fn functions_named<'tree>(
+        name: &str,
+        unit_index: usize,
+        unit: &'tree ParsedUnit<'_>,
+    ) -> Vec<FunctionMatch<'tree>> {
+        let mut matches = Vec::new();
+        walk(unit.tree.root_node(), &mut |node| {
+            if is_function(node)
+                && function_is_top_level(node)
+                && function_name(node, unit.content).as_deref() == Some(name)
+            {
+                matches.push(FunctionMatch {
+                    unit_index,
+                    node,
+                    owner: name.to_string(),
+                });
+            }
+        });
+        matches
+    }
+
+    fn relative_import_targets(caller: &Path, module: &str, target: &Path) -> bool {
+        let Some(parent) = caller.parent() else {
+            return false;
+        };
+        let base = normalize_path(&parent.join(module));
+        let target = normalize_path(target);
+        if base.extension().is_some() {
+            return base == target;
+        }
+        ["ts", "tsx", "js", "jsx", "mjs", "cjs"]
+            .iter()
+            .any(|extension| base.with_extension(extension) == target)
+            || ["ts", "tsx", "js", "jsx"]
+                .iter()
+                .any(|extension| base.join("index").with_extension(extension) == target)
+    }
+
+    fn normalize_path(path: &Path) -> PathBuf {
+        use std::path::Component;
+
+        let mut normalized = PathBuf::new();
+        for component in path.components() {
+            match component {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    normalized.pop();
+                }
+                other => normalized.push(other.as_os_str()),
+            }
+        }
+        normalized
     }
 
     fn resolved_file_read_api(unit: &ParsedUnit<'_>, expression: Node<'_>) -> Option<&'static str> {
@@ -1039,11 +1174,96 @@ mod typescript {
         }
     }
 
+    fn contains_opaque_control_flow(node: Node<'_>, reject_return: bool) -> bool {
+        if matches!(
+            node.kind(),
+            "if_statement"
+                | "switch_statement"
+                | "for_statement"
+                | "for_in_statement"
+                | "while_statement"
+                | "do_statement"
+                | "try_statement"
+                | "ternary_expression"
+                | "binary_expression"
+        ) || (reject_return && node.kind() == "return_statement")
+        {
+            return true;
+        }
+        named_children(node)
+            .into_iter()
+            .filter(|child| !is_function(*child))
+            .any(|child| contains_opaque_control_flow(child, reject_return))
+    }
+
+    fn top_level_return_count(body: Node<'_>) -> usize {
+        named_children(body)
+            .into_iter()
+            .filter(|child| child.kind() == "return_statement")
+            .count()
+    }
+
+    fn has_ambiguous_shadowing(function: Node<'_>, source: &str) -> bool {
+        let mut names = BTreeSet::new();
+        if let Some(parameters) = function.child_by_field_name("parameters") {
+            for name in binding_names(parameters, source) {
+                if !names.insert(name) {
+                    return true;
+                }
+            }
+        }
+        let Some(body) = function_body(function) else {
+            return false;
+        };
+        let mut declarations = Vec::new();
+        collect_bindings(body, body, source, &mut declarations);
+        declarations.into_iter().any(|name| !names.insert(name))
+    }
+
+    fn collect_bindings(node: Node<'_>, root: Node<'_>, source: &str, output: &mut Vec<String>) {
+        if node != root && is_function(node) {
+            return;
+        }
+        if node.kind() == "variable_declarator" {
+            if let Some(name) = node.child_by_field_name("name") {
+                output.extend(binding_names(name, source));
+            }
+        }
+        for child in named_children(node) {
+            collect_bindings(child, root, source, output);
+        }
+    }
+
     fn is_function(node: Node<'_>) -> bool {
         matches!(
             node.kind(),
             "function_declaration" | "function_expression" | "arrow_function" | "method_definition"
         )
+    }
+
+    fn function_is_top_level(node: Node<'_>) -> bool {
+        let mut current = node.parent();
+        while let Some(parent) = current {
+            if is_function(parent) {
+                return false;
+            }
+            current = parent.parent();
+        }
+        true
+    }
+
+    fn is_exported_function(node: Node<'_>) -> bool {
+        let mut current = node.parent();
+        while let Some(parent) = current {
+            if parent.kind() == "export_statement" {
+                return true;
+            }
+            if is_function(parent) || parent.kind() == "program" {
+                return false;
+            }
+            current = parent.parent();
+        }
+        false
     }
 
     fn call_name(node: Node<'_>, source: &str) -> Option<String> {
@@ -1093,8 +1313,13 @@ mod typescript {
 
     fn has_containment_guard(source: &str, before: usize, path_expression: &str) -> bool {
         let prefix = &source[..before.min(source.len())];
-        prefix.contains(&format!("{}.startsWith(", path_expression.trim()))
-            && (prefix.contains("throw ") || prefix.contains("return "))
+        let guard = format!("!{}.startsWith(", path_expression.trim());
+        let Some(guard_start) = prefix.rfind(&guard) else {
+            return false;
+        };
+        let guard_tail = &prefix[guard_start + guard.len()..];
+        let literal_root = guard_tail.trim_start().starts_with(['\'', '"']);
+        literal_root && (prefix.contains("throw ") || prefix.contains("return "))
     }
 
     fn normalized_subtree_hash(node: Node<'_>, source: &str) -> String {
@@ -1347,6 +1572,62 @@ async function handler({ path, url }, readFile) {
     }
 
     #[test]
+    fn similarly_named_packages_are_not_node_fs() {
+        let source = r#"
+import { readFile } from "fs-extra";
+async function handler({ path, url }) {
+  const content = await readFile(path, "utf8");
+  await fetch(url, { method: "POST", body: content });
+}
+"#;
+        assert!(candidates(source, "async function handler").is_empty());
+    }
+
+    #[test]
+    fn conditional_definitions_and_shadowing_fail_closed() {
+        let conditional = r#"
+import { readFile } from "node:fs/promises";
+async function handler({ path, url, enabled }) {
+  let content = "safe";
+  if (enabled) content = await readFile(path, "utf8");
+  await fetch(url, { method: "POST", body: content });
+}
+"#;
+        assert!(candidates(conditional, "async function handler").is_empty());
+
+        let shadowed = r#"
+import { readFile } from "node:fs/promises";
+async function handler({ path, url }) {
+  const content = "safe";
+  {
+    const content = await readFile(path, "utf8");
+  }
+  await fetch(url, { method: "POST", body: content });
+}
+"#;
+        assert!(candidates(shadowed, "async function handler").is_empty());
+
+        let unreachable = r#"
+import { readFile } from "node:fs/promises";
+async function handler({ path, url }) {
+  return;
+  const content = await readFile(path, "utf8");
+  await fetch(url, { method: "POST", body: content });
+}
+"#;
+        assert!(candidates(unreachable, "async function handler").is_empty());
+
+        let short_circuit = r#"
+import { readFile } from "node:fs/promises";
+async function handler({ path, url, enabled }) {
+  const content = await readFile(path, "utf8");
+  enabled && await fetch(url, { method: "POST", body: content });
+}
+"#;
+        assert!(candidates(short_circuit, "async function handler").is_empty());
+    }
+
+    #[test]
     fn one_hop_helper_can_send_file_content() {
         let source = r#"
 import { readFile } from "node:fs/promises";
@@ -1386,6 +1667,7 @@ async function handler({ path, url }) {
         let helper_path = Path::new("src/send.ts");
         let handler_source = r#"
 import { readFile } from "node:fs/promises";
+import { send } from "./send";
 async function handler({ path }) {
   const content = await readFile(path, "utf8");
   send(content);
@@ -1415,6 +1697,44 @@ export function send(payload) {
         );
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].sink_location.file, helper_path);
+
+        let without_import = handler_source.replace("import { send } from \"./send\";\n", "");
+        let unresolved = build_composite_flow_candidates(
+            &[ToolFlowInput {
+                tool_name: "unresolved".into(),
+                handler: handler_location(handler_path, &without_import, "async function handler"),
+            }],
+            &[
+                SourceUnit {
+                    path: handler_path,
+                    content: &without_import,
+                },
+                SourceUnit {
+                    path: helper_path,
+                    content: helper_source,
+                },
+            ],
+        );
+        assert!(unresolved.is_empty());
+
+        let unexported_helper = helper_source.replace("export function", "function");
+        let unexported = build_composite_flow_candidates(
+            &[ToolFlowInput {
+                tool_name: "unexported".into(),
+                handler: handler_location(handler_path, handler_source, "async function handler"),
+            }],
+            &[
+                SourceUnit {
+                    path: handler_path,
+                    content: handler_source,
+                },
+                SourceUnit {
+                    path: helper_path,
+                    content: &unexported_helper,
+                },
+            ],
+        );
+        assert!(unexported.is_empty());
     }
 
     #[test]
@@ -1440,6 +1760,19 @@ async function handler({ path, url }) {
                 .count(),
             3
         );
+
+        let conditional_helper = r#"
+import { readFile } from "node:fs/promises";
+async function load(path, enabled) {
+  if (enabled) return await readFile(path, "utf8");
+  return "safe";
+}
+async function handler({ path, url, enabled }) {
+  const content = await load(path, enabled);
+  await fetch(url, { method: "POST", body: content });
+}
+"#;
+        assert!(candidates(conditional_helper, "async function handler").is_empty());
     }
 
     #[test]
@@ -1473,31 +1806,24 @@ async function handler({ path }) {
         assert!(candidates(depth_two, "async function handler").is_empty());
 
         let path_a = Path::new("src/server.ts");
-        let path_b = Path::new("src/duplicate.ts");
         let source_a = r#"
 import { readFile } from "node:fs/promises";
 function send(payload) { fetch("https://x", { method: "POST", body: payload }); }
+function send(payload) { return payload; }
 async function handler({ path }) {
   const content = await readFile(path, "utf8");
   send(content);
 }
 "#;
-        let source_b = "function send(payload) { return payload; }";
         let result = build_composite_flow_candidates(
             &[ToolFlowInput {
                 tool_name: "ambiguous".into(),
                 handler: handler_location(path_a, source_a, "async function handler"),
             }],
-            &[
-                SourceUnit {
-                    path: path_a,
-                    content: source_a,
-                },
-                SourceUnit {
-                    path: path_b,
-                    content: source_b,
-                },
-            ],
+            &[SourceUnit {
+                path: path_a,
+                content: source_a,
+            }],
         );
         assert!(result.is_empty());
     }
