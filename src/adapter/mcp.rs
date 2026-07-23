@@ -38,9 +38,9 @@ impl super::Adapter for McpAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
-        Ok(load_mcp_analysis(root, filter)?
+        Ok(load_mcp_target(root, filter)
             .into_iter()
-            .map(|bundle| bundle.target)
+            .map(|(target, _)| target)
             .collect())
     }
 }
@@ -84,6 +84,43 @@ impl super::AnalysisAdapter for McpAnalysisAdapter {
 }
 
 fn load_mcp_analysis(root: &Path, filter: &ScanPathFilter) -> Result<Vec<AnalysisBundle>> {
+    let (target, composite_tools) = load_mcp_target(root, filter)?;
+
+    let source_for_composite = target
+        .source_files
+        .iter()
+        .filter_map(|source_file| match source_file.language {
+            Language::TypeScript | Language::JavaScript => Some(SourceUnit {
+                path: &source_file.path,
+                content: &source_file.content,
+            }),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    let mut tool_flow_inputs = Vec::new();
+    for tool in &composite_tools {
+        let Some(location) = &tool.handler_location else {
+            continue;
+        };
+        tool_flow_inputs.push(ToolFlowInput {
+            tool_name: tool.tool_name.clone(),
+            handler: location.clone(),
+        });
+    }
+
+    let composite_flows = build_composite_flow_candidates(&tool_flow_inputs, &source_for_composite);
+
+    Ok(vec![AnalysisBundle {
+        target,
+        composite_flows,
+    }])
+}
+
+fn load_mcp_target(
+    root: &Path,
+    filter: &ScanPathFilter,
+) -> Result<(ScanTarget, Vec<ToolDeclForComposite>)> {
     let metadata_root =
         super::mcp_metadata::metadata_root_for_scan(root).unwrap_or_else(|| root.to_path_buf());
     let name = root
@@ -111,17 +148,10 @@ fn load_mcp_analysis(root: &Path, filter: &ScanPathFilter) -> Result<Vec<Analysi
 
     // Phase 1: Parse each source file, collecting results for cross-file analysis.
     let mut parsed_files: Vec<(PathBuf, parser::ParsedFile)> = Vec::new();
-    let mut source_for_composite = Vec::new();
     for sf in &source_files {
         if let Some(parser) = parser::parser_for_language(sf.language) {
             if let Ok(parsed) = parser.parse_file(&sf.path, &sf.content) {
                 parsed_files.push((sf.path.clone(), parsed));
-            }
-            if matches!(sf.language, Language::TypeScript | Language::JavaScript) {
-                source_for_composite.push(SourceUnit {
-                    path: &sf.path,
-                    content: &sf.content,
-                });
             }
         }
     }
@@ -193,33 +223,20 @@ fn load_mcp_analysis(root: &Path, filter: &ScanPathFilter) -> Result<Vec<Analysi
     };
 
     let data = build_data_surface(&tools, &execution);
-    let mut tool_flow_inputs = Vec::new();
-    for tool_decl in &tool_decls_for_composite {
-        let Some(location) = &tool_decl.handler_location else {
-            continue;
-        };
-        tool_flow_inputs.push(ToolFlowInput {
-            tool_name: tool_decl.tool_name.clone(),
-            handler: location.clone(),
-        });
-    }
 
-    let composite_flows = build_composite_flow_candidates(&tool_flow_inputs, &source_for_composite);
+    let target = ScanTarget {
+        name,
+        framework: Framework::Mcp,
+        root_path: metadata_root,
+        tools,
+        execution,
+        data,
+        dependencies,
+        provenance,
+        source_files,
+    };
 
-    Ok(vec![AnalysisBundle {
-        target: ScanTarget {
-            name,
-            framework: Framework::Mcp,
-            root_path: metadata_root,
-            tools,
-            execution,
-            data,
-            dependencies,
-            provenance,
-            source_files,
-        },
-        composite_flows,
-    }])
+    Ok((target, tool_decls_for_composite))
 }
 
 struct ToolDeclForComposite {
