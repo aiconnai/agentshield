@@ -1,6 +1,10 @@
 use std::path::{Path, PathBuf};
 
+use crate::analysis::composite_flow::build_composite_flow_candidates;
+use crate::analysis::composite_flow::SourceUnit;
+use crate::analysis::composite_flow::ToolFlowInput;
 use crate::analysis::cross_file::apply_cross_file_sanitization;
+use crate::analysis::AnalysisBundle;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::capability::{
@@ -34,104 +38,176 @@ impl super::Adapter for McpAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
-        let metadata_root =
-            super::mcp_metadata::metadata_root_for_scan(root).unwrap_or_else(|| root.to_path_buf());
-        let name = root
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "mcp-server".into());
-
-        let mut source_files = Vec::new();
-        let mut execution = ExecutionSurface::default();
-        let mut tool_declarations = Vec::new();
-
-        // Collect source files
-        collect_source_files_with_filter(root, filter, &mut source_files)?;
-        for source_file in &source_files {
-            if matches!(
-                source_file.language,
-                Language::TypeScript | Language::JavaScript
-            ) {
-                tool_declarations.extend(extract_mcp_tool_declarations_from_source(
-                    &source_file.path,
-                    &source_file.content,
-                ));
-            }
-        }
-
-        // Phase 1: Parse each source file, collecting results for cross-file analysis.
-        let mut parsed_files: Vec<(PathBuf, parser::ParsedFile)> = Vec::new();
-        for sf in &source_files {
-            if let Some(parser) = parser::parser_for_language(sf.language) {
-                if let Ok(parsed) = parser.parse_file(&sf.path, &sf.content) {
-                    parsed_files.push((sf.path.clone(), parsed));
-                }
-            }
-        }
-
-        // Phase 2: Cross-file sanitizer-aware analysis — downgrade operations
-        // in functions that are only called with sanitized arguments.
-        apply_cross_file_sanitization(&mut parsed_files);
-
-        let operation_bindings = bind_mcp_tool_operations(&tool_declarations, &parsed_files);
-        debug_assert_eq!(operation_bindings.len(), tool_declarations.len());
-        debug_assert!(operation_bindings
-            .iter()
-            .all(McpToolOperationBinding::is_consistent));
-        let mut tools = tool_declarations
+        Ok(load_mcp_analysis(root, filter)?
             .into_iter()
-            .zip(operation_bindings)
-            .map(|(declaration, binding)| {
-                let mut tool = declaration.tool;
-                if binding.handler_resolved {
-                    project_observed_execution(&mut tool, &binding.execution);
-                }
-                tool.capability_observation_complete = binding.observation_complete;
-                tool
-            })
-            .collect::<Vec<_>>();
+            .map(|bundle| bundle.target)
+            .collect())
+    }
+}
 
-        // Phase 3: Merge parsed results into execution surface.
-        for (_, parsed) in parsed_files {
-            execution.commands.extend(parsed.commands);
-            execution.file_operations.extend(parsed.file_operations);
-            execution
-                .network_operations
-                .extend(parsed.network_operations);
-            execution.env_accesses.extend(parsed.env_accesses);
-            execution.dynamic_exec.extend(parsed.dynamic_exec);
+impl super::AnalysisAdapter for McpAdapter {
+    fn framework(&self) -> Framework {
+        Framework::Mcp
+    }
+
+    fn detect(&self, root: &Path) -> bool {
+        super::mcp_metadata::metadata_root_for_scan(root).is_some()
+    }
+
+    fn load_analysis_with_filter(
+        &self,
+        root: &Path,
+        filter: &ScanPathFilter,
+    ) -> Result<Vec<AnalysisBundle>> {
+        load_mcp_analysis(root, filter)
+    }
+}
+
+pub(crate) struct McpAnalysisAdapter;
+
+impl super::AnalysisAdapter for McpAnalysisAdapter {
+    fn framework(&self) -> Framework {
+        Framework::Mcp
+    }
+
+    fn detect(&self, root: &Path) -> bool {
+        super::mcp_metadata::metadata_root_for_scan(root).is_some()
+    }
+
+    fn load_analysis_with_filter(
+        &self,
+        root: &Path,
+        filter: &ScanPathFilter,
+    ) -> Result<Vec<AnalysisBundle>> {
+        load_mcp_analysis(root, filter)
+    }
+}
+
+fn load_mcp_analysis(root: &Path, filter: &ScanPathFilter) -> Result<Vec<AnalysisBundle>> {
+    let metadata_root =
+        super::mcp_metadata::metadata_root_for_scan(root).unwrap_or_else(|| root.to_path_buf());
+    let name = root
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "mcp-server".into());
+
+    let mut source_files = Vec::new();
+    let mut execution = ExecutionSurface::default();
+    let mut tool_declarations = Vec::new();
+
+    // Collect source files
+    collect_source_files_with_filter(root, filter, &mut source_files)?;
+    for source_file in &source_files {
+        if matches!(
+            source_file.language,
+            Language::TypeScript | Language::JavaScript
+        ) {
+            tool_declarations.extend(extract_mcp_tool_declarations_from_source(
+                &source_file.path,
+                &source_file.content,
+            ));
         }
+    }
 
-        // Parse tool definitions from JSON if available
-        let tools_json = root.join("tools.json");
-        if tools_json.exists() && filter.allows_path(root, &tools_json) {
-            if let Ok(content) = std::fs::read_to_string(&tools_json) {
-                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
-                    tools.extend(parser::json_schema::parse_tools_from_json(&value));
-                    tools = dedupe_tools_by_name(tools);
-                }
+    // Phase 1: Parse each source file, collecting results for cross-file analysis.
+    let mut parsed_files: Vec<(PathBuf, parser::ParsedFile)> = Vec::new();
+    let mut source_for_composite = Vec::new();
+    for sf in &source_files {
+        if let Some(parser) = parser::parser_for_language(sf.language) {
+            if let Ok(parsed) = parser.parse_file(&sf.path, &sf.content) {
+                parsed_files.push((sf.path.clone(), parsed));
+            }
+            if matches!(sf.language, Language::TypeScript | Language::JavaScript) {
+                source_for_composite.push(SourceUnit {
+                    path: &sf.path,
+                    content: &sf.content,
+                });
             }
         }
-        for tool in &mut tools {
-            project_declared_permissions(tool);
-            project_declared_description(tool);
+    }
+
+    // Phase 2: Cross-file sanitizer-aware analysis — downgrade operations
+    // in functions that are only called with sanitized arguments.
+    apply_cross_file_sanitization(&mut parsed_files);
+
+    let operation_bindings = bind_mcp_tool_operations(&tool_declarations, &parsed_files);
+    debug_assert_eq!(operation_bindings.len(), tool_declarations.len());
+    debug_assert!(operation_bindings
+        .iter()
+        .all(McpToolOperationBinding::is_consistent));
+
+    let mut tool_decls_for_composite = Vec::with_capacity(tool_declarations.len());
+    let mut tools = Vec::with_capacity(tool_declarations.len());
+
+    for (declaration, binding) in tool_declarations.into_iter().zip(operation_bindings) {
+        let mut tool = declaration.tool;
+        if binding.handler_resolved {
+            project_observed_execution(&mut tool, &binding.execution);
         }
+        tool.capability_observation_complete = binding.observation_complete;
+        tool_decls_for_composite.push(ToolDeclForComposite {
+            tool_name: tool.name.clone(),
+            handler_location: binding.handler_location.clone(),
+        });
+        tools.push(tool);
+    }
 
-        let (dependencies, provenance) = if super::mcp_metadata::same_path(root, &metadata_root) {
-            (
-                parse_dependencies(root, filter),
-                parse_provenance(root, filter),
-            )
-        } else {
-            (
-                parse_dependencies(&metadata_root, filter),
-                parse_provenance(&metadata_root, filter),
-            )
+    // Phase 3: Merge parsed results into execution surface.
+    for (_, parsed) in &parsed_files {
+        execution.commands.extend(parsed.commands.clone());
+        execution
+            .file_operations
+            .extend(parsed.file_operations.clone());
+        execution
+            .network_operations
+            .extend(parsed.network_operations.clone());
+        execution.env_accesses.extend(parsed.env_accesses.clone());
+        execution.dynamic_exec.extend(parsed.dynamic_exec.clone());
+    }
+
+    // Parse tool definitions from JSON if available
+    let tools_json = root.join("tools.json");
+    if tools_json.exists() && filter.allows_path(root, &tools_json) {
+        if let Ok(content) = std::fs::read_to_string(&tools_json) {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
+                tools.extend(parser::json_schema::parse_tools_from_json(&value));
+                tools = dedupe_tools_by_name(tools);
+            }
+        }
+    }
+    for tool in &mut tools {
+        project_declared_permissions(tool);
+        project_declared_description(tool);
+    }
+
+    let (dependencies, provenance) = if super::mcp_metadata::same_path(root, &metadata_root) {
+        (
+            parse_dependencies(root, filter),
+            parse_provenance(root, filter),
+        )
+    } else {
+        (
+            parse_dependencies(&metadata_root, filter),
+            parse_provenance(&metadata_root, filter),
+        )
+    };
+
+    let data = build_data_surface(&tools, &execution);
+    let mut tool_flow_inputs = Vec::new();
+    for tool_decl in &tool_decls_for_composite {
+        let Some(location) = &tool_decl.handler_location else {
+            continue;
         };
+        tool_flow_inputs.push(ToolFlowInput {
+            tool_name: tool_decl.tool_name.clone(),
+            handler: location.clone(),
+        });
+    }
 
-        let data = build_data_surface(&tools, &execution);
+    let composite_flows = build_composite_flow_candidates(&tool_flow_inputs, &source_for_composite);
 
-        Ok(vec![ScanTarget {
+    Ok(vec![AnalysisBundle {
+        target: ScanTarget {
             name,
             framework: Framework::Mcp,
             root_path: metadata_root,
@@ -141,8 +217,14 @@ impl super::Adapter for McpAdapter {
             dependencies,
             provenance,
             source_files,
-        }])
-    }
+        },
+        composite_flows,
+    }])
+}
+
+struct ToolDeclForComposite {
+    tool_name: String,
+    handler_location: Option<SourceLocation>,
 }
 
 /// Check if a file path belongs to a test file or test directory.
@@ -228,6 +310,7 @@ struct McpToolOperationBinding {
     handler_resolved: bool,
     observation_complete: bool,
     resolved_callees: Vec<String>,
+    handler_location: Option<SourceLocation>,
 }
 
 impl McpToolOperationBinding {
@@ -321,6 +404,7 @@ fn bind_mcp_tool_operations(
                     handler_resolved: false,
                     observation_complete: false,
                     resolved_callees: Vec::new(),
+                    handler_location: None,
                 };
             };
 
@@ -333,8 +417,9 @@ fn bind_mcp_tool_operations(
             resolved_callees.sort_by(|left, right| left.0.cmp(&right.0));
             resolved_callees.dedup_by(|left, right| left.0 == right.0);
 
+            let handler_span = handler.span.clone();
             let mut scopes = Vec::with_capacity(resolved_callees.len() + 1);
-            scopes.push((handler.span, handler.caller));
+            scopes.push((handler_span.clone(), handler.caller));
             scopes.extend(
                 resolved_callees
                     .iter()
@@ -350,6 +435,7 @@ fn bind_mcp_tool_operations(
                 handler_resolved: true,
                 observation_complete,
                 resolved_callees: resolved_callees.into_iter().map(|(name, _)| name).collect(),
+                handler_location: Some(handler_span),
             }
         })
         .collect()
@@ -367,6 +453,7 @@ fn bind_mcp_tool_operations(
             handler_resolved: false,
             observation_complete: false,
             resolved_callees: Vec::new(),
+            handler_location: None,
         })
         .collect()
 }

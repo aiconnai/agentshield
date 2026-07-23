@@ -298,7 +298,7 @@ pub fn build_attestation(
     });
 
     // Scanner info
-    let rule_count = crate::rules::RuleEngine::new().list_rules().len();
+    let rule_count = crate::rules::RuleEngine::new().list_scanner_rules().len();
     let scanner = ScannerInfo {
         name: "agentshield".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
