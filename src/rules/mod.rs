@@ -4,7 +4,9 @@ pub mod policy;
 
 use crate::ir::ScanTarget;
 
-pub use finding::{AttackCategory, Confidence, Evidence, Finding, RuleMetadata, Severity};
+pub use finding::{
+    AttackCategory, Confidence, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
+};
 
 /// A detector checks a `ScanTarget` and produces findings.
 pub trait Detector: Send + Sync {
@@ -42,5 +44,24 @@ impl RuleEngine {
 impl Default for RuleEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_builtin_rules_have_owasp_mcp_mapping() {
+        let engine = RuleEngine::new();
+        let rules = engine.list_rules();
+        assert!(!rules.is_empty());
+        for rule in &rules {
+            assert!(
+                rule.owasp_mcp.is_some(),
+                "rule {} is missing an OWASP MCP Top 10 mapping",
+                rule.id
+            );
+        }
     }
 }

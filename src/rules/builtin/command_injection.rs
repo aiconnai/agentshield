@@ -1,6 +1,6 @@
 use crate::ir::{ArgumentSource, ScanTarget, SinkClass};
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-001: Command Injection
@@ -19,6 +19,7 @@ impl Detector for CommandInjectionDetector {
             default_severity: Severity::Critical,
             attack_category: AttackCategory::CommandInjection,
             cwe_id: Some("CWE-78".into()),
+            owasp_mcp: Some(OwaspMcp::CommandExecution),
         }
     }
 
