@@ -165,6 +165,102 @@ pub struct RuleMetadata {
     pub default_severity: Severity,
     pub attack_category: AttackCategory,
     pub cwe_id: Option<String>,
+    /// OWASP MCP Top 10 category, if applicable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owasp_mcp: Option<OwaspMcp>,
+}
+
+/// OWASP MCP Top 10 (2025) categories.
+///
+/// Serialized as the short code (e.g. `"MCP05"`) for stable machine use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum OwaspMcp {
+    /// MCP01 — Token Mismanagement & Session Hijacking
+    #[serde(rename = "MCP01")]
+    TokenMismanagement,
+    /// MCP02 — Unauthorized / Excessive Scope & Privilege Escalation
+    #[serde(rename = "MCP02")]
+    ExcessiveScope,
+    /// MCP03 — Tool Poisoning & Malicious Tool Descriptions
+    #[serde(rename = "MCP03")]
+    ToolPoisoning,
+    /// MCP04 — Prompt Injection via Tool Metadata & Content
+    #[serde(rename = "MCP04")]
+    PromptInjection,
+    /// MCP05 — Command Injection & Arbitrary Code Execution
+    #[serde(rename = "MCP05")]
+    CommandExecution,
+    /// MCP06 — Data Exfiltration & Sensitive Information Disclosure
+    #[serde(rename = "MCP06")]
+    DataExfiltration,
+    /// MCP07 — Supply Chain & Dependency Compromise
+    #[serde(rename = "MCP07")]
+    SupplyChain,
+    /// MCP08 — Insecure Server-to-Server Communication
+    #[serde(rename = "MCP08")]
+    InsecureCommunication,
+    /// MCP09 — Malicious Updates / Rug Pulls
+    #[serde(rename = "MCP09")]
+    MaliciousUpdate,
+    /// MCP10 — Insufficient Logging, Monitoring & Auditability
+    #[serde(rename = "MCP10")]
+    InsufficientLogging,
+}
+
+impl OwaspMcp {
+    /// Short taxonomy code, e.g. "MCP05".
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::TokenMismanagement => "MCP01",
+            Self::ExcessiveScope => "MCP02",
+            Self::ToolPoisoning => "MCP03",
+            Self::PromptInjection => "MCP04",
+            Self::CommandExecution => "MCP05",
+            Self::DataExfiltration => "MCP06",
+            Self::SupplyChain => "MCP07",
+            Self::InsecureCommunication => "MCP08",
+            Self::MaliciousUpdate => "MCP09",
+            Self::InsufficientLogging => "MCP10",
+        }
+    }
+
+    /// Human-readable taxonomy name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::TokenMismanagement => "Token Mismanagement & Session Hijacking",
+            Self::ExcessiveScope => "Unauthorized / Excessive Scope & Privilege Escalation",
+            Self::ToolPoisoning => "Tool Poisoning & Malicious Tool Descriptions",
+            Self::PromptInjection => "Prompt Injection via Tool Metadata & Content",
+            Self::CommandExecution => "Command Injection & Arbitrary Code Execution",
+            Self::DataExfiltration => "Data Exfiltration & Sensitive Information Disclosure",
+            Self::SupplyChain => "Supply Chain & Dependency Compromise",
+            Self::InsecureCommunication => "Insecure Server-to-Server Communication",
+            Self::MaliciousUpdate => "Malicious Updates / Rug Pulls",
+            Self::InsufficientLogging => "Insufficient Logging, Monitoring & Auditability",
+        }
+    }
+
+    /// All categories, for SARIF taxonomy emission.
+    pub fn all() -> &'static [OwaspMcp] {
+        &[
+            Self::TokenMismanagement,
+            Self::ExcessiveScope,
+            Self::ToolPoisoning,
+            Self::PromptInjection,
+            Self::CommandExecution,
+            Self::DataExfiltration,
+            Self::SupplyChain,
+            Self::InsecureCommunication,
+            Self::MaliciousUpdate,
+            Self::InsufficientLogging,
+        ]
+    }
+}
+
+impl std::fmt::Display for OwaspMcp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.code())
+    }
 }
 
 #[cfg(test)]
@@ -366,5 +462,48 @@ mod tests {
             fp.chars().all(|c| c.is_ascii_hexdigit()),
             "Fingerprint should be valid hex"
         );
+    }
+
+    #[test]
+    fn rule_metadata_owasp_serialization_roundtrip() {
+        let meta = RuleMetadata {
+            id: "SHIELD-001".into(),
+            name: "Command Injection".into(),
+            description: "desc".into(),
+            default_severity: Severity::Critical,
+            attack_category: AttackCategory::CommandInjection,
+            cwe_id: Some("CWE-78".into()),
+            owasp_mcp: Some(OwaspMcp::CommandExecution),
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(json.contains("\"owasp_mcp\":\"MCP05\""));
+        let back: RuleMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.owasp_mcp, Some(OwaspMcp::CommandExecution));
+    }
+
+    #[test]
+    fn rule_metadata_owasp_none_omits_key() {
+        let meta = RuleMetadata {
+            id: "SHIELD-999".into(),
+            name: "Future Rule".into(),
+            description: "desc".into(),
+            default_severity: Severity::Info,
+            attack_category: AttackCategory::SupplyChain,
+            cwe_id: None,
+            owasp_mcp: None,
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(!json.contains("owasp_mcp"));
+        // Deserialize missing key defaults to None
+        let back: RuleMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.owasp_mcp, None);
+    }
+
+    #[test]
+    fn owasp_codes_and_names_complete() {
+        assert_eq!(OwaspMcp::all().len(), 10);
+        assert_eq!(OwaspMcp::CommandExecution.code(), "MCP05");
+        assert_eq!(OwaspMcp::CommandExecution.to_string(), "MCP05");
+        assert!(OwaspMcp::SupplyChain.name().contains("Supply Chain"));
     }
 }

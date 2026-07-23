@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::ir::tool_surface::PermissionType;
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-008: Excessive Permissions
@@ -21,6 +21,7 @@ impl Detector for ExcessivePermissionsDetector {
             default_severity: Severity::Medium,
             attack_category: AttackCategory::ExcessivePermissions,
             cwe_id: Some("CWE-250".into()),
+            owasp_mcp: Some(OwaspMcp::ExcessiveScope),
         }
     }
 

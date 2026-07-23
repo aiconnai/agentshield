@@ -1,6 +1,6 @@
 use crate::ir::{ScanTarget, SinkClass};
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-011: Dynamic Code Execution
@@ -19,6 +19,7 @@ impl Detector for DynamicExecDetector {
             default_severity: Severity::Critical,
             attack_category: AttackCategory::CodeInjection,
             cwe_id: Some("CWE-95".into()),
+            owasp_mcp: Some(OwaspMcp::CommandExecution),
         }
     }
 

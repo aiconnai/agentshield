@@ -1,7 +1,7 @@
 use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-007: Prompt Injection Surface
@@ -25,6 +25,7 @@ impl Detector for PromptInjectionDetector {
             default_severity: Severity::Medium,
             attack_category: AttackCategory::PromptInjectionSurface,
             cwe_id: None,
+            owasp_mcp: Some(OwaspMcp::PromptInjection),
         }
     }
 

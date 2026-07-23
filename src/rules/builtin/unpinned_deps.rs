@@ -1,6 +1,6 @@
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-009: Unpinned Dependencies
@@ -19,6 +19,7 @@ impl Detector for UnpinnedDepsDetector {
             default_severity: Severity::Medium,
             attack_category: AttackCategory::SupplyChain,
             cwe_id: Some("CWE-1104".into()),
+            owasp_mcp: Some(OwaspMcp::SupplyChain),
         }
     }
 

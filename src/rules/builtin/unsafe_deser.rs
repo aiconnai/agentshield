@@ -4,7 +4,7 @@ use super::unsafe_deser_patterns::{
 
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-016: Unsafe Deserialization
@@ -24,6 +24,7 @@ impl Detector for UnsafeDeserDetector {
             default_severity: Severity::Critical,
             attack_category: AttackCategory::CodeInjection,
             cwe_id: Some("CWE-502".into()),
+            owasp_mcp: Some(OwaspMcp::CommandExecution),
         }
     }
 

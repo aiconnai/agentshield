@@ -1,7 +1,7 @@
 use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::ir::ScanTarget;
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-018: Secret Leakage
@@ -38,6 +38,7 @@ impl Detector for SecretLeakageDetector {
             default_severity: Severity::High,
             attack_category: AttackCategory::DataExfiltration,
             cwe_id: Some("CWE-532".into()),
+            owasp_mcp: Some(OwaspMcp::DataExfiltration),
         }
     }
 
