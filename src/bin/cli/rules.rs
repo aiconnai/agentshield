@@ -2,7 +2,7 @@ use agentshield::rules::RuleEngine;
 
 pub(super) fn cmd_list_rules(format_str: String) -> Result<i32, agentshield::error::ShieldError> {
     let engine = RuleEngine::new();
-    let rules = engine.list_rules();
+    let rules = engine.list_scanner_rules();
 
     match format_str.as_str() {
         "json" => {
