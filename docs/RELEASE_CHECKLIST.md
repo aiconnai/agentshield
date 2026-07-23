@@ -32,7 +32,7 @@ Use this checklist for public AgentShield releases.
 - [ ] Confirm release workflow builds with `--features full`.
 - [ ] Confirm the release workflow `Check release invariants` job passed before any build matrix started.
 - [ ] Confirm release workflow fails when the pushed tag does not match `Cargo.toml`.
-- [ ] Confirm release workflow publishes `ghcr.io/aiconnai/agentshield:<version>` without the leading `v` from the Git tag.
+- [ ] Confirm the Docker workflow publishes `ghcr.io/aiconnai/agentshield:<version>` without the leading `v` from the Git tag.
 - [ ] Confirm native release jobs smoke-check `agentshield --help` for the `wrap` command.
 - [ ] Do not execute cross-compiled aarch64 Linux artifacts on x86 runners.
 - [ ] Confirm the Docker image includes `wrap` and reports the intended version.
