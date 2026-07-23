@@ -96,23 +96,28 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
     let ignore_tests = options.ignore_tests || config.scan.ignore_tests;
     let path_filter = ScanPathFilter::from_scan_config(&config.scan, ignore_tests)?;
     let path_filter_summary = path_filter.summary();
-    let targets = adapter::auto_detect_and_load_with_filter(path, &path_filter)?;
+    let bundles = adapter::auto_detect_analysis_with_filter(path, &path_filter)?;
 
     // Run detectors on all targets
     let engine = RuleEngine::new();
     let mut all_findings: Vec<Finding> = Vec::new();
 
-    let target_name = if let Some(first) = targets.first() {
-        first.name.clone()
+    let target_name = if let Some(first) = bundles.first() {
+        first.target.name.clone()
     } else {
         path.file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "unknown".into())
     };
 
-    for target in &targets {
-        let findings = engine.run(target);
-        all_findings.extend(findings);
+    let mut targets = Vec::with_capacity(bundles.len());
+    for bundle in &bundles {
+        let input = crate::analysis::DetectionInput {
+            target: &bundle.target,
+            composite_flows: &bundle.composite_flows,
+        };
+        all_findings.extend(engine.run_with_context(&input));
+        targets.push(bundle.target.clone());
     }
 
     // Canonicalize for stable fingerprints; fall back to the raw path on error.
@@ -134,7 +139,7 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
 
 /// Render a scan report in the specified format.
 pub fn render_report(report: &ScanReport, format: OutputFormat) -> Result<String> {
-    let rule_metadata = rules::RuleEngine::new().list_rules();
+    let rule_metadata = rules::RuleEngine::new().list_scanner_rules();
     output::render_with_metadata(
         &report.findings,
         &report.verdict,
