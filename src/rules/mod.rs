@@ -2,6 +2,7 @@ pub mod builtin;
 pub mod finding;
 pub mod policy;
 
+use crate::analysis::DetectionInput;
 use crate::ir::ScanTarget;
 
 pub use finding::{
@@ -17,9 +18,16 @@ pub trait Detector: Send + Sync {
     fn run(&self, target: &ScanTarget) -> Vec<Finding>;
 }
 
+pub(crate) trait ContextDetector: Send + Sync {
+    fn metadata(&self) -> RuleMetadata;
+
+    fn run(&self, input: &DetectionInput<'_>) -> Vec<Finding>;
+}
+
 /// The rule engine runs all registered detectors against a target.
 pub struct RuleEngine {
     detectors: Vec<Box<dyn Detector>>,
+    context_detectors: Vec<Box<dyn ContextDetector>>,
 }
 
 impl RuleEngine {
@@ -27,6 +35,7 @@ impl RuleEngine {
     pub fn new() -> Self {
         Self {
             detectors: builtin::all_detectors(),
+            context_detectors: Vec::new(),
         }
     }
 
@@ -35,9 +44,36 @@ impl RuleEngine {
         self.detectors.iter().flat_map(|d| d.run(target)).collect()
     }
 
+    /// Run all built-in detectors, including contextual detectors.
+    pub(crate) fn run_with_context(&self, input: &DetectionInput<'_>) -> Vec<Finding> {
+        let _ = input.composite_flows.len();
+        let mut findings = self
+            .detectors
+            .iter()
+            .flat_map(|detector| detector.run(input.target))
+            .collect::<Vec<_>>();
+        findings.extend(
+            self.context_detectors
+                .iter()
+                .flat_map(|detector| detector.run(input)),
+        );
+        findings
+    }
+
     /// List metadata for all registered rules.
     pub fn list_rules(&self) -> Vec<RuleMetadata> {
         self.detectors.iter().map(|d| d.metadata()).collect()
+    }
+
+    /// List metadata for all scanner rules, including future contextual detectors.
+    pub fn list_scanner_rules(&self) -> Vec<RuleMetadata> {
+        let mut rules = self
+            .detectors
+            .iter()
+            .map(|d| d.metadata())
+            .collect::<Vec<_>>();
+        rules.extend(self.context_detectors.iter().map(|d| d.metadata()));
+        rules
     }
 }
 
