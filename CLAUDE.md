@@ -5,7 +5,8 @@ This file provides guidance to AI coding agents when working with this repositor
 ## Project Overview
 
 **AgentShield** is a Rust-based, offline-first security scanner for AI agent extensions
-(MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, GPT Actions, Cursor Rules).
+(MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, GPT Actions, Cursor Rules,
+and Hermes Agent projects).
 It produces SARIF output compatible with GitHub Code Scanning, supports DSSE attestation,
 and includes baseline diffing, suppressions, and egress policy generation.
 
@@ -31,7 +32,8 @@ agentshield/
 │   │   ├── crewai.rs             # CrewAI adapter (BaseTool, @tool)
 │   │   ├── langchain.rs          # LangChain adapter (@tool, BaseTool, langgraph)
 │   │   ├── gpt_actions.rs        # GPT Actions adapter (OpenAPI specs)
-│   │   └── cursor_rules.rs       # Cursor Rules adapter (.cursorrules files)
+│   │   ├── cursor_rules.rs       # Cursor Rules adapter (.cursorrules files)
+│   │   └── hermes.rs             # Hermes Agent config, context, and skills adapter
 │   ├── parser/                   # Language parsers
 │   │   ├── mod.rs                # Parser trait, ParsedFile, FunctionDef, CallSite
 │   │   ├── python.rs             # tree-sitter Python + regex patterns
@@ -63,7 +65,8 @@ agentshield/
 │   │   ├── vuln_ssrf/            # SHIELD-003 true positive
 │   │   └── vuln_cred_exfil/      # SHIELD-002 true positive
 │   ├── crewai_project/           # CrewAI adapter test (v0.2.4)
-│   └── langchain_project/       # LangChain adapter test (v0.2.4)
+│   ├── langchain_project/        # LangChain adapter test (v0.2.4)
+│   └── hermes_agent/             # Hermes Agent adapter fixtures
 ├── vscode/                       # VS Code extension (v0.1.0)
 │   ├── package.json              # Extension manifest
 │   ├── tsconfig.json             # TypeScript config
@@ -74,7 +77,10 @@ agentshield/
 │       └── types.ts              # JSON interfaces (mirrors Rust)
 ├── .github/workflows/
 │   ├── ci.yml                    # Test + clippy + fmt + smoke
-│   └── release.yml               # 5-platform binary builds
+│   ├── feature-matrix.yml        # Supported Cargo feature configurations
+│   ├── vscode.yml                # Extension compile, test, audit, and package
+│   ├── release.yml               # 5-platform binary builds
+│   └── docker.yml                # Canonical multi-architecture GHCR publisher
 └── action.yml                    # GitHub Action (composite)
 ```
 
@@ -84,8 +90,8 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (212 tests)
-cargo test
+# Test (295 Rust tests under the default feature set, including all targets)
+cargo test --workspace --all-targets --locked
 
 # Lint
 cargo clippy -- -D warnings
@@ -101,7 +107,38 @@ cargo run -- suppress SHIELD-001 src/tools.py:42 --reason "accepted risk"
 cargo run -- list-suppressions
 cargo run -- certify . --output attestation.json
 cargo run -- certify . --sign-key key.bin --output attestation.json
+
+# VS Code extension
+cd vscode
+npm ci
+npm run compile
+npm test
+npm audit --audit-level=moderate
+npm run package
 ```
+
+The Rust test count is the number of entries ending in `: test` emitted by
+`cargo test --workspace --all-targets --locked -- --list`. The dedicated VS Code
+workflow runs clean installation, compilation, unit tests, dependency auditing,
+and VSIX packaging. Docker images for version tags are published only by
+`.github/workflows/docker.yml`; `release.yml` owns the platform binary release.
+
+## Supported Cargo Feature Configurations
+
+The default feature set enables both language parsers (`python` and `typescript`).
+CI also verifies these supported configurations independently:
+
+```bash
+cargo test --no-default-features --locked
+cargo check --no-default-features --features python --locked
+cargo check --no-default-features --features typescript --locked
+cargo check --no-default-features --features runtime --locked
+cargo check --no-default-features --features runtime,runtime-guard --locked
+```
+
+Use `runtime-guard` together with `runtime` for the supported runtime-guard
+configuration. The existing primary Rust CI continues to exercise the complete
+all-features build.
 
 ## Architecture Principles
 
@@ -196,7 +233,7 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 5. `load()` uses the 3-phase pipeline (parse → cross-file analysis → merge)
 6. Reuse shared helpers from `mcp.rs`: `collect_source_files()`, `parse_dependencies()`, `parse_provenance()`
 
-**Existing adapters:** MCP (`mcp.rs`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), GPT Actions (`gpt_actions.rs`), Cursor Rules (`cursor_rules.rs`)
+**Existing adapters:** MCP (`mcp.rs`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), GPT Actions (`gpt_actions.rs`), Cursor Rules (`cursor_rules.rs`), Hermes Agent (`hermes.rs`)
 
 ## Conventions
 
