@@ -44,28 +44,36 @@ if ! grep -Fq "$docker_tag" README.md; then
 fi
 
 release_workflow=".github/workflows/release.yml"
-if ! grep -Fq 'version="${GITHUB_REF_NAME#v}"' "$release_workflow"; then
-  echo "Release workflow must strip the leading v from Docker version tags"
+docker_workflow=".github/workflows/docker.yml"
+
+if ! grep -Fq 'REGISTRY: ghcr.io' "$docker_workflow"; then
+  echo "Docker workflow must publish to the ghcr.io registry"
   exit 1
 fi
 
-if ! grep -Fq 'ghcr.io/aiconnai/agentshield:${{ steps.docker-version.outputs.version }}' "$release_workflow"; then
-  echo "Release workflow must publish ${docker_image}:<version>"
+# shellcheck disable=SC2016 # Match the literal GitHub Actions expression.
+if ! grep -Fq 'IMAGE_NAME: ${{ github.repository }}' "$docker_workflow"; then
+  echo "Docker workflow must publish the repository image as ${docker_image}"
   exit 1
 fi
 
-if ! grep -Fq 'ghcr.io/aiconnai/agentshield:latest' "$release_workflow"; then
-  echo "Release workflow must publish ${docker_image}:latest"
+if ! grep -Fq 'uses: docker/metadata-action@' "$docker_workflow"; then
+  echo "Docker workflow must derive canonical image tags with docker/metadata-action"
   exit 1
 fi
 
-if grep -Fq 'ghcr.io/${{ github.repository_owner }}/agentshield:${{ github.ref_name }}' "$release_workflow"; then
-  echo "Release workflow must not publish GHCR tags with repository_owner/ref_name"
+if ! grep -Fq 'type=semver,pattern={{version}}' "$docker_workflow"; then
+  echo "Docker workflow must publish ${docker_image}:<version> without the leading v"
   exit 1
 fi
 
-if grep -Fq 'ghcr.io/${{ github.repository_owner }}/agentshield:latest' "$release_workflow"; then
-  echo "Release workflow must not publish latest under repository_owner"
+if ! grep -Fq 'type=raw,value=latest' "$docker_workflow"; then
+  echo "Docker workflow must publish ${docker_image}:latest"
+  exit 1
+fi
+
+if grep -Fq 'docker/build-push-action@' "$release_workflow"; then
+  echo "Release workflow must not duplicate Docker publishing"
   exit 1
 fi
 

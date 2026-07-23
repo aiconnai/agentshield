@@ -12,6 +12,16 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  release-invariants:
+    name: Release Invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify release workflow contracts
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          .github/scripts/check-release-invariants.sh "v${version}"
+
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
