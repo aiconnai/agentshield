@@ -195,7 +195,7 @@ Run MCP servers in containers or with restricted filesystem access. Don't give a
 
 [AgentShield](https://github.com/aiconnai/agentshield) is a free, open-source, offline-first security scanner for AI agent extensions. It ships as a single ~1 MiB binary with:
 
-- **18 built-in detectors** covering OWASP-style vulnerabilities adapted for AI tools
+- **19 built-in detectors** covering OWASP-style vulnerabilities adapted for AI tools
 - **7 framework/client adapters:** MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules
 - **Python regex + TypeScript tree-sitter parsers** with cross-file validation tracking
 - **4 output formats:** console, JSON, SARIF (GitHub Code Scanning), HTML

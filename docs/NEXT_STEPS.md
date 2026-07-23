@@ -1,6 +1,6 @@
 # Next Steps — Post v0.1.0
 
-Status: v0.8.7 release prep. 7 framework/client adapters (MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 18 detectors (SHIELD-001..018), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering, scan include/exclude filters, MCP subdirectory scans, explain hotspot summaries, experimental `guard --stdin`, and experimental bidirectional `guard --mcp-proxy` transport. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations - all done.
+Status: v0.8.7 release prep. 7 framework/client adapters (MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 19 detectors (SHIELD-001..019), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering, scan include/exclude filters, MCP subdirectory scans, explain hotspot summaries, experimental `guard --stdin`, and experimental bidirectional `guard --mcp-proxy` transport. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations - all done.
 
 ---
 

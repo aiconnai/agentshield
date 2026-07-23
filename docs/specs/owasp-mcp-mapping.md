@@ -47,6 +47,7 @@ recebem a categoria do *impacto principal*; a secundária fica documentada em RU
 | SHIELD-016 | Unsafe Deserialization | MCP05 | — |
 | SHIELD-017 | Archive Traversal (Zip Slip) | MCP02 | MCP05 |
 | SHIELD-018 | Secret Leakage | MCP06 | MCP10 |
+| SHIELD-019 | Capability / Description Mismatch | MCP03 | — |
 
 Regras futuras sem mapeamento natural: `owasp_mcp: None` é permitido — o campo é
 `Option`, não obrigatório.
@@ -144,12 +145,12 @@ o `metadata()` do detector.
    - rule sem `owasp_mcp` (construída manualmente no teste) não tem `relationships`;
    - CWE tag preservada;
    - fingerprints/results idênticos ao comportamento anterior (regressão de compat).
-3. **`list-rules`**: saída JSON contém `owasp_mcp` em todas as 18 regras; saída texto
+3. **`list-rules`**: saída JSON contém `owasp_mcp` em todas as 19 regras; saída texto
    contém coluna OWASP.
 4. **Integridade do mapeamento**: teste que itera `RuleEngine::list_rules()` e garante
    que toda regra `SHIELD-*` tem `owasp_mcp: Some(_)` (previne regras novas órfãs);
    códigos MCP válidos (enum garante em compile time).
-5. **Docs**: RULES.md ganha linha "OWASP MCP" na tabela de cada regra (18 edições).
+5. **Docs**: RULES.md mantém uma linha "OWASP MCP" na tabela de cada regra.
 
 ## 6. Não-escopo (explícito)
 

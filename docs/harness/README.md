@@ -110,7 +110,7 @@ Exclusions are not a way to make production code look green.
 ## Current Scanner Surface
 
 - Framework adapters: MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules.
-- Rule surface: 18 built-in detectors, `SHIELD-001` through `SHIELD-018`.
+- Rule surface: 19 built-in detectors, `SHIELD-001` through `SHIELD-019`.
 - Output formats: console, JSON, SARIF 2.1.0, HTML, plus DSSE attestation through `certify`.
 - Trust workflows: suppressions, baselines, egress policy generation, optional runtime egress enforcement.
 - Distribution surfaces: GitHub Action, release binaries for 5 targets, VS Code extension.

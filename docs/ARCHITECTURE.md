@@ -184,7 +184,7 @@ The `Sanitized` variant was added in v0.2.2 and is produced by `apply_cross_file
 ```
 src/rules/mod.rs          — RuleEngine, Detector trait
 src/rules/finding.rs      — Finding, Severity, Confidence, Evidence
-src/rules/builtin/        — 18 built-in detectors
+src/rules/builtin/        — 19 built-in detectors
 ```
 
 Each detector implements:
@@ -263,7 +263,7 @@ All formatters receive `(&[Finding], &PolicyVerdict)` and produce a `String`.
              ▼
      ┌───────────────┐
      │  RuleEngine   │
-     │  18 detectors │
+     │  19 detectors │
      └───────┬───────┘
              │
         Vec<Finding>

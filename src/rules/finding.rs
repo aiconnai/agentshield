@@ -98,6 +98,7 @@ pub enum AttackCategory {
     PromptInjectionSurface,
     ExcessivePermissions,
     DataExfiltration,
+    CapabilityMismatch,
 }
 
 impl std::fmt::Display for AttackCategory {
@@ -113,6 +114,7 @@ impl std::fmt::Display for AttackCategory {
             Self::PromptInjectionSurface => write!(f, "Prompt Injection Surface"),
             Self::ExcessivePermissions => write!(f, "Excessive Permissions"),
             Self::DataExfiltration => write!(f, "Data Exfiltration"),
+            Self::CapabilityMismatch => write!(f, "Capability Mismatch"),
         }
     }
 }
