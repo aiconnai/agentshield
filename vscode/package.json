@@ -25,7 +25,6 @@
     "agent",
     "sarif"
   ],
-  "icon": "icon.png",
   "activationEvents": [
     "workspaceContains:**/package.json",
     "workspaceContains:**/pyproject.toml",
@@ -73,13 +72,14 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
+    "test": "npm run compile && node --test dist/test/*.test.js",
     "watch": "tsc -watch -p ./",
     "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
-    "@vscode/vsce": "^3.0.0",
+    "@vscode/vsce": "^3.9.2",
     "typescript": "^5.4.0"
   }
 }

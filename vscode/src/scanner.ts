@@ -6,6 +6,12 @@ import { AgentShieldReport } from "./types";
 
 const execFileAsync = promisify(execFile);
 
+type ScanExecutor = (
+  binary: string,
+  args: string[],
+  options: { timeout: number; maxBuffer: number; cwd: string }
+) => Promise<{ stdout: string; stderr: string }>;
+
 /**
  * Locate the agentshield binary.
  *
@@ -14,10 +20,19 @@ const execFileAsync = promisify(execFile);
 export function findBinary(): string {
   const config = vscode.workspace.getConfiguration("agentshield");
   const configured = config.get<string>("binaryPath", "");
-  if (configured) {
-    return configured;
+  return resolveBinary(configured);
+}
+
+export function resolveBinary(configured: string): string {
+  return configured || "agentshield";
+}
+
+export function buildScanArgs(workspacePath: string, ignoreTests: boolean): string[] {
+  const args = ["scan", workspacePath, "--format", "json"];
+  if (ignoreTests) {
+    args.push("--ignore-tests");
   }
-  return "agentshield";
+  return args;
 }
 
 /**
@@ -28,22 +43,20 @@ export function findBinary(): string {
  */
 export async function runScan(
   workspacePath: string,
-  output: vscode.OutputChannel
+  output: vscode.OutputChannel,
+  execute: ScanExecutor = execFileAsync
 ): Promise<AgentShieldReport | null> {
   const binary = findBinary();
   const config = vscode.workspace.getConfiguration("agentshield");
   const ignoreTests = config.get<boolean>("ignoreTests", true);
   const timeout = config.get<number>("timeout", 30) * 1000;
 
-  const args = ["scan", workspacePath, "--format", "json"];
-  if (ignoreTests) {
-    args.push("--ignore-tests");
-  }
+  const args = buildScanArgs(workspacePath, ignoreTests);
 
   output.appendLine(`> ${binary} ${args.join(" ")}`);
 
   try {
-    const { stdout } = await execFileAsync(binary, args, {
+    const { stdout } = await execute(binary, args, {
       timeout,
       maxBuffer: 10 * 1024 * 1024,
       cwd: workspacePath,
@@ -75,7 +88,7 @@ export async function runScan(
   }
 }
 
-function parseReport(
+export function parseReport(
   stdout: string,
   output: vscode.OutputChannel
 ): AgentShieldReport | null {
