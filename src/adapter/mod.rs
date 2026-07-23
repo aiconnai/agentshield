@@ -6,6 +6,7 @@ pub mod langchain;
 pub mod mcp;
 pub(super) mod mcp_metadata;
 pub mod openclaw;
+mod pipeline;
 
 use std::path::Path;
 

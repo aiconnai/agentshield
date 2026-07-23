@@ -1,11 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::analysis::cross_file::apply_cross_file_sanitization;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
-use crate::parser;
 
 /// CrewAI framework adapter.
 ///
@@ -104,37 +102,13 @@ impl super::Adapter for CrewAiAdapter {
             .unwrap_or_else(|| "crewai-project".into());
 
         let mut source_files = Vec::new();
-        let mut execution = execution_surface::ExecutionSurface::default();
-
         // Phase 0: Collect source files (reuses MCP adapter's walker)
         super::mcp::collect_source_files_with_filter(root, filter, &mut source_files)?;
 
         // Filter to Python-only (CrewAI is a Python framework)
         source_files.retain(|sf| matches!(sf.language, Language::Python));
 
-        // Phase 1: Parse each Python file
-        let mut parsed_files: Vec<(PathBuf, parser::ParsedFile)> = Vec::new();
-        for sf in &source_files {
-            if let Some(parser) = parser::parser_for_language(sf.language) {
-                if let Ok(parsed) = parser.parse_file(&sf.path, &sf.content) {
-                    parsed_files.push((sf.path.clone(), parsed));
-                }
-            }
-        }
-
-        // Phase 2: Cross-file sanitizer-aware analysis
-        apply_cross_file_sanitization(&mut parsed_files);
-
-        // Phase 3: Merge into execution surface
-        for (_, parsed) in parsed_files {
-            execution.commands.extend(parsed.commands);
-            execution.file_operations.extend(parsed.file_operations);
-            execution
-                .network_operations
-                .extend(parsed.network_operations);
-            execution.env_accesses.extend(parsed.env_accesses);
-            execution.dynamic_exec.extend(parsed.dynamic_exec);
-        }
+        let execution = super::pipeline::build_execution_surface(&source_files);
 
         // Parse dependencies from pyproject.toml / requirements.txt
         let dependencies = super::mcp::parse_dependencies(root, filter);
@@ -163,6 +137,7 @@ impl super::Adapter for CrewAiAdapter {
 mod tests {
     use super::*;
     use crate::adapter::Adapter;
+    use std::path::PathBuf;
 
     #[test]
     fn test_detect_crewai_via_pyproject() {
