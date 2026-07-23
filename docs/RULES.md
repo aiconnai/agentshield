@@ -1,6 +1,6 @@
 # Detection Rules
 
-AgentShield ships with 18 built-in detectors targeting the most common security
+AgentShield ships with 19 built-in detectors targeting the most common security
 issues in AI agent extensions. Each rule has an ID, severity, confidence level,
 and CWE mapping where applicable.
 
@@ -409,6 +409,30 @@ can expose credentials to users, third-party services, or later prompt context.
 responses. Use a secrets manager, keep raw secrets out of model-visible output,
 and centralize redaction helpers for tokens, API keys, passwords, and private
 keys.
+
+---
+
+## SHIELD-019: Capability / Description Mismatch
+
+| Field | Value |
+|-------|-------|
+| Severity | High |
+| CWE | — |
+| Category | Capability Mismatch |
+| OWASP MCP | MCP03 |
+
+**What it detects:** Explicit tool descriptions that declare one or more
+capabilities while handler-bound code performs additional, undisclosed
+capabilities. Matching uses a small deterministic English phrase table and
+does not infer intent from vague descriptions or input-schema field names.
+
+**Why it matters:** A tool can present itself to the model and user as a narrow
+file reader or calculator while quietly making network requests, executing
+processes, reading credentials, or performing other sensitive actions.
+
+**Remediation:** Make the description accurately disclose every material
+capability, or remove the hidden behavior. Permissions do not substitute for an
+honest natural-language description.
 
 ---
 

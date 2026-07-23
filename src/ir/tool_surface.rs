@@ -44,6 +44,23 @@ pub enum Capability {
     DatabaseWrite,
 }
 
+impl Capability {
+    pub(crate) fn code(self) -> &'static str {
+        match self {
+            Self::FsRead => "fs_read",
+            Self::FsWrite => "fs_write",
+            Self::NetworkEgress => "network_egress",
+            Self::ProcessExec => "process_exec",
+            Self::EnvRead => "env_read",
+            Self::CredentialAccess => "credential_access",
+            Self::DynamicEval => "dynamic_eval",
+            Self::PackageInstall => "package_install",
+            Self::DatabaseRead => "database_read",
+            Self::DatabaseWrite => "database_write",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapabilityEvidence {
     pub capability: Capability,
