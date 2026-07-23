@@ -1,0 +1,41 @@
+name: VS Code Extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "vscode/**"
+      - ".github/workflows/vscode.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "vscode/**"
+      - ".github/workflows/vscode.yml"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    name: Compile, test, audit, and package
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Compile
+        run: npm run compile
+      - name: Test
+        run: npm test
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
+      - name: Package extension
+        run: npm run package -- --out agentshield.vsix
