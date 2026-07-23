@@ -258,12 +258,20 @@ fn extract_mcp_tool_declarations_from_source(
 }
 
 fn find_next_mcp_tool_call(content: &str) -> Option<usize> {
-    match (content.find(".tool("), content.find(".registerTool(")) {
-        (Some(tool), Some(register_tool)) => Some(tool.min(register_tool)),
-        (Some(tool), None) => Some(tool),
-        (None, Some(register_tool)) => Some(register_tool),
-        (None, None) => None,
+    let mut cursor = 0;
+    while cursor < content.len() {
+        if let Some(next) = skip_js_string_or_comment(content, cursor, content.len()) {
+            cursor = next;
+            continue;
+        }
+        if content[cursor..].starts_with(".tool(")
+            || content[cursor..].starts_with(".registerTool(")
+        {
+            return Some(cursor);
+        }
+        cursor += 1;
     }
+    None
 }
 
 fn parse_mcp_tool_handler(
@@ -274,10 +282,7 @@ fn parse_mcp_tool_handler(
 ) -> Option<McpToolHandler> {
     let (start, end) = trim_range(content, start, end);
     let candidate = &content[start..end];
-    if candidate.contains("=>")
-        || candidate.starts_with("function")
-        || candidate.starts_with("async function")
-    {
+    if is_inline_handler(candidate) {
         return Some(McpToolHandler::Inline {
             location: source_loc_span(path, content, start, end),
         });
@@ -288,15 +293,107 @@ fn parse_mcp_tool_handler(
     })
 }
 
-fn is_js_symbol(candidate: &str) -> bool {
-    !candidate.is_empty()
-        && candidate.split('.').all(|segment| {
-            let mut chars = segment.chars();
-            chars
-                .next()
-                .is_some_and(|ch| ch.is_ascii_alphabetic() || matches!(ch, '_' | '$'))
-                && chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$'))
+fn is_inline_handler(candidate: &str) -> bool {
+    if candidate.starts_with('{') || candidate.starts_with('[') {
+        return false;
+    }
+    if is_function_expression(candidate) {
+        return true;
+    }
+
+    let arrow_candidate = candidate
+        .strip_prefix("async")
+        .filter(|rest| {
+            rest.starts_with('(') || rest.chars().next().is_some_and(char::is_whitespace)
         })
+        .map(str::trim_start)
+        .unwrap_or(candidate);
+
+    if arrow_candidate.starts_with('(') {
+        return find_matching_delimiter(arrow_candidate, 0, b'(', b')')
+            .is_some_and(|close| arrow_candidate[close + 1..].trim_start().starts_with("=>"));
+    }
+
+    arrow_candidate
+        .split_once("=>")
+        .is_some_and(|(parameter, _)| is_js_identifier(parameter.trim()))
+}
+
+fn is_function_expression(candidate: &str) -> bool {
+    let candidate = candidate
+        .strip_prefix("async")
+        .filter(|rest| rest.chars().next().is_some_and(char::is_whitespace))
+        .map(str::trim_start)
+        .unwrap_or(candidate);
+    candidate.strip_prefix("function").is_some_and(|rest| {
+        rest.is_empty()
+            || rest.starts_with('(')
+            || rest.starts_with('*')
+            || rest.chars().next().is_some_and(char::is_whitespace)
+    })
+}
+
+fn is_js_symbol(candidate: &str) -> bool {
+    let mut segments = candidate.split('.');
+    let Some(first) = segments.next() else {
+        return false;
+    };
+    !is_js_reserved_word(first) && is_js_identifier(first) && segments.all(is_js_identifier)
+}
+
+fn is_js_identifier(candidate: &str) -> bool {
+    let mut chars = candidate.chars();
+    chars
+        .next()
+        .is_some_and(|ch| ch.is_ascii_alphabetic() || matches!(ch, '_' | '$'))
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$'))
+}
+
+fn is_js_reserved_word(candidate: &str) -> bool {
+    matches!(
+        candidate,
+        "async"
+            | "await"
+            | "break"
+            | "case"
+            | "catch"
+            | "class"
+            | "const"
+            | "continue"
+            | "debugger"
+            | "default"
+            | "delete"
+            | "do"
+            | "else"
+            | "export"
+            | "extends"
+            | "false"
+            | "finally"
+            | "for"
+            | "function"
+            | "if"
+            | "import"
+            | "in"
+            | "instanceof"
+            | "let"
+            | "new"
+            | "null"
+            | "return"
+            | "static"
+            | "super"
+            | "switch"
+            | "this"
+            | "throw"
+            | "true"
+            | "try"
+            | "typeof"
+            | "undefined"
+            | "var"
+            | "void"
+            | "while"
+            | "with"
+            | "yield"
+    )
 }
 
 fn parse_object_string_property(
@@ -431,6 +528,9 @@ fn skip_js_string_or_comment(content: &str, start: usize, end: usize) -> Option<
     let bytes = content.as_bytes();
     let quote = *bytes.get(start)?;
     if matches!(quote, b'\'' | b'"' | b'`') {
+        // Template literals are treated as opaque strings. Nested backticks
+        // inside `${...}` are intentionally unsupported in this lightweight
+        // extractor; handler-to-body resolution remains AST-backed follow-up work.
         let mut cursor = start + 1;
         while cursor < end {
             if bytes[cursor] == b'\\' {
@@ -561,6 +661,8 @@ fn source_loc(file: &Path, line: usize) -> SourceLocation {
 }
 
 fn source_loc_span(file: &Path, content: &str, start: usize, end: usize) -> SourceLocation {
+    // Columns are UTF-8 byte offsets and `end` is exclusive, matching the
+    // half-open span produced by the source segment scanner.
     let start_line = content[..start].lines().count() + 1;
     let start_column = content[..start]
         .rsplit_once('\n')
@@ -969,6 +1071,89 @@ server.registerTool(
         assert!(matches!(
             declarations[0].handler,
             Some(McpToolHandler::Inline { .. })
+        ));
+    }
+
+    #[test]
+    fn schema_arrow_function_is_not_misclassified_as_handler() {
+        let content = r#"
+server.tool(
+  "read_file",
+  "Read a local file",
+  { path: z.string().transform(value => value.trim()) },
+)
+"#;
+
+        let declarations =
+            extract_mcp_tool_declarations_from_source(Path::new("src/server.ts"), content);
+
+        assert_eq!(declarations.len(), 1);
+        assert_eq!(declarations[0].handler, None);
+    }
+
+    #[test]
+    fn arrow_text_in_config_description_is_not_misclassified_as_handler() {
+        let content = r#"
+server.registerTool("map_value", {
+  description: "Maps a => b",
+  inputSchema: { value: { type: "string" } },
+})
+"#;
+
+        let declarations =
+            extract_mcp_tool_declarations_from_source(Path::new("src/server.ts"), content);
+
+        assert_eq!(declarations.len(), 1);
+        assert_eq!(
+            declarations[0].tool.description.as_deref(),
+            Some("Maps a => b")
+        );
+        assert_eq!(declarations[0].handler, None);
+    }
+
+    #[test]
+    fn reserved_literals_are_not_named_handlers() {
+        for candidate in ["async", "true", "false", "null", "undefined", "this"] {
+            assert_eq!(
+                parse_mcp_tool_handler(Path::new("src/server.ts"), candidate, 0, candidate.len()),
+                None,
+                "{candidate} must not be classified as a named handler"
+            );
+        }
+    }
+
+    #[test]
+    fn handler_names_with_function_prefix_remain_named() {
+        let candidate = "functionHandler";
+        assert!(matches!(
+            parse_mcp_tool_handler(Path::new("src/server.ts"), candidate, 0, candidate.len()),
+            Some(McpToolHandler::Named { ref symbol }) if symbol == candidate
+        ));
+
+        let inline = "async() => ({ content: [] })";
+        assert!(matches!(
+            parse_mcp_tool_handler(Path::new("src/server.ts"), inline, 0, inline.len()),
+            Some(McpToolHandler::Inline { .. })
+        ));
+    }
+
+    #[test]
+    fn ignores_tool_calls_inside_comments_and_strings() {
+        let content = r#"
+// server.tool("commented", "Nope", async () => {})
+const docs = 'call server.registerTool("string", {}, handler)'
+/* server.registerTool("blocked", {}, handler) */
+server.registerTool("real", { description: "Real tool" }, handlers.run)
+"#;
+
+        let declarations =
+            extract_mcp_tool_declarations_from_source(Path::new("src/server.ts"), content);
+
+        assert_eq!(declarations.len(), 1);
+        assert_eq!(declarations[0].tool.name, "real");
+        assert!(matches!(
+            declarations[0].handler,
+            Some(McpToolHandler::Named { ref symbol }) if symbol == "handlers.run"
         ));
     }
 }
