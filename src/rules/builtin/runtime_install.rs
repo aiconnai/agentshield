@@ -1,27 +1,14 @@
+use crate::analysis::runtime_install::is_runtime_install_command;
 use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
-use once_cell::sync::Lazy;
-use regex::Regex;
 
 /// SHIELD-005: Runtime Package Install
 ///
 /// Flags runtime package install commands (pip install, npm install,
 /// uv pip install) in executable code paths.
 pub struct RuntimeInstallDetector;
-
-static INSTALL_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
-    vec![
-        Regex::new(r"pip\s+install").expect("static regex pattern is valid"),
-        Regex::new(r"pip3\s+install").expect("static regex pattern is valid"),
-        Regex::new(r"npm\s+install").expect("static regex pattern is valid"),
-        Regex::new(r"npm\s+i\b").expect("static regex pattern is valid"),
-        Regex::new(r"uv\s+pip\s+install").expect("static regex pattern is valid"),
-        Regex::new(r"yarn\s+add").expect("static regex pattern is valid"),
-        Regex::new(r"pnpm\s+add").expect("static regex pattern is valid"),
-    ]
-});
 
 impl Detector for RuntimeInstallDetector {
     fn metadata(&self) -> RuleMetadata {
@@ -46,31 +33,28 @@ impl Detector for RuntimeInstallDetector {
                 _ => continue,
             };
 
-            for pattern in INSTALL_PATTERNS.iter() {
-                if pattern.is_match(&cmd_str) {
-                    findings.push(Finding {
-                        rule_id: "SHIELD-005".into(),
-                        rule_name: "Runtime Package Install".into(),
-                        severity: Severity::High,
-                        confidence: Confidence::High,
-                        attack_category: AttackCategory::SupplyChain,
-                        message: format!("Runtime package installation detected: '{}'", cmd_str),
+            if is_runtime_install_command(&cmd_str) {
+                findings.push(Finding {
+                    rule_id: "SHIELD-005".into(),
+                    rule_name: "Runtime Package Install".into(),
+                    severity: Severity::High,
+                    confidence: Confidence::High,
+                    attack_category: AttackCategory::SupplyChain,
+                    message: format!("Runtime package installation detected: '{}'", cmd_str),
+                    location: Some(cmd.location.clone()),
+                    evidence: vec![Evidence {
+                        description: format!("'{}' executes '{}'", cmd.function, cmd_str),
                         location: Some(cmd.location.clone()),
-                        evidence: vec![Evidence {
-                            description: format!("'{}' executes '{}'", cmd.function, cmd_str),
-                            location: Some(cmd.location.clone()),
-                            snippet: None,
-                        }],
-                        taint_path: None,
-                        remediation: Some(
-                            "Install dependencies at build time, not runtime. \
+                        snippet: None,
+                    }],
+                    taint_path: None,
+                    remediation: Some(
+                        "Install dependencies at build time, not runtime. \
                              Pin versions and verify hashes in a lockfile."
-                                .into(),
-                        ),
-                        cwe_id: Some("CWE-829".into()),
-                    });
-                    break;
-                }
+                            .into(),
+                    ),
+                    cwe_id: Some("CWE-829".into()),
+                });
             }
         }
 

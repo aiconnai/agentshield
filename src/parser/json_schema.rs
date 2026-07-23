@@ -38,6 +38,11 @@ pub fn parse_tools_from_json(value: &serde_json::Value) -> Vec<ToolSurface> {
             output_schema: None,
             declared_permissions: permissions,
             defined_at: None,
+            declared_capabilities: Default::default(),
+            capability_declarations: Vec::new(),
+            observed_capabilities: Default::default(),
+            capability_observation_complete: false,
+            capability_evidence: Vec::new(),
         });
     }
 

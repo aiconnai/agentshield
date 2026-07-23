@@ -9,8 +9,10 @@ detector SHIELD-019. Sem LLM, score, discovery local ou novos toxic flows.
 Uma tool pode declarar uma finalidade limitada em linguagem natural e executar
 ações materialmente diferentes. SHIELD-019 compara, por tool:
 
-- `declared_capabilities`: o que a descrição da tool afirma ou sugere de forma
-  explícita;
+- `declared_capabilities`: união normalizada do que description e permissions
+  estruturadas declaram;
+- `description_declared`: subconjunto com provenance `Description`, usado pelo
+  detector para comparar a promessa em linguagem natural;
 - `observed_capabilities`: o que o código associado à tool efetivamente faz.
 
 O detector é deliberadamente conservador:
