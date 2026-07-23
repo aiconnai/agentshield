@@ -230,6 +230,11 @@ fn extract_path_tools(spec: &serde_json::Value, spec_path: &Path, tools: &mut Ve
                     end_line: None,
                     end_column: None,
                 }),
+                declared_capabilities: Default::default(),
+                capability_declarations: Vec::new(),
+                observed_capabilities: Default::default(),
+                capability_observation_complete: false,
+                capability_evidence: Vec::new(),
             });
         }
     }

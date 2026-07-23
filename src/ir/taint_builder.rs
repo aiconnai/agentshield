@@ -291,6 +291,11 @@ mod tests {
             output_schema: None,
             declared_permissions: vec![],
             defined_at: Some(make_location(1)),
+            declared_capabilities: Default::default(),
+            capability_declarations: Vec::new(),
+            observed_capabilities: Default::default(),
+            capability_observation_complete: false,
+            capability_evidence: Vec::new(),
         }
     }
 
@@ -581,6 +586,11 @@ mod tests {
             output_schema: None,
             declared_permissions: vec![],
             defined_at: None,
+            declared_capabilities: Default::default(),
+            capability_declarations: Vec::new(),
+            observed_capabilities: Default::default(),
+            capability_observation_complete: false,
+            capability_evidence: Vec::new(),
         }];
 
         let surface = build_data_surface(&tools, &ExecutionSurface::default());

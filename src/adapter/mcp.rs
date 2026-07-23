@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::analysis::cross_file::apply_cross_file_sanitization;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
+use crate::ir::capability::{project_declared_permissions, project_observed_execution};
 use crate::ir::execution_surface::ExecutionSurface;
 use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
@@ -40,7 +41,7 @@ impl super::Adapter for McpAdapter {
 
         let mut source_files = Vec::new();
         let mut execution = ExecutionSurface::default();
-        let mut tools = Vec::new();
+        let mut tool_declarations = Vec::new();
 
         // Collect source files
         collect_source_files_with_filter(root, filter, &mut source_files)?;
@@ -49,7 +50,7 @@ impl super::Adapter for McpAdapter {
                 source_file.language,
                 Language::TypeScript | Language::JavaScript
             ) {
-                tools.extend(extract_mcp_tools_from_source(
+                tool_declarations.extend(extract_mcp_tool_declarations_from_source(
                     &source_file.path,
                     &source_file.content,
                 ));
@@ -69,6 +70,26 @@ impl super::Adapter for McpAdapter {
         // Phase 2: Cross-file sanitizer-aware analysis — downgrade operations
         // in functions that are only called with sanitized arguments.
         apply_cross_file_sanitization(&mut parsed_files);
+
+        let operation_bindings = bind_mcp_tool_operations(&tool_declarations, &parsed_files);
+        debug_assert_eq!(operation_bindings.len(), tool_declarations.len());
+        debug_assert!(operation_bindings
+            .iter()
+            .all(McpToolOperationBinding::is_consistent));
+        let mut tools = tool_declarations
+            .into_iter()
+            .zip(operation_bindings)
+            .map(|(declaration, binding)| {
+                let mut tool = declaration.tool;
+                if binding.handler_resolved {
+                    project_observed_execution(&mut tool, &binding.execution);
+                }
+                // Positive evidence is usable for stealth detection, but B.0.1
+                // does not prove observation completeness for overclaim.
+                tool.capability_observation_complete = false;
+                tool
+            })
+            .collect::<Vec<_>>();
 
         // Phase 3: Merge parsed results into execution surface.
         for (_, parsed) in parsed_files {
@@ -90,6 +111,9 @@ impl super::Adapter for McpAdapter {
                     tools = dedupe_tools_by_name(tools);
                 }
             }
+        }
+        for tool in &mut tools {
+            project_declared_permissions(tool);
         }
 
         let (dependencies, provenance) = if super::mcp_metadata::same_path(root, &metadata_root) {
@@ -185,13 +209,6 @@ pub fn is_test_file(path: &Path) -> bool {
     false
 }
 
-fn extract_mcp_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
-    extract_mcp_tool_declarations_from_source(path, content)
-        .into_iter()
-        .map(|declaration| declaration.tool)
-        .collect()
-}
-
 #[derive(Debug, Clone)]
 struct McpToolDeclaration {
     tool: ToolSurface,
@@ -205,13 +222,22 @@ enum McpToolHandler {
 }
 
 #[derive(Debug, Clone)]
-// This is the tested handoff shape for capability projection. It is deliberately
-// not computed by `load()` until the IR has storage for per-tool observations.
-#[allow(dead_code)]
 struct McpToolOperationBinding {
     execution: ExecutionSurface,
     handler_resolved: bool,
     resolved_callees: Vec<String>,
+}
+
+impl McpToolOperationBinding {
+    fn is_consistent(&self) -> bool {
+        self.handler_resolved
+            || (self.execution.commands.is_empty()
+                && self.execution.file_operations.is_empty()
+                && self.execution.network_operations.is_empty()
+                && self.execution.env_accesses.is_empty()
+                && self.execution.dynamic_exec.is_empty()
+                && self.resolved_callees.is_empty())
+    }
 }
 
 #[cfg(feature = "typescript")]
@@ -263,6 +289,11 @@ fn extract_mcp_tool_declarations_from_source(
                 output_schema: None,
                 declared_permissions: Vec::new(),
                 defined_at: Some(source_loc(path, line)),
+                declared_capabilities: Default::default(),
+                capability_declarations: Vec::new(),
+                observed_capabilities: Default::default(),
+                capability_observation_complete: false,
+                capability_evidence: Vec::new(),
             },
             handler,
         });
@@ -274,7 +305,6 @@ fn extract_mcp_tool_declarations_from_source(
 }
 
 #[cfg(feature = "typescript")]
-#[allow(dead_code)] // Consumed when per-tool capability storage lands.
 fn bind_mcp_tool_operations(
     declarations: &[McpToolDeclaration],
     parsed_files: &[(PathBuf, parser::ParsedFile)],
@@ -317,7 +347,6 @@ fn bind_mcp_tool_operations(
 }
 
 #[cfg(not(feature = "typescript"))]
-#[allow(dead_code)] // Keeps the next consumer conservative in no-TS builds.
 fn bind_mcp_tool_operations(
     declarations: &[McpToolDeclaration],
     _parsed_files: &[(PathBuf, parser::ParsedFile)],
@@ -1605,6 +1634,141 @@ function run() { return readFile("report.txt") }
         assert_eq!(bindings.len(), 1);
         assert!(!bindings[0].handler_resolved);
         assert!(bindings[0].execution.file_operations.is_empty());
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn adapter_load_projects_per_tool_observed_capabilities() {
+        use crate::adapter::Adapter;
+
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(
+            fixture.path().join("package.json"),
+            r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            fixture.path().join("server.ts"),
+            r#"
+server.registerTool("read_file", { description: "Read a file" }, handleRead)
+server.registerTool("fetch_url", { description: "Fetch a URL" }, handleFetch)
+
+function handleRead(path: string) { return readFile(path) }
+function handleFetch(url: string) { return fetch(url) }
+"#,
+        )
+        .unwrap();
+
+        let target = McpAdapter.load(fixture.path(), false).unwrap().remove(0);
+        let read = target
+            .tools
+            .iter()
+            .find(|tool| tool.name == "read_file")
+            .unwrap();
+        let fetch = target
+            .tools
+            .iter()
+            .find(|tool| tool.name == "fetch_url")
+            .unwrap();
+
+        assert_eq!(
+            read.observed_capabilities,
+            std::collections::BTreeSet::from([Capability::FsRead])
+        );
+        assert!(read
+            .capability_evidence
+            .iter()
+            .all(|evidence| evidence.capability == Capability::FsRead));
+        assert_eq!(
+            fetch.observed_capabilities,
+            std::collections::BTreeSet::from([Capability::NetworkEgress])
+        );
+        assert!(!read.capability_observation_complete);
+        assert!(!fetch.capability_observation_complete);
+    }
+
+    #[cfg(not(feature = "typescript"))]
+    #[test]
+    fn adapter_load_without_typescript_keeps_observed_capabilities_empty() {
+        use crate::adapter::Adapter;
+
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(
+            fixture.path().join("package.json"),
+            r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            fixture.path().join("server.ts"),
+            r#"
+server.registerTool("fetch_url", { description: "Fetch a URL" }, handleFetch)
+function handleFetch(url: string) { return fetch(url) }
+"#,
+        )
+        .unwrap();
+
+        let target = McpAdapter.load(fixture.path(), false).unwrap().remove(0);
+        let tool = target
+            .tools
+            .iter()
+            .find(|tool| tool.name == "fetch_url")
+            .unwrap();
+
+        assert!(tool.observed_capabilities.is_empty());
+        assert!(tool.capability_evidence.is_empty());
+        assert!(!tool.capability_observation_complete);
+    }
+
+    #[test]
+    fn adapter_load_projects_permissions_but_not_input_schema() {
+        use crate::adapter::Adapter;
+
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(
+            fixture.path().join("package.json"),
+            r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            fixture.path().join("tools.json"),
+            r#"{
+  "tools": [
+    {
+      "name": "fetch_url",
+      "description": "Fetch content from a URL",
+      "inputSchema": {"properties": {"url": {"type": "string"}}}
+    },
+    {
+      "name": "schema_only",
+      "inputSchema": {"properties": {"url": {"type": "string"}}}
+    }
+  ]
+}"#,
+        )
+        .unwrap();
+
+        let target = McpAdapter.load(fixture.path(), false).unwrap().remove(0);
+        let fetch = target
+            .tools
+            .iter()
+            .find(|tool| tool.name == "fetch_url")
+            .unwrap();
+        let schema_only = target
+            .tools
+            .iter()
+            .find(|tool| tool.name == "schema_only")
+            .unwrap();
+
+        assert_eq!(
+            fetch.declared_capabilities,
+            std::collections::BTreeSet::from([Capability::NetworkEgress])
+        );
+        assert!(fetch
+            .capability_declarations
+            .iter()
+            .all(|declaration| { declaration.source == CapabilityDeclarationSource::Permission }));
+        assert!(schema_only.declared_capabilities.is_empty());
+        assert!(schema_only.capability_declarations.is_empty());
     }
 
     #[cfg(not(feature = "typescript"))]

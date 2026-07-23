@@ -3,6 +3,7 @@
 //! All adapters produce a `ScanTarget`. All detectors consume a `ScanTarget`.
 //! This decouples framework-specific parsing from security analysis.
 
+pub(crate) mod capability;
 pub mod data_surface;
 pub mod dependency_surface;
 pub mod execution_surface;
@@ -17,7 +18,9 @@ pub use data_surface::DataSurface;
 pub use dependency_surface::DependencySurface;
 pub use execution_surface::ExecutionSurface;
 pub use provenance_surface::ProvenanceSurface;
-pub use tool_surface::ToolSurface;
+pub use tool_surface::{
+    Capability, CapabilityDeclaration, CapabilityDeclarationSource, CapabilityEvidence, ToolSurface,
+};
 
 /// Complete scan target — the unified IR that all analysis operates on.
 #[derive(Debug, Clone, Serialize, Deserialize)]

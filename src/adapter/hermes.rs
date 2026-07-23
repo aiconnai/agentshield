@@ -414,6 +414,11 @@ fn parse_mcp_servers_from_yaml(
             output_schema: None,
             declared_permissions: vec![],
             defined_at: Some(location.clone()),
+            declared_capabilities: Default::default(),
+            capability_declarations: Vec::new(),
+            observed_capabilities: Default::default(),
+            capability_observation_complete: false,
+            capability_evidence: Vec::new(),
         });
 
         if let Some(command) = server.command {
