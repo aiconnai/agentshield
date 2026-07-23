@@ -220,10 +220,14 @@ Criar um módulo único de projeção com uma tabela versionada de phrases. Matc
 - lowercase Unicode;
 - normalização de espaços e pontuação;
 - phrase/token boundaries, nunca substring arbitrária;
+- artigos comuns (`a`, `an`, `the`) são ignorados e somente uma lista fechada
+  de infleções verbais simples é normalizada (`reads` → `read`, `fetches` →
+  `fetch`, etc.);
 - inglês no PR B; novos idiomas exigem tabela e fixtures próprias;
 - phrases negadas quando um marcador (`no`, `not`, `never`, `without`,
   `doesn't`, `does not`) aparece nos quatro tokens anteriores não declaram
-  capability.
+  capability; a janela para em limites de sentença/cláusula e em adversativos
+  (`but`, `however`, `yet`).
 
 Tabela inicial, intencionalmente pequena:
 
@@ -247,7 +251,9 @@ Palavras genéricas isoladas (`manage`, `process`, `access`, `data`, `search`,
 `CredentialAccess`: frases como “requires/accepts an API key” normalmente
 descrevem um parâmetro fornecido pelo caller. Da mesma forma, `download` sem
 origem HTTP/URL e `execute code` sem qualificador de execução dinâmica não
-declaram capabilities.
+declaram capabilities. `download from` somente declara `NetworkEgress` quando
+o objeto normalizado explicita `url`, `http`, `https` ou `web`; fontes locais
+como disk, cache e local storage permanecem sem declaration de rede.
 
 ### 3.2 Guardrail para descrição vaga
 

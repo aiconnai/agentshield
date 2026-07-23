@@ -163,6 +163,12 @@ struct DescriptionCapability {
     phrase: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DescriptionToken {
+    Word(String),
+    Boundary,
+}
+
 struct PhrasePattern {
     capability: Capability,
     tokens: &'static [&'static str],
@@ -198,7 +204,11 @@ const DESCRIPTION_PHRASES: &[PhrasePattern] = &[
     phrase!(NetworkEgress, "http", "requests"),
     phrase!(NetworkEgress, "call", "api"),
     phrase!(NetworkEgress, "call", "apis"),
-    phrase!(NetworkEgress, "download", "from"),
+    phrase!(NetworkEgress, "from", "url"),
+    phrase!(NetworkEgress, "from", "urls"),
+    phrase!(NetworkEgress, "from", "http"),
+    phrase!(NetworkEgress, "from", "https"),
+    phrase!(NetworkEgress, "from", "web"),
     phrase!(NetworkEgress, "download", "url"),
     phrase!(NetworkEgress, "download", "urls"),
     phrase!(ProcessExec, "run", "command"),
@@ -244,12 +254,7 @@ fn description_capabilities(description: &str) -> Vec<DescriptionCapability> {
 
     for pattern in DESCRIPTION_PHRASES {
         for (start, candidate) in tokens.windows(pattern.tokens.len()).enumerate() {
-            if candidate
-                .iter()
-                .map(String::as_str)
-                .eq(pattern.tokens.iter().copied())
-                && !is_negated(&tokens, start)
-            {
+            if pattern_matches(candidate, pattern.tokens) && !is_negated(&tokens, start) {
                 matches.push(DescriptionCapability {
                     capability: pattern.capability,
                     phrase: pattern.tokens.join(" "),
@@ -265,25 +270,94 @@ fn description_capabilities(description: &str) -> Vec<DescriptionCapability> {
     matches
 }
 
-fn tokenize_description(description: &str) -> Vec<String> {
-    description
-        .to_lowercase()
-        .split(|character: char| !character.is_alphanumeric() && character != '\'')
-        .filter(|token| !token.is_empty())
-        .map(ToOwned::to_owned)
-        .collect()
+fn pattern_matches(candidate: &[DescriptionToken], pattern: &[&str]) -> bool {
+    candidate
+        .iter()
+        .zip(pattern)
+        .all(|(token, expected)| matches!(token, DescriptionToken::Word(word) if word == expected))
 }
 
-fn is_negated(tokens: &[String], phrase_start: usize) -> bool {
-    let window = &tokens[phrase_start.saturating_sub(4)..phrase_start];
-    window.iter().any(|token| {
-        matches!(
-            token.as_str(),
+fn tokenize_description(description: &str) -> Vec<DescriptionToken> {
+    let normalized = description.to_lowercase().replace('’', "'");
+    let mut tokens = Vec::new();
+    let mut word = String::new();
+
+    for character in normalized.chars() {
+        if character.is_alphanumeric() || character == '\'' {
+            word.push(character);
+            continue;
+        }
+
+        push_description_word(&mut tokens, &mut word);
+        if matches!(character, '.' | ';' | ':' | '!' | '?')
+            && !matches!(tokens.last(), Some(DescriptionToken::Boundary))
+        {
+            tokens.push(DescriptionToken::Boundary);
+        }
+    }
+    push_description_word(&mut tokens, &mut word);
+    tokens
+}
+
+fn push_description_word(tokens: &mut Vec<DescriptionToken>, word: &mut String) {
+    if word.is_empty() {
+        return;
+    }
+
+    let normalized = normalize_description_word(word);
+    if !matches!(normalized, "a" | "an" | "the") {
+        tokens.push(DescriptionToken::Word(normalized.to_string()));
+    }
+    word.clear();
+}
+
+fn normalize_description_word(word: &str) -> &str {
+    match word {
+        "reads" => "read",
+        "writes" => "write",
+        "creates" => "create",
+        "deletes" => "delete",
+        "modifies" => "modify",
+        "lists" => "list",
+        "inspects" => "inspect",
+        "fetches" => "fetch",
+        "calls" => "call",
+        "downloads" => "download",
+        "runs" => "run",
+        "executes" => "execute",
+        "loads" => "load",
+        "accesses" => "access",
+        "evaluates" => "evaluate",
+        "installs" => "install",
+        "adds" => "add",
+        "queries" => "query",
+        "searches" => "search",
+        "updates" => "update",
+        _ => word,
+    }
+}
+
+fn is_negated(tokens: &[DescriptionToken], phrase_start: usize) -> bool {
+    let mut preceding_words = 0;
+    for token in tokens[..phrase_start].iter().rev() {
+        let DescriptionToken::Word(word) = token else {
+            break;
+        };
+        if matches!(word.as_str(), "but" | "however" | "yet") {
+            break;
+        }
+        preceding_words += 1;
+        if matches!(
+            word.as_str(),
             "no" | "not" | "never" | "without" | "doesn't"
-        )
-    }) || window
-        .windows(2)
-        .any(|pair| pair[0] == "does" && pair[1] == "not")
+        ) {
+            return true;
+        }
+        if preceding_words == 4 {
+            break;
+        }
+    }
+    false
 }
 
 fn capability_for_permission(permission: PermissionType) -> Option<Capability> {
@@ -487,6 +561,26 @@ mod tests {
     }
 
     #[test]
+    fn description_projection_handles_articles_inflections_and_url_disclosure() {
+        for description in [
+            "Reads a file and fetches a URL",
+            "Read files from a URL",
+            "Fetches the URL and reads the file",
+        ] {
+            let mut tool = tool();
+            tool.description = Some(description.into());
+
+            project_declared_description(&mut tool);
+
+            assert_eq!(
+                tool.declared_capabilities,
+                BTreeSet::from([Capability::FsRead, Capability::NetworkEgress]),
+                "{description}"
+            );
+        }
+    }
+
+    #[test]
     fn negation_within_four_tokens_suppresses_a_phrase() {
         for description in [
             "Never fetch URLs",
@@ -502,6 +596,54 @@ mod tests {
                 "unexpected capability for {description}"
             );
         }
+    }
+
+    #[test]
+    fn negation_stops_at_sentence_and_adversative_boundaries() {
+        for description in [
+            "Does not write files. Fetch URLs and read files.",
+            "Does not write files; fetches a URL and reads a file.",
+            "Does not write files, but fetches a URL and reads a file.",
+        ] {
+            let mut tool = tool();
+            tool.description = Some(description.into());
+
+            project_declared_description(&mut tool);
+
+            assert_eq!(
+                tool.declared_capabilities,
+                BTreeSet::from([Capability::FsRead, Capability::NetworkEgress]),
+                "{description}"
+            );
+        }
+    }
+
+    #[test]
+    fn download_from_local_sources_does_not_declare_network() {
+        for description in [
+            "Download from disk and read files",
+            "Downloads from cache and reads a file",
+            "Download from local storage and read files",
+        ] {
+            let mut tool = tool();
+            tool.description = Some(description.into());
+
+            project_declared_description(&mut tool);
+
+            assert_eq!(
+                tool.declared_capabilities,
+                BTreeSet::from([Capability::FsRead]),
+                "{description}"
+            );
+        }
+
+        let mut remote = tool();
+        remote.description = Some("Download from a URL and read files".into());
+        project_declared_description(&mut remote);
+        assert_eq!(
+            remote.declared_capabilities,
+            BTreeSet::from([Capability::FsRead, Capability::NetworkEgress])
+        );
     }
 
     #[test]

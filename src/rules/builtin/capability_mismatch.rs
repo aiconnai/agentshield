@@ -479,6 +479,40 @@ function handleFetch(url: string) { return fetch(url) }
         );
     }
 
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn mcp_adapter_accepts_explicit_url_disclosure() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(
+            fixture.path().join("package.json"),
+            r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            fixture.path().join("server.ts"),
+            r#"
+server.registerTool("read_remote_file", {
+  description: "Reads a file from a URL"
+}, handleRead)
+
+function handleRead(url: string) {
+  fetch(url)
+  return readFile("cache.txt")
+}
+"#,
+        )
+        .unwrap();
+
+        let findings = auto_detect_and_load(fixture.path(), false)
+            .unwrap()
+            .iter()
+            .flat_map(|target| RuleEngine::new().run(target))
+            .filter(|finding| finding.rule_id == "SHIELD-019")
+            .collect::<Vec<_>>();
+
+        assert!(findings.is_empty());
+    }
+
     #[test]
     fn existing_safe_fixtures_have_no_capability_mismatch() {
         for fixture in [
