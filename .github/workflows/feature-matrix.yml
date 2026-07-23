@@ -1,0 +1,38 @@
+name: Cargo Feature Matrix
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  feature-matrix:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: No default features
+            command: cargo test --no-default-features --locked
+          - name: Python parser
+            command: cargo check --no-default-features --features python --locked
+          - name: TypeScript parser
+            command: cargo check --no-default-features --features typescript --locked
+          - name: Runtime
+            command: cargo check --no-default-features --features runtime --locked
+          - name: Runtime guard
+            command: cargo check --no-default-features --features runtime,runtime-guard --locked
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+      - run: ${{ matrix.command }}
