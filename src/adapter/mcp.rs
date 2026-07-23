@@ -186,7 +186,29 @@ pub fn is_test_file(path: &Path) -> bool {
 }
 
 fn extract_mcp_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
-    let mut tools = Vec::new();
+    extract_mcp_tool_declarations_from_source(path, content)
+        .into_iter()
+        .map(|declaration| declaration.tool)
+        .collect()
+}
+
+#[derive(Debug, Clone)]
+struct McpToolDeclaration {
+    tool: ToolSurface,
+    handler: Option<McpToolHandler>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum McpToolHandler {
+    Named { symbol: String },
+    Inline { location: SourceLocation },
+}
+
+fn extract_mcp_tool_declarations_from_source(
+    path: &Path,
+    content: &str,
+) -> Vec<McpToolDeclaration> {
+    let mut declarations = Vec::new();
     let mut offset = 0;
 
     while let Some(relative_start) = find_next_mcp_tool_call(&content[offset..]) {
@@ -194,27 +216,45 @@ fn extract_mcp_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface>
         let Some(open_paren) = content[call_start..].find('(').map(|pos| call_start + pos) else {
             break;
         };
-        let args_start = open_paren + 1;
-        let Some((name, after_name)) = parse_string_literal_at(content, args_start) else {
-            offset = args_start;
+        let Some(close_paren) = find_matching_delimiter(content, open_paren, b'(', b')') else {
+            break;
+        };
+        let arguments = top_level_segments(content, open_paren + 1, close_paren);
+        let Some(&(name_start, _)) = arguments.first() else {
+            offset = close_paren + 1;
             continue;
         };
-        let description = parse_next_string_argument(content, after_name);
+        let Some((name, _)) = parse_string_literal_at(content, name_start) else {
+            offset = close_paren + 1;
+            continue;
+        };
+        let description = arguments.get(1).and_then(|&(start, end)| {
+            parse_string_literal_at(content, start)
+                .filter(|(_, after)| *after <= end)
+                .map(|(value, _)| value)
+                .or_else(|| parse_object_string_property(content, start, end, "description"))
+        });
+        let handler = arguments
+            .last()
+            .and_then(|&(start, end)| parse_mcp_tool_handler(path, content, start, end));
         let line = content[..call_start].lines().count() + 1;
 
-        tools.push(ToolSurface {
-            name,
-            description,
-            input_schema: None,
-            output_schema: None,
-            declared_permissions: Vec::new(),
-            defined_at: Some(source_loc(path, line)),
+        declarations.push(McpToolDeclaration {
+            tool: ToolSurface {
+                name,
+                description,
+                input_schema: None,
+                output_schema: None,
+                declared_permissions: Vec::new(),
+                defined_at: Some(source_loc(path, line)),
+            },
+            handler,
         });
 
-        offset = after_name;
+        offset = close_paren + 1;
     }
 
-    dedupe_tools_by_name(tools)
+    dedupe_mcp_tool_declarations(declarations)
 }
 
 fn find_next_mcp_tool_call(content: &str) -> Option<usize> {
@@ -226,16 +266,213 @@ fn find_next_mcp_tool_call(content: &str) -> Option<usize> {
     }
 }
 
-fn parse_next_string_argument(content: &str, offset: usize) -> Option<String> {
-    let mut index = skip_whitespace(content, offset);
-    if content[index..].starts_with(',') {
-        index += 1;
-    } else {
+fn parse_mcp_tool_handler(
+    path: &Path,
+    content: &str,
+    start: usize,
+    end: usize,
+) -> Option<McpToolHandler> {
+    let (start, end) = trim_range(content, start, end);
+    let candidate = &content[start..end];
+    if candidate.contains("=>")
+        || candidate.starts_with("function")
+        || candidate.starts_with("async function")
+    {
+        return Some(McpToolHandler::Inline {
+            location: source_loc_span(path, content, start, end),
+        });
+    }
+
+    is_js_symbol(candidate).then(|| McpToolHandler::Named {
+        symbol: candidate.to_string(),
+    })
+}
+
+fn is_js_symbol(candidate: &str) -> bool {
+    !candidate.is_empty()
+        && candidate.split('.').all(|segment| {
+            let mut chars = segment.chars();
+            chars
+                .next()
+                .is_some_and(|ch| ch.is_ascii_alphabetic() || matches!(ch, '_' | '$'))
+                && chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$'))
+        })
+}
+
+fn parse_object_string_property(
+    content: &str,
+    start: usize,
+    end: usize,
+    property: &str,
+) -> Option<String> {
+    let (start, end) = trim_range(content, start, end);
+    if content.as_bytes().get(start) != Some(&b'{')
+        || content.as_bytes().get(end.saturating_sub(1)) != Some(&b'}')
+    {
         return None;
     }
 
-    let index = skip_whitespace(content, index);
-    parse_string_literal_at(content, index).map(|(value, _)| value)
+    for (property_start, property_end) in top_level_segments(content, start + 1, end - 1) {
+        let Some(colon) = find_top_level_byte(content, property_start, property_end, b':') else {
+            continue;
+        };
+        let (key_start, key_end) = trim_range(content, property_start, colon);
+        let key = parse_string_literal_at(content, key_start)
+            .filter(|(_, after)| *after <= key_end)
+            .map(|(value, _)| value)
+            .unwrap_or_else(|| content[key_start..key_end].to_string());
+        if key != property {
+            continue;
+        }
+
+        let (value_start, value_end) = trim_range(content, colon + 1, property_end);
+        return parse_string_literal_at(content, value_start)
+            .filter(|(_, after)| *after <= value_end)
+            .map(|(value, _)| value);
+    }
+
+    None
+}
+
+fn top_level_segments(content: &str, start: usize, end: usize) -> Vec<(usize, usize)> {
+    let mut segments = Vec::new();
+    let mut segment_start = start;
+    let mut cursor = start;
+    let mut depths = [0usize; 3];
+
+    while cursor < end {
+        if let Some(next) = skip_js_string_or_comment(content, cursor, end) {
+            cursor = next;
+            continue;
+        }
+
+        match content.as_bytes()[cursor] {
+            b'(' => depths[0] += 1,
+            b')' => depths[0] = depths[0].saturating_sub(1),
+            b'{' => depths[1] += 1,
+            b'}' => depths[1] = depths[1].saturating_sub(1),
+            b'[' => depths[2] += 1,
+            b']' => depths[2] = depths[2].saturating_sub(1),
+            b',' if depths == [0, 0, 0] => {
+                let segment = trim_range(content, segment_start, cursor);
+                if segment.0 < segment.1 {
+                    segments.push(segment);
+                }
+                segment_start = cursor + 1;
+            }
+            _ => {}
+        }
+        cursor += 1;
+    }
+
+    let segment = trim_range(content, segment_start, end);
+    if segment.0 < segment.1 {
+        segments.push(segment);
+    }
+    segments
+}
+
+fn find_matching_delimiter(
+    content: &str,
+    open: usize,
+    open_byte: u8,
+    close_byte: u8,
+) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut cursor = open;
+    while cursor < content.len() {
+        if let Some(next) = skip_js_string_or_comment(content, cursor, content.len()) {
+            cursor = next;
+            continue;
+        }
+
+        let byte = content.as_bytes()[cursor];
+        if byte == open_byte {
+            depth += 1;
+        } else if byte == close_byte {
+            depth = depth.checked_sub(1)?;
+            if depth == 0 {
+                return Some(cursor);
+            }
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn find_top_level_byte(content: &str, start: usize, end: usize, needle: u8) -> Option<usize> {
+    let mut cursor = start;
+    let mut depths = [0usize; 3];
+    while cursor < end {
+        if let Some(next) = skip_js_string_or_comment(content, cursor, end) {
+            cursor = next;
+            continue;
+        }
+
+        let byte = content.as_bytes()[cursor];
+        if byte == needle && depths == [0, 0, 0] {
+            return Some(cursor);
+        }
+        match byte {
+            b'(' => depths[0] += 1,
+            b')' => depths[0] = depths[0].saturating_sub(1),
+            b'{' => depths[1] += 1,
+            b'}' => depths[1] = depths[1].saturating_sub(1),
+            b'[' => depths[2] += 1,
+            b']' => depths[2] = depths[2].saturating_sub(1),
+            _ => {}
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn skip_js_string_or_comment(content: &str, start: usize, end: usize) -> Option<usize> {
+    let bytes = content.as_bytes();
+    let quote = *bytes.get(start)?;
+    if matches!(quote, b'\'' | b'"' | b'`') {
+        let mut cursor = start + 1;
+        while cursor < end {
+            if bytes[cursor] == b'\\' {
+                cursor = (cursor + 2).min(end);
+            } else if bytes[cursor] == quote {
+                return Some(cursor + 1);
+            } else {
+                cursor += 1;
+            }
+        }
+        return Some(end);
+    }
+
+    if quote == b'/' && bytes.get(start + 1) == Some(&b'/') {
+        let mut cursor = start + 2;
+        while cursor < end && bytes[cursor] != b'\n' {
+            cursor += 1;
+        }
+        return Some(cursor);
+    }
+    if quote == b'/' && bytes.get(start + 1) == Some(&b'*') {
+        let mut cursor = start + 2;
+        while cursor + 1 < end {
+            if bytes[cursor] == b'*' && bytes[cursor + 1] == b'/' {
+                return Some(cursor + 2);
+            }
+            cursor += 1;
+        }
+        return Some(end);
+    }
+
+    None
+}
+
+fn trim_range(content: &str, mut start: usize, mut end: usize) -> (usize, usize) {
+    while start < end && content.as_bytes()[start].is_ascii_whitespace() {
+        start += 1;
+    }
+    while end > start && content.as_bytes()[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    (start, end)
 }
 
 fn parse_string_literal_at(content: &str, offset: usize) -> Option<(String, usize)> {
@@ -288,6 +525,31 @@ fn dedupe_tools_by_name(tools: Vec<ToolSurface>) -> Vec<ToolSurface> {
     deduped
 }
 
+fn dedupe_mcp_tool_declarations(declarations: Vec<McpToolDeclaration>) -> Vec<McpToolDeclaration> {
+    let mut deduped: Vec<McpToolDeclaration> = Vec::new();
+    for declaration in declarations {
+        if let Some(existing) = deduped
+            .iter_mut()
+            .find(|existing| existing.tool.name == declaration.tool.name)
+        {
+            let existing_score = (
+                usize::from(existing.handler.is_some()),
+                usize::from(existing.tool.description.is_some()),
+            );
+            let new_score = (
+                usize::from(declaration.handler.is_some()),
+                usize::from(declaration.tool.description.is_some()),
+            );
+            if new_score > existing_score {
+                *existing = declaration;
+            }
+        } else {
+            deduped.push(declaration);
+        }
+    }
+    deduped
+}
+
 fn source_loc(file: &Path, line: usize) -> SourceLocation {
     SourceLocation {
         file: file.to_path_buf(),
@@ -295,6 +557,24 @@ fn source_loc(file: &Path, line: usize) -> SourceLocation {
         column: 0,
         end_line: None,
         end_column: None,
+    }
+}
+
+fn source_loc_span(file: &Path, content: &str, start: usize, end: usize) -> SourceLocation {
+    let start_line = content[..start].lines().count() + 1;
+    let start_column = content[..start]
+        .rsplit_once('\n')
+        .map_or(start, |(_, line)| line.len());
+    let end_line = content[..end].lines().count() + 1;
+    let end_column = content[..end]
+        .rsplit_once('\n')
+        .map_or(end, |(_, line)| line.len());
+    SourceLocation {
+        file: file.to_path_buf(),
+        line: start_line,
+        column: start_column,
+        end_line: Some(end_line),
+        end_column: Some(end_column),
     }
 }
 
@@ -582,6 +862,113 @@ server.registerTool("create_report", { description: "Create report" }, async () 
         );
         assert_eq!(tools[0].defined_at.as_ref().map(|loc| loc.line), Some(5));
         assert_eq!(tools[1].name, "create_report");
-        assert_eq!(tools[1].description, None);
+        assert_eq!(tools[1].description.as_deref(), Some("Create report"));
+    }
+
+    #[test]
+    fn extracts_config_description_and_inline_handler_binding() {
+        let content = r#"
+server.registerTool(
+  "create_report",
+  {
+    description: "Create a local report",
+    inputSchema: { path: { type: "string", description: "Output path" } },
+  },
+  async ({ path }) => {
+    await writeFile(path, "report");
+  },
+)
+"#;
+
+        let declarations =
+            extract_mcp_tool_declarations_from_source(Path::new("src/server.ts"), content);
+
+        assert_eq!(declarations.len(), 1);
+        assert_eq!(declarations[0].tool.name, "create_report");
+        assert_eq!(
+            declarations[0].tool.description.as_deref(),
+            Some("Create a local report")
+        );
+        assert!(matches!(
+            declarations[0].handler,
+            Some(McpToolHandler::Inline { .. })
+        ));
+    }
+
+    #[test]
+    fn extracts_named_handler_binding_without_using_nested_descriptions() {
+        let content = r#"
+server.registerTool(
+  "fetch_report",
+  {
+    inputSchema: { url: { type: "string", description: "Remote URL" } },
+    description: "Fetch a report from a URL",
+  },
+  fetchReport,
+)
+"#;
+
+        let declarations =
+            extract_mcp_tool_declarations_from_source(Path::new("src/server.ts"), content);
+
+        assert_eq!(declarations.len(), 1);
+        assert_eq!(
+            declarations[0].tool.description.as_deref(),
+            Some("Fetch a report from a URL")
+        );
+        assert!(matches!(
+            declarations[0].handler,
+            Some(McpToolHandler::Named { ref symbol }) if symbol == "fetchReport"
+        ));
+    }
+
+    #[test]
+    fn extracts_tool_callback_after_description_and_schema_arguments() {
+        let content = r#"
+server.tool(
+  "read_file",
+  "Read a local file",
+  { path: z.string() },
+  handleReadFile,
+)
+"#;
+
+        let declarations =
+            extract_mcp_tool_declarations_from_source(Path::new("src/server.ts"), content);
+
+        assert_eq!(declarations.len(), 1);
+        assert_eq!(
+            declarations[0].tool.description.as_deref(),
+            Some("Read a local file")
+        );
+        assert!(matches!(
+            declarations[0].handler,
+            Some(McpToolHandler::Named { ref symbol }) if symbol == "handleReadFile"
+        ));
+    }
+
+    #[test]
+    fn duplicate_tool_prefers_declaration_with_handler_binding() {
+        let content = r#"
+server.registerTool("report", { description: "Incomplete declaration" })
+server.registerTool(
+  "report",
+  { description: "Bound declaration" },
+  async () => ({ content: [] }),
+)
+"#;
+
+        let declarations =
+            extract_mcp_tool_declarations_from_source(Path::new("src/server.ts"), content);
+
+        assert_eq!(declarations.len(), 1);
+        assert_eq!(
+            declarations[0].tool.description.as_deref(),
+            Some("Bound declaration")
+        );
+        assert!(matches!(
+            declarations[0].handler,
+            Some(McpToolHandler::Inline { .. })
+        ));
     }
 }
