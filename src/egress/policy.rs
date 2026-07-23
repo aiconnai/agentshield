@@ -692,6 +692,11 @@ deny = []
                     description: None,
                 }],
                 defined_at: None,
+                declared_capabilities: Default::default(),
+                capability_declarations: Vec::new(),
+                observed_capabilities: Default::default(),
+                capability_observation_complete: false,
+                capability_evidence: Vec::new(),
             }],
             execution: ExecutionSurface {
                 network_operations: vec![

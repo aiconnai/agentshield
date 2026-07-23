@@ -147,6 +147,11 @@ fn parse_mcp_servers(
             output_schema: None,
             declared_permissions: vec![],
             defined_at: Some(location.clone()),
+            declared_capabilities: Default::default(),
+            capability_declarations: Vec::new(),
+            observed_capabilities: Default::default(),
+            capability_observation_complete: false,
+            capability_evidence: Vec::new(),
         });
 
         // Emit a CommandInvocation for the process that starts the server
