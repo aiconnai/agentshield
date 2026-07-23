@@ -4,6 +4,8 @@ AgentShield ships with 18 built-in detectors targeting the most common security
 issues in AI agent extensions. Each rule has an ID, severity, confidence level,
 and CWE mapping where applicable.
 
+Each rule also maps to a primary category in the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/) (2025). Rules that additionally touch a secondary category note it in parentheses. The mapping is emitted in SARIF (`tool.driver.taxonomies` plus per-rule `relationships`) and in `agentshield list-rules`.
+
 ---
 
 ## SHIELD-001: Command Injection
@@ -13,6 +15,7 @@ and CWE mapping where applicable.
 | Severity | Critical |
 | CWE | [CWE-78](https://cwe.mitre.org/data/definitions/78.html) |
 | Category | Command Injection |
+| OWASP MCP | MCP05 (also: MCP02) |
 
 **What it detects:** Calls to `subprocess.run`, `subprocess.Popen`, `subprocess.call`,
 `subprocess.check_output`, or `os.system` where the command argument comes from a
@@ -49,6 +52,7 @@ Pass arguments as a list, not a string.
 | Severity | Critical |
 | CWE | [CWE-522](https://cwe.mitre.org/data/definitions/522.html) |
 | Category | Credential Exfiltration |
+| OWASP MCP | MCP06 (also: MCP01) |
 
 **What it detects:** A file that both accesses sensitive environment variables
 (`os.environ`, `os.getenv`, `os.environ.get`) and makes outbound HTTP requests
@@ -70,6 +74,7 @@ passed to outbound HTTP calls. Use an allowlist for permitted outbound domains.
 | Severity | High |
 | CWE | [CWE-918](https://cwe.mitre.org/data/definitions/918.html) |
 | Category | SSRF |
+| OWASP MCP | MCP05 (also: MCP08) |
 
 **What it detects:** HTTP client calls (`requests.get`, `requests.post`, `urllib`,
 `httpx`, `aiohttp`, `fetch`) where the URL argument comes from a tool parameter.
@@ -89,6 +94,7 @@ Block private IP ranges and metadata endpoints.
 | Severity | High |
 | CWE | [CWE-22](https://cwe.mitre.org/data/definitions/22.html) |
 | Category | Arbitrary File Access |
+| OWASP MCP | MCP02 (also: MCP06) |
 
 **What it detects:** File operations (`open`, `read`, `write`, `Path`) where the
 file path comes from a tool parameter, allowing path traversal.
@@ -108,6 +114,7 @@ to a specific directory. Reject paths containing `..`.
 | Severity | High |
 | CWE | [CWE-829](https://cwe.mitre.org/data/definitions/829.html) |
 | Category | Supply Chain |
+| OWASP MCP | MCP07 (also: MCP09) |
 
 **What it detects:** Commands that install packages at runtime: `pip install`,
 `npm install`, `yarn add`, `apt-get install`, `brew install`.
@@ -127,6 +134,7 @@ packages inside tool handlers.
 | Severity | High |
 | CWE | [CWE-506](https://cwe.mitre.org/data/definitions/506.html) |
 | Category | Self-Modification |
+| OWASP MCP | MCP09 (also: MCP05) |
 
 **What it detects:** File write operations targeting the extension's own source
 files, or write operations with dynamic/parameter-derived paths.
@@ -146,6 +154,7 @@ Write to designated output directories only.
 | Severity | Medium |
 | CWE | — |
 | Category | Prompt Injection Surface |
+| OWASP MCP | MCP04 (also: MCP03) |
 
 **What it detects:** Tools that fetch external content via HTTP GET requests and
 return it to the LLM without sanitization. External content can contain prompt
@@ -166,6 +175,7 @@ Strip or escape instruction-like patterns. Consider content-type validation.
 | Severity | Medium |
 | CWE | [CWE-250](https://cwe.mitre.org/data/definitions/250.html) |
 | Category | Excessive Permissions |
+| OWASP MCP | MCP02 |
 
 **What it detects:** Tools that declare permissions (network, filesystem, process
 execution) in their tool surface but don't actually use those capabilities in
@@ -186,6 +196,7 @@ Remove unused capability declarations.
 | Severity | Medium |
 | CWE | [CWE-1104](https://cwe.mitre.org/data/definitions/1104.html) |
 | Category | Supply Chain |
+| OWASP MCP | MCP07 (also: MCP09) |
 
 **What it detects:** Dependencies with loose version constraints: `>=`, `~=`,
 `^`, `*`, or no version at all.
@@ -206,6 +217,7 @@ Use a lockfile with hashes for verification.
 | Severity | Medium |
 | CWE | [CWE-506](https://cwe.mitre.org/data/definitions/506.html) |
 | Category | Supply Chain |
+| OWASP MCP | MCP07 |
 
 **What it detects:** Package names with Levenshtein distance 1-2 from popular
 packages (requests, flask, django, numpy, express, react, etc.). Distance 1
@@ -226,6 +238,7 @@ or equivalent. Review new dependencies in code review.
 | Severity | Critical |
 | CWE | [CWE-95](https://cwe.mitre.org/data/definitions/95.html) |
 | Category | Code Injection |
+| OWASP MCP | MCP05 |
 
 **What it detects:** Calls to `eval()` or `exec()` where the code argument
 comes from a tool parameter, interpolated string, or other tainted source.
@@ -245,6 +258,7 @@ alternatives like `ast.literal_eval` for data parsing, or a proper parser.
 | Severity | Low |
 | CWE | — |
 | Category | Supply Chain |
+| OWASP MCP | MCP07 (also: MCP09) |
 
 **What it detects:** Projects that declare dependencies (in `requirements.txt`,
 `pyproject.toml`, `package.json`) but have no corresponding lockfile
@@ -267,6 +281,7 @@ verification of package integrity.
 | Severity | Critical |
 | CWE | [CWE-918](https://cwe.mitre.org/data/definitions/918.html) |
 | Category | SSRF |
+| OWASP MCP | MCP05 (also: MCP08) |
 
 **What it detects:** Tool arguments flowing to HTTP requests that could target
 cloud metadata endpoints or private networks, plus literal requests to known
@@ -289,6 +304,7 @@ metadata endpoints such as `169.254.169.254`.
 | Severity | Critical |
 | CWE | [CWE-494](https://cwe.mitre.org/data/definitions/494.html) |
 | Category | Supply Chain |
+| OWASP MCP | MCP07 (also: MCP05) |
 
 **What it detects:** HTTP downloads that flow to file writes and then process
 execution, or the same high-risk combination appearing in one scan target.
@@ -310,6 +326,7 @@ with trusted checksums or signatures before writing or executing anything.
 | Severity | High |
 | CWE | [CWE-552](https://cwe.mitre.org/data/definitions/552.html) |
 | Category | Arbitrary File Access |
+| OWASP MCP | MCP02 (also: MCP06) |
 
 **What it detects:** File operations using overly broad paths such as root,
 home directories, glob-all patterns, path traversal patterns, interpolated
@@ -332,6 +349,7 @@ root, home, absolute, traversal, and glob-all inputs unless explicitly intended.
 | Severity | Critical |
 | CWE | [CWE-502](https://cwe.mitre.org/data/definitions/502.html) |
 | Category | Code Injection |
+| OWASP MCP | MCP05 |
 
 **What it detects:** Unsafe deserializers and code execution patterns such as
 `pickle.loads`, unsafe `yaml.load`, JavaScript VM execution, or `new Function`
@@ -353,6 +371,7 @@ execution APIs for deserialization.
 | Severity | High |
 | CWE | [CWE-22](https://cwe.mitre.org/data/definitions/22.html) |
 | Category | Arbitrary File Access |
+| OWASP MCP | MCP02 (also: MCP05) |
 
 **What it detects:** Archive extraction operations such as `extractall`,
 `unpack_archive`, `ZipFile.extract`, `TarFile.extract`, `tar.extract`, or
@@ -376,6 +395,7 @@ Reject absolute paths and entries containing traversal segments.
 | Severity | High |
 | CWE | [CWE-532](https://cwe.mitre.org/data/definitions/532.html) |
 | Category | Data Exfiltration |
+| OWASP MCP | MCP06 (also: MCP10) |
 
 **What it detects:** Secret-store or sensitive environment values flowing to
 logs or LLM responses without redaction, plus secret-like environment accesses
