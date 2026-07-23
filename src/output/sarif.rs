@@ -15,7 +15,12 @@ use serde_json::{json, Value};
 /// Rule metadata (including OWASP MCP Top 10 mappings) is taken from
 /// `rule_metadata`; rules without metadata fall back to finding-derived
 /// fields only (id/name/severity/CWE from the finding itself).
-pub fn render(
+pub fn render(findings: &[Finding], target_name: &str, scan_root: &Path) -> Result<String> {
+    render_with_metadata(findings, target_name, scan_root, &[])
+}
+
+/// Render SARIF enriched with rule-registry metadata.
+pub fn render_with_metadata(
     findings: &[Finding],
     target_name: &str,
     scan_root: &Path,
@@ -175,7 +180,7 @@ fn severity_to_sarif_level(severity: Severity) -> &'static str {
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use super::render;
+    use super::{render, render_with_metadata};
     use crate::ir::SourceLocation;
     use crate::rules::{AttackCategory, Confidence, Finding, OwaspMcp, RuleMetadata, Severity};
 
@@ -216,7 +221,7 @@ mod tests {
     #[test]
     fn renders_one_based_start_and_end_columns() {
         let finding = make_finding("SHIELD-003");
-        let rendered = render(&[finding], "fixture", Path::new("."), &[]).unwrap();
+        let rendered = render(&[finding], "fixture", Path::new(".")).unwrap();
         let region = &serde_json::from_str::<serde_json::Value>(&rendered).unwrap()["runs"][0]
             ["results"][0]["locations"][0]["physicalLocation"]["region"];
         assert_eq!(region["startColumn"], 5);
@@ -228,7 +233,8 @@ mod tests {
     fn rule_with_owasp_has_taxonomy_and_relationship() {
         let finding = make_finding("SHIELD-003");
         let meta = make_meta("SHIELD-003", Some(OwaspMcp::CommandExecution));
-        let rendered = render(&[finding], "fixture", Path::new("."), &[meta]).unwrap();
+        let rendered =
+            render_with_metadata(&[finding], "fixture", Path::new("."), &[meta]).unwrap();
         let log: serde_json::Value = serde_json::from_str(&rendered).unwrap();
         let driver = &log["runs"][0]["tool"]["driver"];
 
@@ -256,7 +262,8 @@ mod tests {
     fn rule_without_owasp_omits_relationships_and_taxonomy() {
         let finding = make_finding("SHIELD-003");
         let meta = make_meta("SHIELD-003", None);
-        let rendered = render(&[finding], "fixture", Path::new("."), &[meta]).unwrap();
+        let rendered =
+            render_with_metadata(&[finding], "fixture", Path::new("."), &[meta]).unwrap();
         let log: serde_json::Value = serde_json::from_str(&rendered).unwrap();
         let driver = &log["runs"][0]["tool"]["driver"];
 
@@ -274,14 +281,14 @@ mod tests {
         let finding = make_finding("SHIELD-003");
         let fp = finding.fingerprint(Path::new("."));
 
-        let rendered_bare = render(
+        let rendered_bare = render_with_metadata(
             std::slice::from_ref(&finding),
             "fixture",
             Path::new("."),
             &[],
         )
         .unwrap();
-        let rendered_meta = render(
+        let rendered_meta = render_with_metadata(
             &[finding],
             "fixture",
             Path::new("."),
