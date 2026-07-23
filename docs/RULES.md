@@ -425,6 +425,12 @@ keys.
 capabilities while handler-bound code performs additional, undisclosed
 capabilities. Matching uses a small deterministic English phrase table and
 does not infer intent from vague descriptions or input-schema field names.
+It also reports capabilities promised by the description but absent from code
+only when the handler and its in-project callees are completely resolved and no
+opaque relevant calls remain.
+Data-surface capabilities are projected from typed secret-store and database
+events when an adapter supplies them; current complete-observation coverage is
+non-vacuous for MCP TypeScript execution.
 
 **Why it matters:** A tool can present itself to the model and user as a narrow
 file reader or calculator while quietly making network requests, executing

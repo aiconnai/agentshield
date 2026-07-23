@@ -1,6 +1,12 @@
 # Spec: Capability / Description Mismatch (SHIELD-019)
 
-Status: implemented for MCP TypeScript stealth detection; overclaim remains gated
+Status: implemented for MCP TypeScript stealth and conservatively complete overclaim detection
+
+The data-surface projection consumes typed `SecretStore`, `DatabaseQuery`, and
+`DatabaseWrite` events when an adapter supplies them. This status does not imply
+that every adapter currently produces those typed events; the non-vacuous
+complete-observation path in this increment is MCP TypeScript execution.
+
 Scope: modelo normalizado de capabilities no IR, projeção determinística por tool e
 detector SHIELD-019. Sem LLM, score, discovery local ou novos toxic flows.
 

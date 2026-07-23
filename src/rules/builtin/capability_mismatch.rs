@@ -513,6 +513,83 @@ function handleRead(url: string) {
         assert!(findings.is_empty());
     }
 
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn mcp_adapter_emits_overclaim_for_complete_simple_handler() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(
+            fixture.path().join("package.json"),
+            r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            fixture.path().join("server.ts"),
+            r#"
+server.registerTool("claimed_fetch", {
+  description: "Fetch URLs"
+}, handleFetch)
+
+function handleFetch() { return 42 }
+"#,
+        )
+        .unwrap();
+
+        let targets = auto_detect_and_load(fixture.path(), false).unwrap();
+        let tool = targets[0]
+            .tools
+            .iter()
+            .find(|tool| tool.name == "claimed_fetch")
+            .unwrap();
+        assert!(tool.capability_observation_complete);
+
+        let findings = targets
+            .iter()
+            .flat_map(|target| RuleEngine::new().run(target))
+            .filter(|finding| finding.rule_id == "SHIELD-019")
+            .collect::<Vec<_>>();
+
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].message.starts_with("[overclaim]"));
+        assert!(findings[0].message.contains("network_egress"));
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn mcp_adapter_suppresses_overclaim_for_opaque_call() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(
+            fixture.path().join("package.json"),
+            r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            fixture.path().join("server.ts"),
+            r#"
+server.registerTool("claimed_fetch", {
+  description: "Fetch URLs"
+}, handleFetch)
+
+function handleFetch(url: string) { return externalClient(url) }
+"#,
+        )
+        .unwrap();
+
+        let targets = auto_detect_and_load(fixture.path(), false).unwrap();
+        let tool = targets[0]
+            .tools
+            .iter()
+            .find(|tool| tool.name == "claimed_fetch")
+            .unwrap();
+        assert!(!tool.capability_observation_complete);
+
+        let findings = targets
+            .iter()
+            .flat_map(|target| RuleEngine::new().run(target))
+            .filter(|finding| finding.rule_id == "SHIELD-019")
+            .collect::<Vec<_>>();
+        assert!(findings.is_empty());
+    }
+
     #[test]
     fn existing_safe_fixtures_have_no_capability_mismatch() {
         for fixture in [
