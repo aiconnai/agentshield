@@ -40,7 +40,7 @@ impl super::Adapter for McpAdapter {
 
         let mut source_files = Vec::new();
         let mut execution = ExecutionSurface::default();
-        let mut tools = Vec::new();
+        let mut tool_declarations = Vec::new();
 
         // Collect source files
         collect_source_files_with_filter(root, filter, &mut source_files)?;
@@ -49,7 +49,7 @@ impl super::Adapter for McpAdapter {
                 source_file.language,
                 Language::TypeScript | Language::JavaScript
             ) {
-                tools.extend(extract_mcp_tools_from_source(
+                tool_declarations.extend(extract_mcp_tool_declarations_from_source(
                     &source_file.path,
                     &source_file.content,
                 ));
@@ -69,6 +69,18 @@ impl super::Adapter for McpAdapter {
         // Phase 2: Cross-file sanitizer-aware analysis — downgrade operations
         // in functions that are only called with sanitized arguments.
         apply_cross_file_sanitization(&mut parsed_files);
+
+        // Preserve per-tool handler operation bindings for capability projection.
+        // The public ToolSurface remains unchanged until the capability IR lands.
+        let operation_bindings = bind_mcp_tool_operations(&tool_declarations, &parsed_files);
+        debug_assert_eq!(operation_bindings.len(), tool_declarations.len());
+        debug_assert!(operation_bindings
+            .iter()
+            .all(McpToolOperationBinding::is_consistent));
+        let mut tools = tool_declarations
+            .into_iter()
+            .map(|declaration| declaration.tool)
+            .collect::<Vec<_>>();
 
         // Phase 3: Merge parsed results into execution surface.
         for (_, parsed) in parsed_files {
@@ -185,13 +197,6 @@ pub fn is_test_file(path: &Path) -> bool {
     false
 }
 
-fn extract_mcp_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
-    extract_mcp_tool_declarations_from_source(path, content)
-        .into_iter()
-        .map(|declaration| declaration.tool)
-        .collect()
-}
-
 #[derive(Debug, Clone)]
 struct McpToolDeclaration {
     tool: ToolSurface,
@@ -202,6 +207,31 @@ struct McpToolDeclaration {
 enum McpToolHandler {
     Named { symbol: String },
     Inline { location: SourceLocation },
+}
+
+#[derive(Debug, Clone)]
+struct McpToolOperationBinding {
+    execution: ExecutionSurface,
+    handler_resolved: bool,
+    resolved_callees: Vec<String>,
+}
+
+#[cfg(feature = "typescript")]
+struct ResolvedMcpHandler {
+    span: SourceLocation,
+    caller: Option<String>,
+}
+
+impl McpToolOperationBinding {
+    fn is_consistent(&self) -> bool {
+        self.handler_resolved
+            || (self.execution.commands.is_empty()
+                && self.execution.file_operations.is_empty()
+                && self.execution.network_operations.is_empty()
+                && self.execution.env_accesses.is_empty()
+                && self.execution.dynamic_exec.is_empty()
+                && self.resolved_callees.is_empty())
+    }
 }
 
 fn extract_mcp_tool_declarations_from_source(
@@ -255,6 +285,210 @@ fn extract_mcp_tool_declarations_from_source(
     }
 
     dedupe_mcp_tool_declarations(declarations)
+}
+
+#[cfg(feature = "typescript")]
+fn bind_mcp_tool_operations(
+    declarations: &[McpToolDeclaration],
+    parsed_files: &[(PathBuf, parser::ParsedFile)],
+) -> Vec<McpToolOperationBinding> {
+    declarations
+        .iter()
+        .map(|declaration| {
+            let Some(handler) = resolve_handler(declaration, parsed_files) else {
+                return McpToolOperationBinding {
+                    execution: ExecutionSurface::default(),
+                    handler_resolved: false,
+                    resolved_callees: Vec::new(),
+                };
+            };
+
+            let mut resolved_callees = call_sites_for_handler(parsed_files, &handler)
+                .filter_map(|call_site| {
+                    resolve_unique_function_span(&call_site.callee, parsed_files)
+                        .map(|span| (call_site.callee.clone(), span))
+                })
+                .collect::<Vec<_>>();
+            resolved_callees.sort_by(|left, right| left.0.cmp(&right.0));
+            resolved_callees.dedup_by(|left, right| left.0 == right.0);
+
+            let mut scopes = Vec::with_capacity(resolved_callees.len() + 1);
+            scopes.push((handler.span, handler.caller));
+            scopes.extend(
+                resolved_callees
+                    .iter()
+                    .map(|(name, span)| (span.clone(), Some(name.clone()))),
+            );
+
+            McpToolOperationBinding {
+                execution: execution_within_scopes(parsed_files, &scopes),
+                handler_resolved: true,
+                resolved_callees: resolved_callees.into_iter().map(|(name, _)| name).collect(),
+            }
+        })
+        .collect()
+}
+
+#[cfg(not(feature = "typescript"))]
+fn bind_mcp_tool_operations(
+    declarations: &[McpToolDeclaration],
+    _parsed_files: &[(PathBuf, parser::ParsedFile)],
+) -> Vec<McpToolOperationBinding> {
+    declarations
+        .iter()
+        .map(|_| McpToolOperationBinding {
+            execution: ExecutionSurface::default(),
+            handler_resolved: false,
+            resolved_callees: Vec::new(),
+        })
+        .collect()
+}
+
+#[cfg(feature = "typescript")]
+fn resolve_handler(
+    declaration: &McpToolDeclaration,
+    parsed_files: &[(PathBuf, parser::ParsedFile)],
+) -> Option<ResolvedMcpHandler> {
+    match declaration.handler.as_ref()? {
+        McpToolHandler::Inline { location } => parsed_files
+            .iter()
+            .any(|(path, _)| path == &location.file)
+            .then(|| ResolvedMcpHandler {
+                span: location.clone(),
+                caller: None,
+            }),
+        McpToolHandler::Named { symbol } => {
+            resolve_unique_function_span(symbol, parsed_files).map(|span| ResolvedMcpHandler {
+                span,
+                caller: Some(symbol.clone()),
+            })
+        }
+    }
+}
+
+#[cfg(feature = "typescript")]
+fn resolve_unique_function_span(
+    symbol: &str,
+    parsed_files: &[(PathBuf, parser::ParsedFile)],
+) -> Option<SourceLocation> {
+    let mut matches = parsed_files.iter().flat_map(|(_, parsed)| {
+        parsed
+            .function_defs
+            .iter()
+            .filter(move |definition| definition.name == symbol)
+    });
+    let location = matches.next()?.location.clone();
+    matches.next().is_none().then_some(location)
+}
+
+#[cfg(feature = "typescript")]
+fn call_sites_for_handler<'a>(
+    parsed_files: &'a [(PathBuf, parser::ParsedFile)],
+    handler: &'a ResolvedMcpHandler,
+) -> impl Iterator<Item = &'a parser::CallSite> {
+    parsed_files
+        .iter()
+        .flat_map(|(_, parsed)| parsed.call_sites.iter())
+        .filter(|call_site| {
+            location_within_span(&call_site.location, &handler.span)
+                && match handler.caller.as_deref() {
+                    Some(caller) => call_site.caller.as_deref() == Some(caller),
+                    None => call_site.caller.is_none(),
+                }
+        })
+}
+
+#[cfg(feature = "typescript")]
+fn execution_within_scopes(
+    parsed_files: &[(PathBuf, parser::ParsedFile)],
+    scopes: &[(SourceLocation, Option<String>)],
+) -> ExecutionSurface {
+    let contains = |location: &SourceLocation| {
+        scopes.iter().any(|(span, function_name)| {
+            operation_belongs_to_scope(location, span, function_name.as_deref(), parsed_files)
+        })
+    };
+    let mut execution = ExecutionSurface::default();
+    for (_, parsed) in parsed_files {
+        execution.commands.extend(
+            parsed
+                .commands
+                .iter()
+                .filter(|operation| contains(&operation.location))
+                .cloned(),
+        );
+        execution.file_operations.extend(
+            parsed
+                .file_operations
+                .iter()
+                .filter(|operation| contains(&operation.location))
+                .cloned(),
+        );
+        execution.network_operations.extend(
+            parsed
+                .network_operations
+                .iter()
+                .filter(|operation| contains(&operation.location))
+                .cloned(),
+        );
+        execution.env_accesses.extend(
+            parsed
+                .env_accesses
+                .iter()
+                .filter(|operation| contains(&operation.location))
+                .cloned(),
+        );
+        execution.dynamic_exec.extend(
+            parsed
+                .dynamic_exec
+                .iter()
+                .filter(|operation| contains(&operation.location))
+                .cloned(),
+        );
+    }
+    execution
+}
+
+#[cfg(feature = "typescript")]
+fn operation_belongs_to_scope(
+    location: &SourceLocation,
+    span: &SourceLocation,
+    function_name: Option<&str>,
+    parsed_files: &[(PathBuf, parser::ParsedFile)],
+) -> bool {
+    if !location_within_span(location, span) {
+        return false;
+    }
+
+    let innermost = parsed_files
+        .iter()
+        .flat_map(|(_, parsed)| parsed.function_defs.iter())
+        .filter(|definition| {
+            location_within_span(&definition.location, span)
+                && location_within_span(location, &definition.location)
+        })
+        .max_by_key(|definition| (definition.location.line, definition.location.column));
+
+    match (function_name, innermost) {
+        (Some(expected), Some(definition)) => definition.name == expected,
+        (Some(_), None) => false,
+        (None, None) => true,
+        (None, Some(_)) => false,
+    }
+}
+
+#[cfg(feature = "typescript")]
+fn location_within_span(location: &SourceLocation, span: &SourceLocation) -> bool {
+    if location.file != span.file {
+        return false;
+    }
+    let start = (location.line, location.column);
+    let span_start = (span.line, span.column);
+    let span_end = (
+        span.end_line.unwrap_or(span.line),
+        span.end_column.unwrap_or(usize::MAX),
+    );
+    start >= span_start && start < span_end
 }
 
 fn find_next_mcp_tool_call(content: &str) -> Option<usize> {
@@ -955,7 +1189,11 @@ server.tool(
 server.registerTool("create_report", { description: "Create report" }, async () => {})
 "#;
 
-        let tools = extract_mcp_tools_from_source(Path::new("src/mcp/server.ts"), content);
+        let tools =
+            extract_mcp_tool_declarations_from_source(Path::new("src/mcp/server.ts"), content)
+                .into_iter()
+                .map(|declaration| declaration.tool)
+                .collect::<Vec<_>>();
         assert_eq!(tools.len(), 2);
         assert_eq!(tools[0].name, "search_party");
         assert_eq!(
@@ -1155,5 +1393,157 @@ server.registerTool("real", { description: "Real tool" }, handlers.run)
             declarations[0].handler,
             Some(McpToolHandler::Named { ref symbol }) if symbol == "handlers.run"
         ));
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn binds_named_handlers_without_cross_tool_operation_leakage() {
+        use crate::parser::LanguageParser;
+
+        let path = Path::new("src/server.ts");
+        let content = r#"
+server.registerTool("read_file", { description: "Read a file" }, handleRead)
+server.registerTool("fetch_url", { description: "Fetch a URL" }, handleFetch)
+
+async function handleRead(path: string) {
+  return readFile(path)
+}
+
+async function handleFetch(url: string) {
+  return fetch(url)
+}
+"#;
+        let declarations = extract_mcp_tool_declarations_from_source(path, content);
+        let parsed = parser::typescript::TypeScriptParser
+            .parse_file(path, content)
+            .unwrap();
+
+        let bindings = bind_mcp_tool_operations(&declarations, &[(path.to_path_buf(), parsed)]);
+
+        assert_eq!(bindings.len(), 2);
+        assert!(bindings[0].handler_resolved);
+        assert_eq!(bindings[0].execution.file_operations.len(), 1);
+        assert!(bindings[0].execution.network_operations.is_empty());
+        assert!(bindings[1].handler_resolved);
+        assert!(bindings[1].execution.file_operations.is_empty());
+        assert_eq!(bindings[1].execution.network_operations.len(), 1);
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn binds_inline_handler_and_one_hop_in_project_callee() {
+        use crate::parser::LanguageParser;
+
+        let path = Path::new("src/server.ts");
+        let content = r#"
+server.registerTool(
+  "fetch_report",
+  { description: "Fetch a report" },
+  async (url: string) => {
+    await writeFile("audit.log", "started")
+    return fetchThroughClient(url)
+  },
+)
+
+async function fetchThroughClient(url: string) {
+  return fetch(url)
+}
+"#;
+        let declarations = extract_mcp_tool_declarations_from_source(path, content);
+        let parsed = parser::typescript::TypeScriptParser
+            .parse_file(path, content)
+            .unwrap();
+
+        let bindings = bind_mcp_tool_operations(&declarations, &[(path.to_path_buf(), parsed)]);
+
+        assert_eq!(bindings.len(), 1);
+        assert!(bindings[0].handler_resolved);
+        assert_eq!(bindings[0].resolved_callees, vec!["fetchThroughClient"]);
+        assert_eq!(bindings[0].execution.file_operations.len(), 1);
+        assert_eq!(bindings[0].execution.network_operations.len(), 1);
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn operation_binding_stops_after_one_callee_hop() {
+        use crate::parser::LanguageParser;
+
+        let path = Path::new("src/server.ts");
+        let content = r#"
+server.registerTool("report", { description: "Build report" }, handleReport)
+
+async function handleReport() {
+  return firstHop()
+}
+
+async function firstHop() {
+  return secondHop()
+}
+
+async function secondHop() {
+  return fetch("https://example.com")
+}
+"#;
+        let declarations = extract_mcp_tool_declarations_from_source(path, content);
+        let parsed = parser::typescript::TypeScriptParser
+            .parse_file(path, content)
+            .unwrap();
+
+        let bindings = bind_mcp_tool_operations(&declarations, &[(path.to_path_buf(), parsed)]);
+
+        assert_eq!(bindings.len(), 1);
+        assert!(bindings[0].handler_resolved);
+        assert_eq!(bindings[0].resolved_callees, vec!["firstHop"]);
+        assert!(
+            bindings[0].execution.network_operations.is_empty(),
+            "depth-2 operations must not be attributed to the tool"
+        );
+    }
+
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn uncalled_nested_function_operations_are_not_attributed_to_handler() {
+        use crate::parser::LanguageParser;
+
+        let path = Path::new("src/server.ts");
+        let content = r#"
+server.registerTool("report", { description: "Build report" }, handleReport)
+
+async function handleReport() {
+  async function unusedNetworkHelper() {
+    return fetch("https://example.com")
+  }
+  return "local report"
+}
+"#;
+        let declarations = extract_mcp_tool_declarations_from_source(path, content);
+        let parsed = parser::typescript::TypeScriptParser
+            .parse_file(path, content)
+            .unwrap();
+
+        let bindings = bind_mcp_tool_operations(&declarations, &[(path.to_path_buf(), parsed)]);
+
+        assert_eq!(bindings.len(), 1);
+        assert!(bindings[0].handler_resolved);
+        assert!(bindings[0].resolved_callees.is_empty());
+        assert!(
+            bindings[0].execution.network_operations.is_empty(),
+            "an uncalled nested function is not part of handler execution"
+        );
+    }
+
+    #[cfg(not(feature = "typescript"))]
+    #[test]
+    fn no_typescript_feature_keeps_operation_binding_unresolved() {
+        let path = Path::new("src/server.ts");
+        let content = r#"server.registerTool("fetch", { description: "Fetch" }, handleFetch)"#;
+        let declarations = extract_mcp_tool_declarations_from_source(path, content);
+
+        let bindings = bind_mcp_tool_operations(&declarations, &[]);
+
+        assert_eq!(bindings.len(), 1);
+        assert!(!bindings[0].handler_resolved);
+        assert!(bindings[0].execution.network_operations.is_empty());
+        assert!(bindings[0].resolved_callees.is_empty());
     }
 }
