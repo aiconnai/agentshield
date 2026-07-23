@@ -1,7 +1,7 @@
 use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::ir::{ArgumentSource, ScanTarget};
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-013: Metadata SSRF
@@ -66,6 +66,7 @@ impl Detector for MetadataSsrfDetector {
             default_severity: Severity::Critical,
             attack_category: AttackCategory::Ssrf,
             cwe_id: Some("CWE-918".into()),
+            owasp_mcp: Some(OwaspMcp::CommandExecution),
         }
     }
 

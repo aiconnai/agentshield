@@ -1,6 +1,6 @@
 use crate::ir::{ArgumentSource, ScanTarget, SinkClass};
 use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, RuleMetadata, Severity,
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
 /// SHIELD-003: Server-Side Request Forgery (SSRF)
@@ -18,6 +18,7 @@ impl Detector for SsrfDetector {
             default_severity: Severity::High,
             attack_category: AttackCategory::Ssrf,
             cwe_id: Some("CWE-918".into()),
+            owasp_mcp: Some(OwaspMcp::CommandExecution),
         }
     }
 
