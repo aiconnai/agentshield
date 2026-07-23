@@ -134,12 +134,14 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
 
 /// Render a scan report in the specified format.
 pub fn render_report(report: &ScanReport, format: OutputFormat) -> Result<String> {
+    let rule_metadata = rules::RuleEngine::new().list_rules();
     output::render(
         &report.findings,
         &report.verdict,
         format,
         &report.target_name,
         &report.scan_root,
+        &rule_metadata,
     )
 }
 
