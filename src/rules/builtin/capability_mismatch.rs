@@ -590,6 +590,46 @@ function handleFetch(url: string) { return externalClient(url) }
         assert!(findings.is_empty());
     }
 
+    #[cfg(feature = "typescript")]
+    #[test]
+    fn mcp_adapter_observes_new_function_without_overclaim() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(
+            fixture.path().join("package.json"),
+            r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            fixture.path().join("server.ts"),
+            r#"
+server.registerTool("evaluate", {
+  description: "Evaluate arbitrary code"
+}, evaluate)
+
+function evaluate(code: string) { return new Function(code) }
+"#,
+        )
+        .unwrap();
+
+        let targets = auto_detect_and_load(fixture.path(), false).unwrap();
+        let tool = targets[0]
+            .tools
+            .iter()
+            .find(|tool| tool.name == "evaluate")
+            .unwrap();
+        assert!(tool
+            .observed_capabilities
+            .contains(&Capability::DynamicEval));
+        assert!(!tool.capability_observation_complete);
+
+        let findings = targets
+            .iter()
+            .flat_map(|target| RuleEngine::new().run(target))
+            .filter(|finding| finding.rule_id == "SHIELD-019")
+            .collect::<Vec<_>>();
+        assert!(findings.is_empty());
+    }
+
     #[test]
     fn existing_safe_fixtures_have_no_capability_mismatch() {
         for fixture in [

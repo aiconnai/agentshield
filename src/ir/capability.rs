@@ -2,7 +2,6 @@ use std::collections::BTreeSet;
 
 use crate::analysis::runtime_install::is_runtime_install_command;
 
-use super::data_surface::{DataSurface, TaintSinkType, TaintSourceType};
 use super::execution_surface::{ExecutionSurface, FileOpType};
 use super::tool_surface::{
     Capability, CapabilityDeclaration, CapabilityDeclarationSource, CapabilityEvidence,
@@ -137,47 +136,6 @@ pub(crate) fn project_observed_execution(tool: &mut ToolSurface, execution: &Exe
         });
     }
 
-    merge_observed_capabilities(tool, capabilities, evidence);
-}
-
-pub(crate) fn project_observed_data(tool: &mut ToolSurface, data: &DataSurface) {
-    let mut capabilities = BTreeSet::new();
-    let mut evidence = Vec::new();
-
-    for source in &data.sources {
-        let (capability, description) = match source.source_type {
-            TaintSourceType::SecretStore => (Capability::CredentialAccess, "secret-store access"),
-            TaintSourceType::DatabaseQuery => (Capability::DatabaseRead, "database query"),
-            _ => continue,
-        };
-        capabilities.insert(capability);
-        evidence.push(CapabilityEvidence {
-            capability,
-            location: source.location.clone(),
-            description: format!("{description}: {}", source.description),
-        });
-    }
-
-    for sink in &data.sinks {
-        if sink.sink_type != TaintSinkType::DatabaseWrite {
-            continue;
-        }
-        capabilities.insert(Capability::DatabaseWrite);
-        evidence.push(CapabilityEvidence {
-            capability: Capability::DatabaseWrite,
-            location: sink.location.clone(),
-            description: format!("database write: {}", sink.description),
-        });
-    }
-
-    merge_observed_capabilities(tool, capabilities, evidence);
-}
-
-fn merge_observed_capabilities(
-    tool: &mut ToolSurface,
-    capabilities: BTreeSet<Capability>,
-    evidence: Vec<CapabilityEvidence>,
-) {
     tool.observed_capabilities.extend(capabilities);
     tool.capability_evidence.extend(evidence);
     tool.capability_evidence.sort_by(|left, right| {
@@ -431,7 +389,6 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::ir::data_surface::{TaintSink, TaintSource};
     use crate::ir::execution_surface::{
         CommandInvocation, EnvAccess, FileOperation, NetworkOperation,
     };
@@ -536,47 +493,6 @@ mod tests {
                 Capability::PackageInstall,
             ])
         );
-        assert!(tool
-            .capability_evidence
-            .windows(2)
-            .all(|pair| pair[0].capability <= pair[1].capability));
-    }
-
-    #[test]
-    fn data_surface_projects_secret_and_database_capabilities() {
-        let mut tool = tool();
-        let data = DataSurface {
-            sources: vec![
-                TaintSource {
-                    source_type: TaintSourceType::SecretStore,
-                    description: "vault token".into(),
-                    location: location(2),
-                },
-                TaintSource {
-                    source_type: TaintSourceType::DatabaseQuery,
-                    description: "customer lookup".into(),
-                    location: location(3),
-                },
-            ],
-            sinks: vec![TaintSink {
-                sink_type: TaintSinkType::DatabaseWrite,
-                description: "customer update".into(),
-                location: location(4),
-            }],
-            taint_paths: Vec::new(),
-        };
-
-        project_observed_data(&mut tool, &data);
-
-        assert_eq!(
-            tool.observed_capabilities,
-            BTreeSet::from([
-                Capability::CredentialAccess,
-                Capability::DatabaseRead,
-                Capability::DatabaseWrite,
-            ])
-        );
-        assert_eq!(tool.capability_evidence.len(), 3);
         assert!(tool
             .capability_evidence
             .windows(2)

@@ -4,8 +4,7 @@ use crate::analysis::cross_file::apply_cross_file_sanitization;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::capability::{
-    project_declared_description, project_declared_permissions, project_observed_data,
-    project_observed_execution,
+    project_declared_description, project_declared_permissions, project_observed_execution,
 };
 use crate::ir::execution_surface::ExecutionSurface;
 use crate::ir::taint_builder::build_data_surface;
@@ -86,9 +85,6 @@ impl super::Adapter for McpAdapter {
                 let mut tool = declaration.tool;
                 if binding.handler_resolved {
                     project_observed_execution(&mut tool, &binding.execution);
-                    let bound_data =
-                        build_data_surface(std::slice::from_ref(&tool), &binding.execution);
-                    project_observed_data(&mut tool, &bound_data);
                 }
                 tool.capability_observation_complete = binding.observation_complete;
                 tool
