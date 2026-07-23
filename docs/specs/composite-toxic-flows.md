@@ -165,11 +165,13 @@ Os nomes são indicativos; o contrato é obrigatório:
 Não preencher `TaintPath::through` com locations não relacionadas apenas para
 simular uma chain.
 
-C.0 prova extração e graph construction por API crate-private + testes. C.1
-permanece bloqueado até uma decisão explícita de transporte para o detector.
-Não duplicar parsing dentro de SHIELD-020 nem usar cache global. Se C.1 exigir
-campo público/serializado ou mudança do `Detector` contract, isso sai em PR
-separado com revisão de API e compatibilidade.
+C.0 prova extração e graph construction por API crate-private + testes. O
+transporte C.0 → C.1 é definido em
+[`composite-flow-transport.md`](composite-flow-transport.md): sidecar
+crate-private, lane interna de built-in adapters, registro de regras de scanner
+separado e context detector separado, sem campo público/serializado nem mudança
+do contrato `Detector`. Não duplicar parsing dentro de SHIELD-020 nem usar
+cache global.
 
 ## 5. Extração mínima
 
