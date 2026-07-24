@@ -35,7 +35,7 @@ impl RuleEngine {
     pub fn new() -> Self {
         Self {
             detectors: builtin::all_detectors(),
-            context_detectors: Vec::new(),
+            context_detectors: builtin::all_context_detectors(),
         }
     }
 
@@ -46,7 +46,6 @@ impl RuleEngine {
 
     /// Run all built-in detectors, including contextual detectors.
     pub(crate) fn run_with_context(&self, input: &DetectionInput<'_>) -> Vec<Finding> {
-        let _ = input.composite_flows.len();
         let mut findings = self
             .detectors
             .iter()

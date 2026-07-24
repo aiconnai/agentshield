@@ -32,7 +32,7 @@ reports. The current release line is `0.8.7`.
 | Area | What AgentShield does |
 |------|------------------------|
 | Scanner surface | Normalizes seven framework/client families into one IR: MCP, OpenClaw, Hermes Agent, CrewAI, LangChain/LangGraph, GPT Actions, and Cursor Rules. |
-| Detection | Runs 19 built-in rules for command execution, credential exfiltration, capability mismatch, SSRF, filesystem risk, runtime installs, prompt surfaces, dependency hygiene, unsafe deserialization, secret leakage, and more. |
+| Detection | Runs 20 built-in rules for command execution, credential exfiltration, composite toxic flows, capability mismatch, SSRF, filesystem risk, runtime installs, prompt surfaces, dependency hygiene, unsafe deserialization, secret leakage, and more. |
 | Workflow fit | Works locally, in CI, and in GitHub Code Scanning without sending source code to a hosted service. |
 | Boundary | AgentShield is not a hosted monitoring service, runtime sandbox, or allowlist marketplace. Experimental runtime guard entrypoints are available behind opt-in feature flags; the stable contract is static scanning plus policy evaluation. |
 
