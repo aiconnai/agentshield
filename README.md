@@ -122,6 +122,7 @@ jobs:
           path: '.'
           fail-on: 'high'
           ignore-tests: true
+          strict: true # set false only when no supported adapter layout is expected
           upload-sarif: true
 ```
 
@@ -379,7 +380,7 @@ such as `legacy/` as matching that directory's contents.
 |------|---------|
 | 0 | Scan passed with no findings above threshold |
 | 1 | Scan failed with findings above threshold |
-| 2 | Scan error, such as invalid config or no supported adapter found |
+| 2 | Scan error (e.g., invalid config); no supported adapter found is surfaced as scanner error and can be controlled by action `strict` mode |
 | 3 | Runtime guard blocked or failed closed on invalid runtime input |
 
 ---
