@@ -3,22 +3,21 @@
 //! Findings remain the security facts and policy remains the enforcement
 //! boundary. This module is intentionally not part of the public API.
 //!
-//! E.1 deliberately has no production caller: integration is the separate E.2
-//! review gate. Remove this allowance when that gate adds an explicit consumer.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::error::{Result as ShieldResult, ShieldError};
+use crate::output::OutputFormat;
 use crate::rules::{Confidence, Finding, RuleEngine, RuleMetadata, Severity};
 
 pub(crate) const MODEL_VERSION: &str = "agentshield-risk-v1";
 const COVERAGE_SCHEMA: &str = "agentshield-coverage-v1";
 const SATURATION_CONSTANT: u64 = 30;
 const MAX_EMITTED_SCORE: u8 = 99;
+const MAX_OUTPUT_CONTRIBUTIONS: usize = 50;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct RiskAssessment {
@@ -31,6 +30,7 @@ pub(crate) struct RiskAssessment {
 }
 
 impl RiskAssessment {
+    #[cfg(test)]
     pub(crate) fn is_comparable_to(&self, other: &Self) -> bool {
         self.model_version == other.model_version && self.coverage_id == other.coverage_id
     }
@@ -50,6 +50,19 @@ pub(crate) struct RiskSummary {
     pub(crate) input_findings: usize,
     pub(crate) unique_findings: usize,
     pub(crate) duplicate_findings: usize,
+}
+
+#[derive(Serialize)]
+struct ExperimentalRiskOutput<'a> {
+    status: &'static str,
+    score: u8,
+    model_version: &'a str,
+    coverage_id: &'a str,
+    raw_points: u64,
+    contributions: &'a [RiskContribution],
+    contributions_truncated: usize,
+    summary: &'a RiskSummary,
+    interpretation: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -180,6 +193,80 @@ pub(crate) fn assess(
         },
         contributions,
     })
+}
+
+pub(crate) fn render_experimental(
+    base_report: &str,
+    assessment: &RiskAssessment,
+    format: OutputFormat,
+) -> ShieldResult<String> {
+    let displayed = assessment.contributions.len().min(MAX_OUTPUT_CONTRIBUTIONS);
+    let output = ExperimentalRiskOutput {
+        status: "informational",
+        score: assessment.score,
+        model_version: &assessment.model_version,
+        coverage_id: &assessment.coverage_id,
+        raw_points: assessment.raw_points,
+        contributions: &assessment.contributions[..displayed],
+        contributions_truncated: assessment.contributions.len() - displayed,
+        summary: &assessment.summary,
+        interpretation:
+            "Prioritization index only; not a probability, percentage, grade, or policy verdict.",
+    };
+
+    match format {
+        OutputFormat::Console => Ok(render_experimental_console(base_report, &output)),
+        OutputFormat::Json => render_experimental_json(base_report, &output),
+        OutputFormat::Sarif | OutputFormat::Html => Err(ShieldError::Config(
+            "`--experimental-risk` supports only console and JSON output".to_owned(),
+        )),
+    }
+}
+
+fn render_experimental_console(base_report: &str, output: &ExperimentalRiskOutput<'_>) -> String {
+    use std::fmt::Write;
+
+    let mut rendered = base_report.to_owned();
+    if !rendered.ends_with('\n') {
+        rendered.push('\n');
+    }
+    rendered.push('\n');
+    rendered.push_str("Experimental risk assessment (informational)\n");
+    let _ = writeln!(rendered, "Score: {}", output.score);
+    let _ = writeln!(rendered, "Model: {}", output.model_version);
+    let _ = writeln!(rendered, "Coverage: {}", output.coverage_id);
+    let _ = writeln!(rendered, "Raw points: {}", output.raw_points);
+    let _ = writeln!(
+        rendered,
+        "Contributions: {} shown, {} omitted",
+        output.contributions.len(),
+        output.contributions_truncated
+    );
+    for contribution in output.contributions {
+        let _ = writeln!(
+            rendered,
+            "- {} {} {} {}: {} point(s)",
+            contribution.fingerprint,
+            contribution.rule_id,
+            contribution.effective_severity,
+            contribution.confidence,
+            contribution.points
+        );
+    }
+    let _ = writeln!(rendered, "Interpretation: {}", output.interpretation);
+    rendered
+}
+
+fn render_experimental_json(
+    base_report: &str,
+    output: &ExperimentalRiskOutput<'_>,
+) -> ShieldResult<String> {
+    let mut report: serde_json::Value = serde_json::from_str(base_report)?;
+    let object = report
+        .as_object_mut()
+        .ok_or_else(|| ShieldError::Output("default JSON report was not an object".to_owned()))?;
+    object.insert("risk_assessment".to_owned(), serde_json::to_value(output)?);
+    Ok(serde_json::to_string_pretty(&report)?)
 }
 
 fn contribution_points(severity: Severity, confidence: Confidence) -> u64 {
@@ -554,6 +641,38 @@ mod tests {
         other.model_version = base.model_version.clone();
         other.coverage_id = "different".to_owned();
         assert!(!base.is_comparable_to(&other));
+    }
+
+    #[test]
+    fn experimental_output_bounds_contributions_and_reports_omissions() {
+        let findings = (0..51)
+            .map(|index| {
+                finding(
+                    &format!("SHIELD-GOLDEN-{index:02}"),
+                    Severity::Low,
+                    Confidence::Low,
+                    &format!("evidence {index}"),
+                )
+            })
+            .collect::<Vec<_>>();
+        let assessment = assess(&findings, Path::new("/scan"), &coverage()).expect("assessment");
+        let rendered = render_experimental(
+            r#"{"findings":[],"verdict":{"pass":true}}"#,
+            &assessment,
+            OutputFormat::Json,
+        )
+        .expect("render experimental JSON");
+        let report: serde_json::Value =
+            serde_json::from_str(&rendered).expect("parse experimental JSON");
+
+        assert_eq!(
+            report["risk_assessment"]["contributions"]
+                .as_array()
+                .expect("contributions")
+                .len(),
+            50
+        );
+        assert_eq!(report["risk_assessment"]["contributions_truncated"], 1);
     }
 
     #[test]

@@ -1,14 +1,15 @@
 # AgentShield risk model v1
 
-Status: internal golden model
+Status: experimental opt-in output
 
 Model identifier: `agentshield-risk-v1`
 
 This document freezes the E.1 model selected under
 [`explainable-risk-score.md`](explainable-risk-score.md). The model is
-crate-private and is not emitted by any default or opt-in output in E.1.
-Findings remain the security facts; policy verdict and process exit status
-remain the only enforcement contract.
+emitted only when `scan --experimental-risk` is explicitly selected with
+console or JSON output. Default output remains unchanged. Findings remain the
+security facts; policy verdict and process exit status remain the only
+enforcement contract.
 
 ## Inputs
 
@@ -74,4 +75,12 @@ contexts; E.1 does not expose a comparison UI.
 Fingerprint deduplication removes exact duplicates but does not prove semantic
 independence across different rules. Golden tests validate deterministic
 mechanics, not breach probability or real-world calibration. E.2 output remains
-blocked if representative correlated findings make the ranking misleading.
+experimental and must be removed or revised if representative correlated
+findings make the ranking misleading.
+
+## Experimental output boundary
+
+`--experimental-risk` supports console and JSON only. It is incompatible with
+`--explain`; it does not modify SARIF, HTML or DSSE. At most 50 ordered
+contributions are emitted, with an explicit omitted count. The flag never
+changes findings, policy, verdict, baseline behavior or process exit status.
