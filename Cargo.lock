@@ -19,6 +19,7 @@ dependencies = [
  "pretty_assertions",
  "proptest",
  "regex",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",
