@@ -570,7 +570,11 @@ mod platform {
         let mut parsed = Vec::new();
         for descriptor in registry() {
             let root_indices: Vec<Option<usize>> = match descriptor.base {
-                DiscoveryBase::EffectiveProfile if request.include_default_paths => vec![None],
+                DiscoveryBase::EffectiveProfile
+                    if request.include_default_paths && request.effective_profile.is_some() =>
+                {
+                    vec![None]
+                }
                 DiscoveryBase::ExplicitRoot => (0..request.roots.len()).map(Some).collect(),
                 _ => Vec::new(),
             };
@@ -588,7 +592,7 @@ mod platform {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 

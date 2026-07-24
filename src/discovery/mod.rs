@@ -139,6 +139,16 @@ pub(crate) enum SourceStatus {
     ChangeDetectedDuringRead,
 }
 
+pub(crate) const SOURCE_STATUSES: &[SourceStatus] = &[
+    SourceStatus::Inspected,
+    SourceStatus::Unsupported,
+    SourceStatus::Malformed,
+    SourceStatus::PermissionDenied,
+    SourceStatus::LimitReached,
+    SourceStatus::UnsupportedFilesystemSafety,
+    SourceStatus::ChangeDetectedDuringRead,
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum EntryState {
@@ -190,6 +200,21 @@ pub(crate) enum DiagnosticCode {
     UnsupportedFilesystemSafety,
     ChangeDetectedDuringRead,
 }
+
+pub(crate) const DIAGNOSTIC_CODES: &[DiagnosticCode] = &[
+    DiagnosticCode::InvalidJson,
+    DiagnosticCode::MissingServerMap,
+    DiagnosticCode::ServerMapNotObject,
+    DiagnosticCode::EntryNotObject,
+    DiagnosticCode::EntryNameTooLong,
+    DiagnosticCode::EntryNameInvalid,
+    DiagnosticCode::EntryLimitReached,
+    DiagnosticCode::LimitReached,
+    DiagnosticCode::ConfigSizeLimitReached,
+    DiagnosticCode::PermissionDenied,
+    DiagnosticCode::UnsupportedFilesystemSafety,
+    DiagnosticCode::ChangeDetectedDuringRead,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -3,10 +3,11 @@ use std::path::PathBuf;
 use agentshield::error::{Result, ShieldError};
 
 use crate::discovery::{
-    discover, registry, DiscoveryBase, DiscoveryEnvelope, DiscoveryRequest, ENTRY_STATES,
-    MAX_AGGREGATE_BYTES, MAX_CANDIDATE_FILES_PER_INVOCATION, MAX_CANDIDATE_FILES_PER_ROOT,
-    MAX_CONFIG_BYTES, MAX_DEPTH_PER_ROOT, MAX_DIRECTORIES_PER_INVOCATION, MAX_DIRECTORIES_PER_ROOT,
-    MAX_ENTRIES_PER_INVOCATION, MAX_OPENED_CONFIGS_PER_INVOCATION, MAX_OPENED_CONFIGS_PER_ROOT,
+    discover, registry, DiscoveryBase, DiscoveryEnvelope, DiscoveryRequest, DIAGNOSTIC_CODES,
+    ENTRY_STATES, MAX_AGGREGATE_BYTES, MAX_CANDIDATE_FILES_PER_INVOCATION,
+    MAX_CANDIDATE_FILES_PER_ROOT, MAX_CONFIG_BYTES, MAX_DEPTH_PER_ROOT,
+    MAX_DIRECTORIES_PER_INVOCATION, MAX_DIRECTORIES_PER_ROOT, MAX_ENTRIES_PER_INVOCATION,
+    MAX_OPENED_CONFIGS_PER_INVOCATION, MAX_OPENED_CONFIGS_PER_ROOT, SOURCE_STATUSES,
 };
 
 pub(crate) fn cmd_discover(
@@ -75,6 +76,16 @@ fn render_explanation(request: &DiscoveryRequest) -> String {
         .map(|state| state.as_str())
         .collect::<Vec<_>>()
         .join(", ");
+    let source_statuses = SOURCE_STATUSES
+        .iter()
+        .map(json_label)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let diagnostic_codes = DIAGNOSTIC_CODES
+        .iter()
+        .map(json_label)
+        .collect::<Vec<_>>()
+        .join(", ");
 
     format!(
         "Discovery plan (read-only; no scan or execution)\n\
@@ -87,7 +98,9 @@ fn render_explanation(request: &DiscoveryRequest) -> String {
          aggregate_bytes={MAX_AGGREGATE_BYTES}, entries={MAX_ENTRIES_PER_INVOCATION}\n\
          Symlinks and special files are never followed or read. Platforms without an atomic \
          no-follow primitive fail closed.\n\
-         Entry states: {entry_states}.\n",
+         Source statuses: {source_statuses}.\n\
+         Entry states: {entry_states}.\n\
+         Diagnostic codes: {diagnostic_codes}.\n",
         if request.include_default_paths {
             "enabled"
         } else {
