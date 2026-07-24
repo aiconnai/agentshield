@@ -36,6 +36,7 @@ jobs:
           fail-on: "{fail_on}"
           ignore-tests: {ignore_tests}
 {baseline_input}          upload-sarif: {upload_sarif}
+          strict: true
 "#,
         scan_path = options.scan_path,
         fail_on = options.fail_on,
@@ -109,6 +110,7 @@ jobs:
           fail-on: "{fail_on}"
           ignore-tests: {ignore_tests}
 {baseline_input}          upload-sarif: {upload_sarif}
+          strict: true
 "#,
         scan_path = options.scan_path,
         fail_on = options.fail_on,
@@ -136,6 +138,7 @@ mod tests {
         assert!(workflow.contains("fail-on: \"high\""));
         assert!(workflow.contains("ignore-tests: true"));
         assert!(workflow.contains("upload-sarif: true"));
+        assert!(workflow.contains("strict: true"));
         assert!(!workflow.contains("baseline:"));
     }
 
@@ -151,6 +154,7 @@ mod tests {
 
         assert!(workflow.contains("baseline: \".agentshield-baseline.json\""));
         assert!(workflow.contains("upload-sarif: true"));
+        assert!(workflow.contains("strict: true"));
     }
 
     #[test]
@@ -169,5 +173,6 @@ mod tests {
         assert!(workflow.contains("semgrep scan --config auto"));
         assert!(workflow.contains("uses: aiconnai/agentshield@main"));
         assert!(workflow.contains("baseline: \".agentshield-baseline.json\""));
+        assert!(workflow.contains("strict: true"));
     }
 }

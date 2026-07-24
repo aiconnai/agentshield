@@ -35,6 +35,10 @@ inputs:
     description: 'Skip test files (test/, tests/, __tests__/, *.test.ts, *.spec.ts, etc.)'
     required: false
     default: 'false'
+  strict:
+    description: 'Fail when no supported adapter is found; false makes only that discovery error non-blocking'
+    required: false
+    default: 'true'
   version:
     description: 'AgentShield version to use (default: latest). Accepts a version with or without a "v" prefix, e.g. v0.8.0 or 0.8.0.'
     required: false
@@ -147,6 +151,7 @@ runs:
       id: scan
       shell: bash
       run: |
+        SCAN_LOG="${{ runner.temp }}/agentshield-scan.log"
         ARGS="scan ${{ inputs.path }}"
         ARGS="$ARGS --fail-on ${{ inputs.fail-on }}"
 
@@ -171,9 +176,15 @@ runs:
         fi
 
         set +e
-        agentshield $ARGS
-        EXIT_CODE=$?
+        agentshield $ARGS 2>&1 | tee "$SCAN_LOG"
+        EXIT_CODE=${PIPESTATUS[0]}
         set -e
+
+        if grep -Fq "No suitable adapter found for directory:" "$SCAN_LOG"; then
+          echo "no_adapter=true" >> $GITHUB_OUTPUT
+        else
+          echo "no_adapter=false" >> $GITHUB_OUTPUT
+        fi
 
         echo "exit-code=$EXIT_CODE" >> $GITHUB_OUTPUT
         echo "sarif-file=$SARIF_FILE" >> $GITHUB_OUTPUT
@@ -204,6 +215,14 @@ runs:
           echo "::error::AgentShield found findings above the '${{ inputs.fail-on }}' threshold"
           exit 1
         elif [ "$AGENTSHIELD_EXIT" = "2" ]; then
-          echo "::error::AgentShield encountered a scan error"
-          exit 2
+          if [ "${{ steps.scan.outputs.no_adapter }}" = "true" ] && [ "${{ inputs.strict }}" = "false" ]; then
+            echo "::warning::AgentShield found no supported adapter for the scanned path; non-blocking due strict=false"
+            exit 0
+          elif [ "${{ steps.scan.outputs.no_adapter }}" = "true" ]; then
+            echo "::error::AgentShield encountered a scan error: No suitable adapter found"
+            exit 2
+          else
+            echo "::error::AgentShield encountered a scan error"
+            exit 2
+          fi
         fi

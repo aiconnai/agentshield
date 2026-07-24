@@ -248,6 +248,79 @@ jobs:
           print('PASS: composite action used root config and suppressed excluded metadata findings')
           "
 
+      - name: "Test 9a: Prepare strict-mode fixtures"
+        shell: bash
+        run: |
+          mkdir -p "${{ runner.temp }}/agentshield-no-adapter"
+
+      - name: "Test 9b: strict=false permits no-adapter scans"
+        id: no-adapter-permissive
+        uses: ./
+        with:
+          binary-path: ${{ runner.temp }}/agentshield/agentshield
+          path: ${{ runner.temp }}/agentshield-no-adapter
+          format: console
+          upload-sarif: false
+          strict: false
+
+      - name: "Test 9c: Verify permissive no-adapter result"
+        shell: bash
+        run: |
+          if [ "${{ steps.no-adapter-permissive.outputs.exit-code }}" != "2" ]; then
+            echo "::error::strict=false should preserve scanner exit code 2, got ${{ steps.no-adapter-permissive.outputs.exit-code }}"
+            exit 1
+          fi
+          echo "PASS: strict=false made only the no-adapter check non-blocking"
+
+      - name: "Test 9d: strict=true blocks no-adapter scans"
+        id: no-adapter-strict
+        continue-on-error: true
+        uses: ./
+        with:
+          binary-path: ${{ runner.temp }}/agentshield/agentshield
+          path: ${{ runner.temp }}/agentshield-no-adapter
+          format: console
+          upload-sarif: false
+          strict: true
+
+      - name: "Test 9e: Verify strict no-adapter failure"
+        shell: bash
+        run: |
+          if [ "${{ steps.no-adapter-strict.outcome }}" != "failure" ]; then
+            echo "::error::strict=true should fail a no-adapter scan, got ${{ steps.no-adapter-strict.outcome }}"
+            exit 1
+          fi
+          if [ "${{ steps.no-adapter-strict.outputs.exit-code }}" != "2" ]; then
+            echo "::error::strict=true should preserve scanner exit code 2, got ${{ steps.no-adapter-strict.outputs.exit-code }}"
+            exit 1
+          fi
+          echo "PASS: strict=true kept no-adapter scans blocking"
+
+      - name: "Test 9f: strict=false still blocks invalid config"
+        id: invalid-config-permissive
+        continue-on-error: true
+        uses: ./
+        with:
+          binary-path: ${{ runner.temp }}/agentshield/agentshield
+          path: tests/fixtures/mcp_servers/safe_calculator
+          config: tests/fixtures
+          format: console
+          upload-sarif: false
+          strict: false
+
+      - name: "Test 9g: Verify genuine scan errors remain blocking"
+        shell: bash
+        run: |
+          if [ "${{ steps.invalid-config-permissive.outcome }}" != "failure" ]; then
+            echo "::error::strict=false must not suppress invalid config errors, got ${{ steps.invalid-config-permissive.outcome }}"
+            exit 1
+          fi
+          if [ "${{ steps.invalid-config-permissive.outputs.exit-code }}" != "2" ]; then
+            echo "::error::invalid config should preserve scanner exit code 2, got ${{ steps.invalid-config-permissive.outputs.exit-code }}"
+            exit 1
+          fi
+          echo "PASS: strict=false did not suppress a genuine scan error"
+
       # --- Upload SARIF for real Code Scanning integration ---
       - name: Upload SARIF to Code Scanning
         if: always() && matrix.os == 'ubuntu-latest'
@@ -272,4 +345,5 @@ jobs:
           echo "| 6 | HTML output format | Passed |" >> $GITHUB_STEP_SUMMARY
           echo "| 7 | list-rules (18 detectors) | Passed |" >> $GITHUB_STEP_SUMMARY
           echo "| 8 | Subdirectory path filters | Passed |" >> $GITHUB_STEP_SUMMARY
-          echo "| 9 | SARIF upload to Code Scanning | Attempted |" >> $GITHUB_STEP_SUMMARY
+          echo "| 9 | Action strict-mode behavior | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| 10 | SARIF upload to Code Scanning | Attempted |" >> $GITHUB_STEP_SUMMARY
