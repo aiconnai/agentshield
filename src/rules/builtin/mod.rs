@@ -2,6 +2,7 @@ mod arbitrary_file_access;
 mod archive_traversal;
 mod capability_mismatch;
 mod command_injection;
+mod composite_toxic_flow;
 mod credential_exfil;
 mod download_exec;
 mod dynamic_exec;
@@ -19,9 +20,9 @@ mod unpinned_deps;
 mod unsafe_deser;
 mod unsafe_deser_patterns;
 
-use super::Detector;
+use super::{ContextDetector, Detector};
 
-/// Returns all built-in detectors (19 rules: SHIELD-001..019).
+/// Returns all built-in target-only detectors (SHIELD-001..019).
 pub fn all_detectors() -> Vec<Box<dyn Detector>> {
     vec![
         Box::new(command_injection::CommandInjectionDetector),
@@ -44,4 +45,11 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(secret_leakage::SecretLeakageDetector),
         Box::new(capability_mismatch::CapabilityMismatchDetector),
     ]
+}
+
+/// Returns all built-in contextual scanners (not target-only).
+pub(crate) fn all_context_detectors() -> Vec<Box<dyn ContextDetector>> {
+    vec![Box::new(
+        composite_toxic_flow::ArbitraryReadExfiltrationDetector,
+    )]
 }
