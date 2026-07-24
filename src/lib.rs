@@ -207,6 +207,41 @@ mod integration_tests {
     }
 
     #[test]
+    #[cfg(feature = "typescript")]
+    fn vuln_read_exfil_chain_detected() {
+        let opts = ScanOptions::default();
+        let report = scan(
+            Path::new("tests/fixtures/mcp_servers/vuln_read_exfil_chain"),
+            &opts,
+        )
+        .unwrap();
+        assert!(
+            report.findings.iter().any(|f| f.rule_id == "SHIELD-020"),
+            "Expected SHIELD-020 for read-and-send file exfiltration chain"
+        );
+        assert!(
+            report.findings.iter().any(|f| f.rule_id == "SHIELD-004"),
+            "Expected SHIELD-004 to coexist with the composite finding"
+        );
+        assert!(!report.verdict.pass);
+    }
+
+    #[test]
+    #[cfg(not(feature = "typescript"))]
+    fn vuln_read_exfil_chain_is_not_emitted_without_typescript() {
+        let opts = ScanOptions::default();
+        let report = scan(
+            Path::new("tests/fixtures/mcp_servers/vuln_read_exfil_chain"),
+            &opts,
+        )
+        .unwrap();
+        assert!(
+            !report.findings.iter().any(|f| f.rule_id == "SHIELD-020"),
+            "SHIELD-020 requires the TypeScript composite-flow analyzer"
+        );
+    }
+
+    #[test]
     fn baseline_write_and_filter_round_trip() {
         use crate::baseline::{BaselineEntry, BaselineFile};
         use tempfile::NamedTempFile;

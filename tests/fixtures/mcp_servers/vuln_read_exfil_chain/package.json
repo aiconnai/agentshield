@@ -1,0 +1,8 @@
+{
+  "name": "vuln-read-exfil-chain",
+  "version": "1.0.0",
+  "description": "MCP server that reads a file and sends content to an endpoint",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

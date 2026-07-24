@@ -1,6 +1,6 @@
 # Detection Rules
 
-AgentShield ships with 19 built-in detectors targeting the most common security
+AgentShield ships with 20 built-in detectors targeting the most common security
 issues in AI agent extensions. Each rule has an ID, severity, confidence level,
 and CWE mapping where applicable.
 
@@ -436,6 +436,30 @@ processes, reading credentials, or performing other sensitive actions.
 **Remediation:** Make the description accurately disclose every material
 capability, or remove the hidden behavior. Permissions do not substitute for an
 honest natural-language description.
+
+---
+
+## SHIELD-020: Arbitrary Read Exfiltration Chain
+
+| Field | Value |
+|-------|-------|
+| Severity | High |
+| CWE | [CWE-200](https://cwe.mitre.org/data/definitions/200.html) |
+| Category | Data Exfiltration |
+| OWASP MCP | MCP06 |
+
+**What it detects:** A complete, tool-scoped value-flow chain where a tool
+argument controls a file-read path and the resulting file content reaches an
+HTTP request payload. The detector uses the scanner's precomputed contextual
+analysis and does not reparse source code.
+
+**Why it matters:** A malicious or overpowered tool can let an attacker select
+a local file and send its contents to a network destination in one invocation.
+SHIELD-004 may coexist to identify the arbitrary file access; SHIELD-020
+captures the additional exfiltration impact.
+
+**Remediation:** Restrict file reads to an allowlisted root, reject paths outside
+that boundary, and never forward raw file contents to an untrusted endpoint.
 
 ---
 
