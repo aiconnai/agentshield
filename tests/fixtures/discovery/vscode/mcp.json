@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "workspace-docs": {
+      "type": "http",
+      "url": "https://private.example.test/mcp"
+    }
+  }
+}
