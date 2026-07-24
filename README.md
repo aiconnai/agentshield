@@ -252,6 +252,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 |---------|---------|
 | `agentshield discover` | Read allowlisted local client configuration paths without execution, network access, or automatic scanning; use `--no-default-paths`, repeated `--root`, `--format console\|json`, and `--explain` to control consent and output. |
 | `agentshield scan [path]` | Scan an agent extension directory and emit console, JSON, SARIF, or HTML output. |
+| `agentshield scan [path] --experimental-risk` | Add an informational, versioned risk index to console or JSON output without changing policy or exit status. |
 | `agentshield scan [path] --explain` | Print a console-only gate, coverage, confidence, grouped findings, next-actions, and limits summary. |
 | `agentshield quickstart [path]` | Create first-run config, suggest CI setup, run the first scan, and explain the result. |
 | `agentshield ci install` | Generate a GitHub Actions workflow for AgentShield. |
@@ -267,7 +268,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield guard --stdin` | Evaluate one runtime event JSON document when built with the `runtime-guard` feature. |
 | `agentshield guard --mcp-proxy [-- <server cmd...>]` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages, block unsafe calls, and either emit forward markers or bridge stdio to a spawned downstream MCP server when built with the `runtime-guard` feature. |
 
-Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--explain`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
+Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--explain`, `--experimental-risk`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
 Configured `[scan] include` and `[scan] exclude` filters scope source and
 metadata-derived findings before detectors run.
 
@@ -283,6 +284,11 @@ agentshield ci install --baseline .agentshield-baseline.json
 `--explain` is intentionally console-only. It will not append text to JSON,
 SARIF, or HTML output. Explain output includes the scan root, metadata root
 when different, and hotspot summaries for concentrated blocking findings.
+
+`--experimental-risk` is a separate console/JSON-only mode and cannot be
+combined with `--explain`. Its versioned index is informational: it does not
+change findings, PASS/FAIL, policy thresholds, baselines, suppressions, or the
+process exit status. SARIF, HTML, and DSSE remain unchanged.
 
 ---
 

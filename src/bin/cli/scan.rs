@@ -19,6 +19,7 @@ pub(super) struct ScanArgs {
     pub(super) write_baseline_path: Option<PathBuf>,
     pub(super) emit_egress_policy_path: Option<PathBuf>,
     pub(super) explain: bool,
+    pub(super) experimental_risk: bool,
 }
 
 pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
@@ -33,6 +34,7 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         write_baseline_path,
         emit_egress_policy_path,
         explain,
+        experimental_risk,
     } = args;
     let format = OutputFormat::from_str_lenient(&format_str).unwrap_or_else(|| {
         eprintln!("Warning: unknown format '{}', using console", format_str);
@@ -42,6 +44,16 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
     if explain && format != OutputFormat::Console {
         return Err(agentshield::error::ShieldError::Config(
             "`scan --explain` is console-only; remove --format or use --format console".into(),
+        ));
+    }
+    if explain && experimental_risk {
+        return Err(agentshield::error::ShieldError::Config(
+            "`scan --explain` and `--experimental-risk` are separate output modes".into(),
+        ));
+    }
+    if experimental_risk && !matches!(format, OutputFormat::Console | OutputFormat::Json) {
+        return Err(agentshield::error::ShieldError::Config(
+            "`--experimental-risk` supports only console and JSON output".into(),
         ));
     }
 
@@ -130,6 +142,8 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
                 ignore_tests: effective_ignore_tests,
             },
         )
+    } else if experimental_risk {
+        agentshield::render_report_with_experimental_risk(&report, format)?
     } else {
         agentshield::render_report(&report, format)?
     };

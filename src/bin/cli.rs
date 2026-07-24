@@ -108,6 +108,10 @@ enum Commands {
         /// This is console-only so JSON, SARIF, and HTML output contracts stay stable.
         #[arg(long)]
         explain: bool,
+
+        /// Add an experimental informational risk index (console or JSON only)
+        #[arg(long)]
+        experimental_risk: bool,
     },
 
     /// First-run setup: create config, inspect coverage, and run an explained scan
@@ -323,6 +327,7 @@ fn main() {
             write_baseline,
             emit_egress_policy,
             explain,
+            experimental_risk,
         } => cmd_scan(ScanArgs {
             path,
             config,
@@ -334,6 +339,7 @@ fn main() {
             write_baseline_path: write_baseline,
             emit_egress_policy_path: emit_egress_policy,
             explain,
+            experimental_risk,
         }),
         Commands::Quickstart {
             path,

@@ -101,6 +101,8 @@ cargo fmt --check
 # Run CLI
 cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- scan . --ignore-tests --format html --output report.html
+cargo run -- scan . --experimental-risk
+cargo run -- scan . --format json --experimental-risk
 cargo run -- scan . --write-baseline baseline.json
 cargo run -- scan . --baseline baseline.json
 cargo run -- discover --no-default-paths --root .
