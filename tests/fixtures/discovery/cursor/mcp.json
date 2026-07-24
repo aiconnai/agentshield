@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "remote-docs": {
+      "url": "https://private.example.test/mcp",
+      "headers": {
+        "Authorization": "Bearer super-secret-token"
+      }
+    },
+    "local-tools": {
+      "command": "node",
+      "args": ["server.js", "--api-key", "super-secret-token"],
+      "env": {
+        "API_TOKEN": "super-secret-token"
+      }
+    }
+  }
+}
