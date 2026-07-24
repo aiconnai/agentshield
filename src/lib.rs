@@ -151,6 +151,27 @@ pub fn render_report(report: &ScanReport, format: OutputFormat) -> Result<String
     )
 }
 
+/// Render a scan report with the opt-in experimental informational risk index.
+///
+/// This additive API supports console and JSON only. It does not change policy,
+/// the report verdict, process exit status, findings, or default rendering.
+pub fn render_report_with_experimental_risk(
+    report: &ScanReport,
+    format: OutputFormat,
+) -> Result<String> {
+    if !matches!(format, OutputFormat::Console | OutputFormat::Json) {
+        return Err(error::ShieldError::Config(
+            "`--experimental-risk` supports only console and JSON output".to_owned(),
+        ));
+    }
+
+    let base_report = render_report(report, format)?;
+    let coverage = risk::CoverageDescriptor::current();
+    let assessment = risk::assess(&report.findings, &report.scan_root, &coverage)
+        .map_err(|error| error::ShieldError::Internal(error.to_string()))?;
+    risk::render_experimental(&base_report, &assessment, format)
+}
+
 #[cfg(test)]
 mod integration_tests {
     use super::*;
