@@ -25,6 +25,7 @@ pub mod error;
 pub mod ir;
 pub mod output;
 pub mod parser;
+mod risk;
 pub mod rules;
 #[cfg(feature = "runtime-guard")]
 pub mod runtime;
