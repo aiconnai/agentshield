@@ -17,7 +17,8 @@ agentshield/
 ├── src/
 │   ├── lib.rs                    # Public API: scan(), render_report()
 │   ├── error.rs                  # ShieldError (thiserror)
-│   ├── bin/cli.rs                # Clap CLI: scan, list-rules, init, suppress, list-suppressions, certify
+│   ├── bin/cli.rs                # Clap CLI: discover, scan, setup, reporting, runtime
+│   ├── discovery/                # CLI-private registry, parsers, and safe filesystem reads
 │   ├── ir/                       # Intermediate Representation (ScanTarget)
 │   │   ├── mod.rs                # ScanTarget, Framework, SourceFile, ArgumentSource
 │   │   ├── tool_surface.rs       # Tool definitions, permissions
@@ -102,6 +103,7 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- scan . --ignore-tests --format html --output report.html
 cargo run -- scan . --write-baseline baseline.json
 cargo run -- scan . --baseline baseline.json
+cargo run -- discover --no-default-paths --root .
 cargo run -- list-rules
 cargo run -- suppress SHIELD-001 src/tools.py:42 --reason "accepted risk"
 cargo run -- list-suppressions

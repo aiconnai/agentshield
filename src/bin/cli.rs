@@ -1,6 +1,10 @@
 use std::path::PathBuf;
 use std::process;
 
+#[path = "cli/discover.rs"]
+mod discover;
+#[path = "../discovery/mod.rs"]
+mod discovery;
 #[path = "cli/reporting.rs"]
 mod reporting;
 #[path = "cli/rules.rs"]
@@ -14,6 +18,7 @@ mod setup;
 
 use clap::{Parser, Subcommand};
 
+use discover::cmd_discover;
 use reporting::{cmd_certify, cmd_list_suppressions, cmd_suppress};
 use rules::cmd_list_rules;
 #[cfg(feature = "runtime")]
@@ -41,6 +46,25 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Discover allowlisted local client configurations without scanning them
+    Discover {
+        /// Do not inspect known configuration paths under the effective profile
+        #[arg(long)]
+        no_default_paths: bool,
+
+        /// Inspect allowlisted configuration layouts under this explicit root
+        #[arg(long, value_name = "PATH")]
+        root: Vec<PathBuf>,
+
+        /// Output format (console, json)
+        #[arg(long, short = 'f', default_value = "console")]
+        format: String,
+
+        /// Explain paths, limits, and symlink policy before reading
+        #[arg(long)]
+        explain: bool,
+    },
+
     /// Scan an agent extension for security issues
     Scan {
         /// Path to the extension directory
@@ -282,6 +306,12 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
+        Commands::Discover {
+            no_default_paths,
+            root,
+            format,
+            explain,
+        } => cmd_discover(!no_default_paths, root, format, explain),
         Commands::Scan {
             path,
             config,

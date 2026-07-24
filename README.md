@@ -136,6 +136,9 @@ cargo install --git https://github.com/aiconnai/agentshield --tag v0.8.7 --featu
 # First-run setup: config + explained first scan
 agentshield quickstart
 
+# Discover allowlisted local client configs without executing or scanning them
+agentshield discover --no-default-paths --root .
+
 # Understand the gate, coverage, confidence, and next actions
 agentshield scan . --ignore-tests --fail-on high --explain
 
@@ -247,6 +250,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 
 | Command | Purpose |
 |---------|---------|
+| `agentshield discover` | Read allowlisted local client configuration paths without execution, network access, or automatic scanning; use `--no-default-paths`, repeated `--root`, `--format console\|json`, and `--explain` to control consent and output. |
 | `agentshield scan [path]` | Scan an agent extension directory and emit console, JSON, SARIF, or HTML output. |
 | `agentshield scan [path] --explain` | Print a console-only gate, coverage, confidence, grouped findings, next-actions, and limits summary. |
 | `agentshield quickstart [path]` | Create first-run config, suggest CI setup, run the first scan, and explain the result. |
