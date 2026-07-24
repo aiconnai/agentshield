@@ -1,6 +1,15 @@
 # Next Steps — Post v0.1.0
 
-Status: v0.8.7 release prep. 7 framework/client adapters (MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 19 detectors (SHIELD-001..019), VS Code extension. Fingerprints, suppressions, baseline diffing, taint path analysis, egress policy generation, DSSE attestation (`certify`), operator override layering, scan include/exclude filters, MCP subdirectory scans, explain hotspot summaries, experimental `guard --stdin`, and experimental bidirectional `guard --mcp-proxy` transport. TypeScript tree-sitter parser, crates.io, Homebrew, GitHub Action e2e, real-world validation, cross-file validation tracking, PR inline annotations - all done.
+Status: post-v0.8.7 development. 7 framework/client adapters (MCP,
+OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 20
+detectors (SHIELD-001..020), and the VS Code extension. Fingerprints,
+suppressions, baseline diffing, taint path analysis, composite toxic-flow
+analysis, egress policy generation, DSSE attestation (`certify`), local client
+discovery, explainable/versioned experimental risk assessment, operator
+override layering, scan include/exclude filters, MCP subdirectory scans,
+OpenClaw `.agents/skills/<skill>/SKILL.md` discovery, explain hotspot summaries,
+experimental `guard --stdin`, and experimental bidirectional
+`guard --mcp-proxy` transport are implemented.
 
 ---
 
@@ -16,21 +25,25 @@ Runtime guard work is planned as an experimental extension to AgentShield's curr
 
 ---
 
-## v0.8.7 release prep
+## Post-v0.8.7 development
 
-The current release-prep scope covers first-run scanner scoping and triage:
+Release `v0.8.7` was published on June 15, 2026. The following increments have
+landed on `main` since that release:
 
-- `[scan] include` and `[scan] exclude` path filters for source and
-  metadata-derived findings.
-- MCP subdirectory scans that preserve the requested source boundary while
-  reading ancestor project metadata.
-- `scan --explain` root reporting and blocking-finding hotspot summaries.
+- SHIELD-020 composite arbitrary-read exfiltration chains with crate-private,
+  contextual value-flow transport;
+- read-only, allowlisted local client discovery through `agentshield discover`;
+- deterministic `agentshield-risk-v1` assessment with explicit
+  `scan --experimental-risk` console/JSON opt-in;
+- isolated OpenClaw targets for direct
+  `.agents/skills/<skill>/SKILL.md` layouts.
 
-Remaining follow-up before tagging:
+Next release work:
 
-- AGENT-31 GitHub Action/e2e coverage for path filters plus MCP subdirectory
-  scans is included in the release-prep batch.
-- Final release checklist pass and version/tag bump when publication is ready.
+- choose the next version from the accumulated post-v0.8.7 changes;
+- run the full release checklist and compatibility gates;
+- update release notes, version, tag, crates.io/Homebrew artifacts, and GitHub
+  release only when publication is explicitly authorized.
 
 ---
 
