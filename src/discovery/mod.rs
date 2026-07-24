@@ -1,8 +1,7 @@
-//! Crate-private registry and structural parsers for local client discovery.
-//!
-//! D.0 intentionally has no CLI or public API consumer. The module-level
-//! allowance is removed when D.1 wires the accepted types into `discover`.
-#![allow(dead_code)]
+//! Binary-private registry, filesystem boundary, and structural parsers for
+//! local client discovery.
+
+mod filesystem;
 
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -31,7 +30,7 @@ pub(crate) enum ClientId {
 }
 
 impl ClientId {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::ClaudeCode => "claude_code",
             Self::Cursor => "cursor",
@@ -55,7 +54,7 @@ pub(crate) enum DiscoveryScope {
 }
 
 impl DiscoveryScope {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::User => "user",
             Self::Workspace => "workspace",
@@ -149,6 +148,24 @@ pub(crate) enum EntryState {
     LocalReference,
 }
 
+impl EntryState {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Configured => "configured",
+            Self::Disabled => "disabled",
+            Self::Unresolved => "unresolved",
+            Self::LocalReference => "local_reference",
+        }
+    }
+}
+
+pub(crate) const ENTRY_STATES: &[EntryState] = &[
+    EntryState::Configured,
+    EntryState::Disabled,
+    EntryState::Unresolved,
+    EntryState::LocalReference,
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SupportStatus {
@@ -167,6 +184,7 @@ pub(crate) enum DiagnosticCode {
     EntryNameTooLong,
     EntryNameInvalid,
     EntryLimitReached,
+    LimitReached,
     ConfigSizeLimitReached,
     PermissionDenied,
     UnsupportedFilesystemSafety,
@@ -205,10 +223,12 @@ impl RedactedPathRef {
         Some(Self(value))
     }
 
-    fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 }
+
+pub(crate) use filesystem::{discover, DiscoveryRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct DiscoverySource {
