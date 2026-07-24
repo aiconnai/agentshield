@@ -208,7 +208,8 @@ The `apply_cross_file_sanitization()` function:
 The `--ignore-tests` flag skips test files at the file-walking stage (before parsing). Available via:
 - **CLI:** `agentshield scan . --ignore-tests`
 - **Config:** `[scan] ignore_tests = true` in `.agentshield.toml`
-- **GitHub Action:** `ignore-tests: true` input
+- **GitHub Action:** `ignore-tests: true` and `strict: true` (default), where `strict: false` makes only
+  no-adapter discovery errors non-blocking; other scan errors still fail the check
 - **Library:** `ScanOptions { ignore_tests: true, .. }`
 
 CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
