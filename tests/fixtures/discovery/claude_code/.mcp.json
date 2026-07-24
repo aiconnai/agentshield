@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "workspace-tools": {
+      "command": "python",
+      "args": ["server.py"],
+      "env": {
+        "PRIVATE_TOKEN": "fixture-secret"
+      }
+    }
+  }
+}
