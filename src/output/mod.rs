@@ -8,8 +8,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
-use crate::rules::policy::PolicyVerdict;
 use crate::rules::Finding;
+use crate::rules::policy::PolicyVerdict;
 
 /// Output format selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

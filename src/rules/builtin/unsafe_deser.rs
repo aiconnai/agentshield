@@ -1,5 +1,5 @@
 use super::unsafe_deser_patterns::{
-    code_outside_literals, is_unsafe_deserializer, LiteralScanState, JS_UNSAFE_PATTERNS, YAML_LOAD,
+    JS_UNSAFE_PATTERNS, LiteralScanState, YAML_LOAD, code_outside_literals, is_unsafe_deserializer,
 };
 
 use crate::ir::ScanTarget;

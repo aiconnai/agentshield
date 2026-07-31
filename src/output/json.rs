@@ -3,8 +3,8 @@ use std::path::Path;
 use serde::Serialize;
 
 use crate::error::Result;
-use crate::rules::policy::PolicyVerdict;
 use crate::rules::Finding;
+use crate::rules::policy::PolicyVerdict;
 
 /// A finding entry with an attached fingerprint for JSON output.
 #[derive(Serialize)]

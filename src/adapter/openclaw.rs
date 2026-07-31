@@ -205,19 +205,23 @@ mod tests {
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[0].name, "alpha");
         assert_eq!(targets[0].root_path, alpha);
-        assert!(targets[0]
-            .source_files
-            .iter()
-            .all(|source| source.path.starts_with(&targets[0].root_path)));
+        assert!(
+            targets[0]
+                .source_files
+                .iter()
+                .all(|source| source.path.starts_with(&targets[0].root_path))
+        );
         assert!(!targets[0].execution.commands.is_empty());
         assert!(targets[0].execution.network_operations.is_empty());
 
         assert_eq!(targets[1].name, "zulu");
         assert_eq!(targets[1].root_path, zulu);
-        assert!(targets[1]
-            .source_files
-            .iter()
-            .all(|source| source.path.starts_with(&targets[1].root_path)));
+        assert!(
+            targets[1]
+                .source_files
+                .iter()
+                .all(|source| source.path.starts_with(&targets[1].root_path))
+        );
         assert!(targets[1].execution.commands.is_empty());
         assert!(!targets[1].execution.network_operations.is_empty());
     }

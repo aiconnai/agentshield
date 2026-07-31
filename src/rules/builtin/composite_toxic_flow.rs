@@ -1,5 +1,5 @@
-use crate::analysis::composite_flow::{CompositeFlowCandidate, FlowEdgeKind, SemanticAnchor};
 use crate::analysis::DetectionInput;
+use crate::analysis::composite_flow::{CompositeFlowCandidate, FlowEdgeKind, SemanticAnchor};
 use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, ContextDetector, Evidence, Finding, OwaspMcp, RuleMetadata,
@@ -223,13 +223,17 @@ mod tests {
             findings[0].message,
             "Tool 'read_and_send' can read an attacker-controlled file and send its contents over HTTP"
         );
-        assert!(findings[0].evidence[0]
-            .description
-            .starts_with("composite_flow:v1:arbitrary_read_exfiltration:"));
-        assert!(findings[0]
-            .evidence
-            .iter()
-            .any(|ev| ev.description.contains("SHIELD-004")));
+        assert!(
+            findings[0].evidence[0]
+                .description
+                .starts_with("composite_flow:v1:arbitrary_read_exfiltration:")
+        );
+        assert!(
+            findings[0]
+                .evidence
+                .iter()
+                .any(|ev| ev.description.contains("SHIELD-004"))
+        );
     }
 
     #[test]
@@ -259,15 +263,19 @@ mod tests {
             engine.run_with_context(&input)
         };
 
-        assert!(engine_findings
-            .iter()
-            .any(|finding| finding.rule_id == "SHIELD-020"));
+        assert!(
+            engine_findings
+                .iter()
+                .any(|finding| finding.rule_id == "SHIELD-020")
+        );
 
         let engine = RuleEngine::new();
-        assert!(!engine
-            .list_rules()
-            .iter()
-            .any(|metadata| metadata.id == "SHIELD-020"));
+        assert!(
+            !engine
+                .list_rules()
+                .iter()
+                .any(|metadata| metadata.id == "SHIELD-020")
+        );
         let metadata = engine
             .list_scanner_rules()
             .into_iter()

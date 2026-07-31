@@ -3,7 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::ir::{data_surface::TaintPath, SourceLocation};
+use crate::ir::{SourceLocation, data_surface::TaintPath};
 
 /// A security finding produced by a detector.
 #[derive(Debug, Clone, Serialize, Deserialize)]

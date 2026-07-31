@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use crate::analysis::composite_flow::build_composite_flow_candidates;
+use crate::analysis::AnalysisBundle;
 use crate::analysis::composite_flow::SourceUnit;
 use crate::analysis::composite_flow::ToolFlowInput;
+use crate::analysis::composite_flow::build_composite_flow_candidates;
 use crate::analysis::cross_file::apply_cross_file_sanitization;
-use crate::analysis::AnalysisBundle;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::capability::{
@@ -162,9 +162,11 @@ fn load_mcp_target(
 
     let operation_bindings = bind_mcp_tool_operations(&tool_declarations, &parsed_files);
     debug_assert_eq!(operation_bindings.len(), tool_declarations.len());
-    debug_assert!(operation_bindings
-        .iter()
-        .all(McpToolOperationBinding::is_consistent));
+    debug_assert!(
+        operation_bindings
+            .iter()
+            .all(McpToolOperationBinding::is_consistent)
+    );
 
     let mut tool_decls_for_composite = Vec::with_capacity(tool_declarations.len());
     let mut tools = Vec::with_capacity(tool_declarations.len());
@@ -1898,10 +1900,11 @@ function handleFetch(url: string) { return fetch(url) }
             read.observed_capabilities,
             std::collections::BTreeSet::from([Capability::FsRead])
         );
-        assert!(read
-            .capability_evidence
-            .iter()
-            .all(|evidence| evidence.capability == Capability::FsRead));
+        assert!(
+            read.capability_evidence
+                .iter()
+                .all(|evidence| evidence.capability == Capability::FsRead)
+        );
         assert_eq!(
             fetch.observed_capabilities,
             std::collections::BTreeSet::from([Capability::NetworkEgress])

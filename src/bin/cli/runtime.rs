@@ -6,7 +6,7 @@ use std::io::Read;
 
 #[cfg(feature = "runtime-guard")]
 use agentshield::runtime::{
-    evaluate_runtime_event, invalid_runtime_guard_input, RuntimeEvent, RuntimeVerdict,
+    RuntimeEvent, RuntimeVerdict, evaluate_runtime_event, invalid_runtime_guard_input,
 };
 
 #[cfg(feature = "runtime-guard")]

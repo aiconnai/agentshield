@@ -233,9 +233,11 @@ mod tests {
         let public = all_adapters();
         let analysis = all_analysis_adapters();
         assert_eq!(public.len(), analysis.len());
-        assert!(public
-            .iter()
-            .zip(analysis.iter())
-            .all(|(a, b)| a.framework() == b.framework()));
+        assert!(
+            public
+                .iter()
+                .zip(analysis.iter())
+                .all(|(a, b)| a.framework() == b.framework())
+        );
     }
 }

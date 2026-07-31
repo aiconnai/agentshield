@@ -1,5 +1,5 @@
-use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::ir::ScanTarget;
+use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };

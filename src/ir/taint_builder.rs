@@ -264,8 +264,8 @@ fn confidence_for_arg(arg: &ArgumentSource) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::tool_surface::ToolSurface;
     use crate::ir::ArgumentSource;
+    use crate::ir::tool_surface::ToolSurface;
     use serde_json::json;
     use std::path::PathBuf;
 
@@ -307,18 +307,24 @@ mod tests {
         let surface = build_data_surface(&tools, &execution);
 
         assert_eq!(surface.sources.len(), 2);
-        assert!(surface
-            .sources
-            .iter()
-            .all(|s| s.source_type == TaintSourceType::ToolArgument));
-        assert!(surface
-            .sources
-            .iter()
-            .any(|s| s.description.contains("command")));
-        assert!(surface
-            .sources
-            .iter()
-            .any(|s| s.description.contains("cwd")));
+        assert!(
+            surface
+                .sources
+                .iter()
+                .all(|s| s.source_type == TaintSourceType::ToolArgument)
+        );
+        assert!(
+            surface
+                .sources
+                .iter()
+                .any(|s| s.description.contains("command"))
+        );
+        assert!(
+            surface
+                .sources
+                .iter()
+                .any(|s| s.description.contains("cwd"))
+        );
     }
 
     #[test]

@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::error::Result;
 use crate::rules::{Finding, OwaspMcp, RuleMetadata, Severity};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Render findings as SARIF 2.1.0.
 ///
@@ -222,8 +222,8 @@ mod tests {
     fn renders_one_based_start_and_end_columns() {
         let finding = make_finding("SHIELD-003");
         let rendered = render(&[finding], "fixture", Path::new(".")).unwrap();
-        let region = &serde_json::from_str::<serde_json::Value>(&rendered).unwrap()["runs"][0]
-            ["results"][0]["locations"][0]["physicalLocation"]["region"];
+        let region = &serde_json::from_str::<serde_json::Value>(&rendered).unwrap()["runs"][0]["results"]
+            [0]["locations"][0]["physicalLocation"]["region"];
         assert_eq!(region["startColumn"], 5);
         assert_eq!(region["endColumn"], 21);
         assert_eq!(region["endLine"], 12);
@@ -251,11 +251,13 @@ mod tests {
         let taxonomies = &driver["taxonomies"];
         assert_eq!(taxonomies[0]["name"], "OWASP MCP Top 10");
         assert_eq!(taxonomies[0]["taxa"].as_array().unwrap().len(), 10);
-        assert!(taxonomies[0]["taxa"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|t| t["id"] == "MCP05"));
+        assert!(
+            taxonomies[0]["taxa"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|t| t["id"] == "MCP05")
+        );
     }
 
     #[test]
@@ -296,10 +298,10 @@ mod tests {
         )
         .unwrap();
 
-        let results_bare = &serde_json::from_str::<serde_json::Value>(&rendered_bare).unwrap()
-            ["runs"][0]["results"];
-        let results_meta = &serde_json::from_str::<serde_json::Value>(&rendered_meta).unwrap()
-            ["runs"][0]["results"];
+        let results_bare = &serde_json::from_str::<serde_json::Value>(&rendered_bare).unwrap()["runs"]
+            [0]["results"];
+        let results_meta = &serde_json::from_str::<serde_json::Value>(&rendered_meta).unwrap()["runs"]
+            [0]["results"];
         assert_eq!(results_bare, results_meta);
         assert_eq!(results_bare[0]["properties"]["fingerprint"], fp);
     }
