@@ -112,6 +112,11 @@ Add to `.github/workflows/security.yml`:
 name: Agent Security
 on: [push, pull_request]
 
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
 jobs:
   scan:
     runs-on: ubuntu-latest

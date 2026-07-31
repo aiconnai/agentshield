@@ -22,6 +22,7 @@ on:
     branches: [main]
 
 permissions:
+  actions: read
   contents: read
   security-events: write
 
@@ -62,6 +63,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   security-events: write
 
@@ -139,6 +141,7 @@ mod tests {
         assert!(workflow.contains("ignore-tests: true"));
         assert!(workflow.contains("upload-sarif: true"));
         assert!(workflow.contains("strict: true"));
+        assert!(workflow.contains("actions: read"));
         assert!(!workflow.contains("baseline:"));
     }
 
@@ -155,6 +158,7 @@ mod tests {
         assert!(workflow.contains("baseline: \".agentshield-baseline.json\""));
         assert!(workflow.contains("upload-sarif: true"));
         assert!(workflow.contains("strict: true"));
+        assert!(workflow.contains("actions: read"));
     }
 
     #[test]
@@ -174,5 +178,6 @@ mod tests {
         assert!(workflow.contains("uses: aiconnai/agentshield@main"));
         assert!(workflow.contains("baseline: \".agentshield-baseline.json\""));
         assert!(workflow.contains("strict: true"));
+        assert!(workflow.contains("actions: read"));
     }
 }

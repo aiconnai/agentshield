@@ -193,6 +193,38 @@ runs:
         if [ -n "$SARIF_FILE" ] && [ -f "$SARIF_FILE" ]; then
           COUNT=$(python3 -c "import json; d=json.load(open('$SARIF_FILE')); print(len(d.get('runs',[{}])[0].get('results',[])))" 2>/dev/null || echo "0")
           echo "finding-count=$COUNT" >> $GITHUB_OUTPUT
+          if [ "$EXIT_CODE" = "1" ]; then
+            echo "::group::AgentShield findings"
+            python3 - "$SARIF_FILE" <<'PY'
+        import json
+        import sys
+
+        with open(sys.argv[1], encoding="utf-8") as handle:
+            sarif = json.load(handle)
+
+        for run in sarif.get("runs", []):
+            for result in run.get("results", []):
+                location = (
+                    result.get("locations", [{}])[0]
+                    .get("physicalLocation", {})
+                )
+                artifact = location.get("artifactLocation", {})
+                region = location.get("region", {})
+                fields = {
+                    "rule": result.get("ruleId", "unknown"),
+                    "level": result.get("level", "unknown"),
+                    "file": artifact.get("uri", "unknown"),
+                    "line": region.get("startLine", "unknown"),
+                    "message": result.get("message", {}).get("text", ""),
+                }
+                rendered = " ".join(
+                    f"{key}={json.dumps(value, ensure_ascii=True)}"
+                    for key, value in fields.items()
+                )
+                print(f"AgentShield finding: {rendered}")
+        PY
+            echo "::endgroup::"
+          fi
         else
           echo "finding-count=0" >> $GITHUB_OUTPUT
         fi
