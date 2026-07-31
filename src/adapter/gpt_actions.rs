@@ -13,6 +13,8 @@ use crate::ir::taint_builder::build_data_surface;
 use crate::ir::tool_surface::ToolSurface;
 use crate::ir::*;
 
+const OPENAPI_EXTENSIONS: &[&str] = &["json", "yaml", "yml"];
+
 /// OpenAPI spec filenames that GPT Actions typically use.
 const OPENAPI_FILENAMES: &[&str] = &[
     "openapi.json",
@@ -92,14 +94,12 @@ impl super::Adapter for GptActionsAdapter {
         let spec_path = find_openapi_spec(root, filter);
 
         if let Some(spec_path) = spec_path {
-            if let Ok(content) = std::fs::read_to_string(&spec_path) {
-                if let Ok(spec) = serde_json::from_str::<serde_json::Value>(&content) {
-                    // Extract server URLs as network operations
-                    extract_server_urls(&spec, &spec_path, &mut execution);
+            if let Ok(spec) = parse_openapi_spec(&spec_path) {
+                // Extract server URLs as network operations
+                extract_server_urls(&spec, &spec_path, &mut execution);
 
-                    // Extract paths as tool surfaces
-                    extract_path_tools(&spec, &spec_path, &mut tools);
-                }
+                // Extract paths as tool surfaces
+                extract_path_tools(&spec, &spec_path, &mut tools);
             }
         }
 
@@ -347,6 +347,32 @@ fn collect_spec_source_files(root: &Path, filter: &ScanPathFilter) -> Vec<Source
     }
 
     files
+}
+
+fn parse_openapi_spec(spec_path: &Path) -> Result<serde_json::Value> {
+    let content = std::fs::read_to_string(spec_path)?;
+    let extension = spec_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    if OPENAPI_EXTENSIONS.contains(&extension.as_str()) && extension != "json" {
+        let yaml: serde_yaml::Value =
+            serde_yaml::from_str(&content).map_err(|err| crate::error::ShieldError::Parse {
+                file: spec_path.display().to_string(),
+                message: format!("Failed to parse OpenAPI YAML: {err}"),
+            })?;
+        return serde_json::to_value(yaml).map_err(|err| crate::error::ShieldError::Parse {
+            file: spec_path.display().to_string(),
+            message: format!("Failed to convert OpenAPI YAML AST: {err}"),
+        });
+    }
+
+    serde_json::from_str(&content).map_err(|err| crate::error::ShieldError::Parse {
+        file: spec_path.display().to_string(),
+        message: format!("Failed to parse OpenAPI JSON: {err}"),
+    })
 }
 
 use sha2::Digest;

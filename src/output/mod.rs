@@ -58,10 +58,14 @@ pub fn render_with_metadata(
 ) -> Result<String> {
     match format {
         OutputFormat::Console => Ok(console::render(findings, verdict, scan_root)),
-        OutputFormat::Json => json::render(findings, verdict, scan_root),
-        OutputFormat::Sarif => {
-            sarif::render_with_metadata(findings, target_name, scan_root, rule_metadata)
-        }
+        OutputFormat::Json => json::render(findings, verdict, target_name, scan_root),
+        OutputFormat::Sarif => sarif::render_with_metadata_and_verdict(
+            findings,
+            target_name,
+            scan_root,
+            rule_metadata,
+            verdict,
+        ),
         OutputFormat::Html => html::render(findings, verdict, target_name, scan_root),
     }
 }

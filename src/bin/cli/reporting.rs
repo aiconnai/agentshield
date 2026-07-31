@@ -10,8 +10,6 @@ pub(super) fn cmd_suppress(
     expires: Option<String>,
     config: Option<PathBuf>,
 ) -> Result<i32, agentshield::error::ShieldError> {
-    use agentshield::rules::policy::Suppression;
-
     if reason.trim().is_empty() {
         eprintln!("Error: --reason must be a non-empty string");
         return Ok(2);
@@ -28,20 +26,84 @@ pub(super) fn cmd_suppress(
     }
 
     let config_path = config.unwrap_or_else(|| PathBuf::from(".agentshield.toml"));
-    let mut cfg = Config::load(&config_path)?;
+    let cfg = Config::load(&config_path)?;
+    if cfg
+        .policy
+        .suppressions
+        .iter()
+        .any(|s| s.fingerprint == fingerprint)
+    {
+        println!("Fingerprint {fingerprint} already exists in suppressions; no update needed.");
+        return Ok(0);
+    }
 
-    let created_at = chrono::Utc::now().format("%Y-%m-%d").to_string();
-    let suppression = Suppression {
-        fingerprint: fingerprint.clone(),
-        reason: reason.clone(),
-        expires: expires.clone(),
-        created_at: Some(created_at),
+    let workspace = config_path
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    let options = ScanOptions {
+        config_path: Some(config_path.clone()),
+        format: OutputFormat::Console,
+        fail_on_override: None,
+        ignore_tests: false,
+    };
+    let report = agentshield::scan(&workspace, &options)?;
+    let matches = report
+        .findings
+        .into_iter()
+        .any(|finding| finding.fingerprint(&report.scan_root) == fingerprint);
+    if !matches {
+        eprintln!("Error: fingerprint '{fingerprint}' was not found in scan results.");
+        return Ok(2);
+    }
+
+    let toml_content = if config_path.exists() {
+        std::fs::read_to_string(&config_path).map_err(|e| {
+            agentshield::error::ShieldError::Config(format!("Failed to read config file: {}", e))
+        })?
+    } else {
+        "".to_string()
     };
 
-    cfg.policy.suppressions.push(suppression);
+    let mut doc = toml_content
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| {
+            agentshield::error::ShieldError::Config(format!("Failed to parse config file: {}", e))
+        })?;
 
-    let toml_str = toml::to_string_pretty(&cfg)?;
-    std::fs::write(&config_path, &toml_str)?;
+    // Ensure "policy" table exists
+    if !doc.contains_key("policy") {
+        doc["policy"] = toml_edit::Item::Table(toml_edit::Table::new());
+    }
+    let policy = doc["policy"].as_table_mut().ok_or_else(|| {
+        agentshield::error::ShieldError::Config("Expected 'policy' to be a table".into())
+    })?;
+
+    // Ensure "suppressions" array of tables exists under "policy"
+    if !policy.contains_key("suppressions") {
+        policy["suppressions"] = toml_edit::Item::ArrayOfTables(toml_edit::ArrayOfTables::new());
+    }
+    let suppressions = policy["suppressions"]
+        .as_array_of_tables_mut()
+        .ok_or_else(|| {
+            agentshield::error::ShieldError::Config(
+                "Expected 'policy.suppressions' to be an array of tables".into(),
+            )
+        })?;
+
+    let mut new_entry = toml_edit::Table::new();
+    new_entry.insert("fingerprint", toml_edit::value(fingerprint.clone()));
+    new_entry.insert("reason", toml_edit::value(reason.clone()));
+    if let Some(ref exp) = expires {
+        new_entry.insert("expires", toml_edit::value(exp.clone()));
+    }
+    let created_at = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    new_entry.insert("created_at", toml_edit::value(created_at));
+
+    suppressions.push(new_entry);
+
+    let new_toml = doc.to_string();
+    std::fs::write(&config_path, new_toml)?;
 
     let expires_display = expires
         .as_deref()

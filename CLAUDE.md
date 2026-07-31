@@ -106,6 +106,10 @@ cargo run -- scan . --format json --experimental-risk
 cargo run -- scan . --write-baseline baseline.json
 cargo run -- scan . --baseline baseline.json
 cargo run -- discover --no-default-paths --root .
+cargo run -- quickstart --force
+cargo run -- ci install --output .github/workflows/agentshield.yml
+cargo run -- guard --stdin
+cargo run -- wrap --policy agentshield.egress.toml -- command
 cargo run -- list-rules
 cargo run -- suppress SHIELD-001 src/tools.py:42 --reason "accepted risk"
 cargo run -- list-suppressions

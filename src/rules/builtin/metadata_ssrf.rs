@@ -1,5 +1,6 @@
 use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
-use crate::ir::{ArgumentSource, ScanTarget};
+use crate::ir::execution_surface::NetworkOperation;
+use crate::ir::{ArgumentSource, ScanTarget, SourceLocation};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
@@ -78,6 +79,15 @@ impl Detector for MetadataSsrfDetector {
             if matches!(path.source.source_type, TaintSourceType::ToolArgument)
                 && matches!(path.sink.sink_type, TaintSinkType::HttpRequest)
             {
+                let Some(target_type) = metadata_target_from_sink_location(
+                    &path.sink.location,
+                    &target.execution.network_operations,
+                ) else {
+                    continue;
+                };
+                if has_finding_at_location(&findings, &path.sink.location) {
+                    continue;
+                }
                 findings.push(Finding {
                     rule_id: "SHIELD-013".into(),
                     rule_name: "Metadata SSRF".into(),
@@ -101,7 +111,7 @@ impl Detector for MetadataSsrfDetector {
                         },
                         Evidence {
                             description: format!(
-                                "Sink: HTTP request via '{}'",
+                                "Sink: HTTP request to {target_type} via '{}'",
                                 path.sink.description
                             ),
                             location: Some(path.sink.location.clone()),
@@ -125,6 +135,9 @@ impl Detector for MetadataSsrfDetector {
         for net_op in &target.execution.network_operations {
             if let ArgumentSource::Literal(ref url) = net_op.url_arg {
                 if let Some(target_type) = is_metadata_or_private(url) {
+                    if has_finding_at_network_location(&findings, &net_op.location) {
+                        continue;
+                    }
                     findings.push(Finding {
                         rule_id: "SHIELD-013".into(),
                         rule_name: "Metadata SSRF".into(),
@@ -155,6 +168,41 @@ impl Detector for MetadataSsrfDetector {
 
         findings
     }
+}
+
+fn metadata_target_from_sink_location(
+    sink_loc: &SourceLocation,
+    network_operations: &[NetworkOperation],
+) -> Option<&'static str> {
+    network_operations
+        .iter()
+        .find(|op| op.location == *sink_loc)
+        .and_then(|op| {
+            if let ArgumentSource::Literal(url) = &op.url_arg {
+                is_metadata_or_private(url)
+            } else {
+                None
+            }
+        })
+}
+
+fn has_finding_at_location(findings: &[Finding], location: &crate::ir::SourceLocation) -> bool {
+    findings.iter().any(|finding| {
+        if finding.rule_id != "SHIELD-013" {
+            return false;
+        }
+        finding
+            .location
+            .as_ref()
+            .is_some_and(|finding_location| finding_location == location)
+    })
+}
+
+fn has_finding_at_network_location(
+    findings: &[Finding],
+    location: &crate::ir::SourceLocation,
+) -> bool {
+    has_finding_at_location(findings, location)
 }
 
 #[cfg(test)]
@@ -190,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn detects_taint_path_to_http() {
+    fn detects_taint_path_to_http_metadata_url() {
         let mut target = empty_target();
         target.data.taint_paths.push(TaintPath {
             source: TaintSource {
@@ -205,6 +253,13 @@ mod tests {
             },
             through: vec![],
             confidence: 0.9,
+        });
+        target.execution.network_operations.push(NetworkOperation {
+            function: "requests.get".into(),
+            url_arg: ArgumentSource::Literal("http://169.254.169.254/latest/meta-data/".into()),
+            method: Some("GET".into()),
+            sends_data: false,
+            location: loc(),
         });
 
         let findings = MetadataSsrfDetector.run(&target);

@@ -1,4 +1,5 @@
 use crate::ir::ScanTarget;
+use crate::ir::SinkClass;
 use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
@@ -132,18 +133,25 @@ impl PromptInjectionDetector {
     fn run_fallback(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
-        // Any network GET that reads external content is a prompt injection surface
+        // Any tainted network operation that reads external content can be prompt injection
         for net_op in &target.execution.network_operations {
             // Only flag reads (GET), not sends (POST with sends_data)
-            if net_op.sends_data {
+            if net_op.sends_data || !net_op.url_arg.is_tainted_for_sink(SinkClass::NetworkUrl) {
                 continue;
             }
+
+            let confidence = match &net_op.url_arg {
+                crate::ir::ArgumentSource::Parameter { .. } => Confidence::Medium,
+                crate::ir::ArgumentSource::Sanitized { .. }
+                | crate::ir::ArgumentSource::Interpolated => Confidence::Medium,
+                _ => Confidence::Low,
+            };
 
             findings.push(Finding {
                 rule_id: "SHIELD-007".into(),
                 rule_name: "Prompt Injection Surface".into(),
                 severity: Severity::Medium,
-                confidence: Confidence::Medium,
+                confidence,
                 attack_category: AttackCategory::PromptInjectionSurface,
                 message: format!(
                     "'{}' fetches external content that may be returned to the LLM unsanitized",
