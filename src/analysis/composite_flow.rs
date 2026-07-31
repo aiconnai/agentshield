@@ -4,6 +4,13 @@
 //! serialized IR. It proves the C.0 contracts needed by SHIELD-020 while the
 //! detector transport decision remains a separate API review.
 // C.0 module intentionally remains test-only until C.1 chooses detector transport.
+#![cfg_attr(
+    not(feature = "typescript"),
+    expect(
+        dead_code,
+        reason = "composite-flow types are exercised by the TypeScript analyzer only"
+    )
+)]
 
 use std::path::{Path, PathBuf};
 
