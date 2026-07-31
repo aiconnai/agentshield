@@ -45,8 +45,8 @@ Rules in this file do not change without explicit owner decision or an approved 
 | SHIELD-016 | ⚠️ inline unit tests only (`unsafe_deser_tests`) | ⚠️ inline unit tests only |
 | SHIELD-017 | ⚠️ inline unit tests only (`archive_traversal` rule tests) | ⚠️ inline unit tests only |
 | SHIELD-018 | `tests/fixtures/mcp_servers/vuln_cred_exfil`, `tests/fixtures/mcp_servers/vuln_cred_exfil/index.ts` | `tests/fixtures/mcp_servers/safe_redacted_logging` |
-| SHIELD-019 | ⚠️ inline unit tests only (`capability_mismatch` rule tests). Safe fixture sanity: `safe_calculator`, `safe_filesystem`, `safe_redacted_logging` | same safe fixtures (`SHIELD-019` must be absent) |
-| SHIELD-020 | ⚠️ inline unit tests only (`composite_toxic_flow` rule tests) | ⚠️ inline unit tests only |
+| SHIELD-019 | `tests/fixtures/mcp_servers/vuln_read_exfil_chain` | `tests/fixtures/mcp_servers/safe_calculator`, `tests/fixtures/mcp_servers/safe_filesystem`, `tests/fixtures/mcp_servers/safe_redacted_logging` |
+| SHIELD-020 | `tests/fixtures/mcp_servers/vuln_read_exfil_chain` | `tests/fixtures/mcp_servers/safe_filesystem` |
 
 ## Required follow-up (for PR2 completion)
 

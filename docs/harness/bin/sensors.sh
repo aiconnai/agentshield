@@ -15,6 +15,7 @@
 #   bash docs/harness/bin/sensors.sh baseline
 #   bash docs/harness/bin/sensors.sh audit
 #   bash docs/harness/bin/sensors.sh status [--json]
+#   bash docs/harness/bin/sensors.sh verify
 
 set -euo pipefail
 
@@ -22,7 +23,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
 usage() {
-  echo "Usage: $0 [full|quick|docs|mcp|fixtures|sarif|action|release|vscode|baseline|audit|status] [--exclude-sensor <name> --known-issue <path> --reason <text>]" >&2
+  echo "Usage: $0 [full|quick|docs|mcp|fixtures|sarif|action|release|vscode|baseline|audit|verify|status] [--exclude-sensor <name> --known-issue <path> --reason <text>]" >&2
 }
 
 status_usage_error() {
@@ -376,6 +377,11 @@ release_checks() {
   assert_match "release includes Windows x64" 'x86_64-pc-windows-msvc' .github/workflows/release.yml || return 1
 }
 
+verify_checks() {
+  echo "=== verify: negative controls ==="
+  fixture_smoke
+  echo "=== verify: all expected outcomes observed ==="
+}
 fixture_smoke() {
   run_sensor fixtures-build "debug build with full features" cargo build --features full || return 1
   local bin="target/debug/agentshield"
@@ -409,6 +415,16 @@ fixture_smoke() {
   assert_scan_rules "SHIELD-013 fires in vuln_metadata_ssrf" 1 "SHIELD-013" "" \
     "$bin" scan tests/fixtures/mcp_servers/vuln_metadata_ssrf || return 1
   assert_scan_rules "SHIELD-013 suppressed in safe filesys" 0 "" "SHIELD-013" \
+    "$bin" scan tests/fixtures/mcp_servers/safe_filesystem --ignore-tests || return 1
+  assert_scan_rules "SHIELD-019 and SHIELD-020 fire in vuln_read_exfil_chain" 1 "SHIELD-019,SHIELD-020" "" \
+    "$bin" scan tests/fixtures/mcp_servers/vuln_read_exfil_chain || return 1
+  assert_scan_rules "SHIELD-019 suppressed in safe calculator" 0 "" "SHIELD-019" \
+    "$bin" scan tests/fixtures/mcp_servers/safe_calculator --ignore-tests || return 1
+  assert_scan_rules "SHIELD-019 suppressed in safe filesystem" 0 "" "SHIELD-019" \
+    "$bin" scan tests/fixtures/mcp_servers/safe_filesystem --ignore-tests || return 1
+  assert_scan_rules "SHIELD-019 suppressed in safe redacted logging" 0 "" "SHIELD-019" \
+    "$bin" scan tests/fixtures/mcp_servers/safe_redacted_logging --ignore-tests || return 1
+  assert_scan_rules "SHIELD-020 suppressed in safe filesystem" 0 "" "SHIELD-020" \
     "$bin" scan tests/fixtures/mcp_servers/safe_filesystem --ignore-tests || return 1
   assert_scan_rules "SHIELD-004 fires in vuln_read_exfil_chain" 1 "SHIELD-004" "" \
     "$bin" scan tests/fixtures/mcp_servers/vuln_read_exfil_chain || return 1
@@ -541,6 +557,12 @@ case "$MODE" in
   audit)
     if should_skip audit; then :; else bash docs/harness/bin/quarterly-audit.sh || exit 1; fi
     harness_checks || exit 1
+    write_success
+    ;;
+
+  verify)
+    harness_checks || exit 1
+    if should_skip verify; then :; else verify_checks || exit 1; fi
     write_success
     ;;
 

@@ -21,6 +21,7 @@ Optional sensor lanes are developer aids. They do not replace the no-argument `s
 | `vscode` | `bash docs/harness/bin/sensors.sh vscode` | `npm ci` and `npm run compile` pass in `vscode/` | VS Code extension changes |
 | `baseline` | `bash docs/harness/bin/sensors.sh baseline` | baseline snapshot writes `.baseline-last` and doctor passes | Planning and complexity snapshots |
 | `audit` | `bash docs/harness/bin/sensors.sh audit` | evidence-only quarterly audit report is generated and doctor passes | Periodic cleanup review |
+| `verify` | `bash docs/harness/bin/sensors.sh verify` | fixture negative controls (known-bad rejected, known-good accepted) pass | Falsifiability hardening |
 
 ## Rust Gates
 
@@ -82,6 +83,10 @@ Additional fixture obligations are enforced for selected rule-level contracts:
 - `SHIELD-004` must be absent in `tests/fixtures/mcp_servers/safe_filesystem --ignore-tests`.
 - `SHIELD-013` must be present in `tests/fixtures/mcp_servers/vuln_metadata_ssrf` without `--ignore-tests`.
 - `SHIELD-013` must be absent in `tests/fixtures/mcp_servers/safe_filesystem --ignore-tests`.
+- `SHIELD-019` must be present in `tests/fixtures/mcp_servers/vuln_read_exfil_chain` without `--ignore-tests`.
+- `SHIELD-019` must be absent in `tests/fixtures/mcp_servers/safe_calculator --ignore-tests`, `tests/fixtures/mcp_servers/safe_filesystem --ignore-tests`, and `tests/fixtures/mcp_servers/safe_redacted_logging --ignore-tests`.
+- `SHIELD-020` must be present in `tests/fixtures/mcp_servers/vuln_read_exfil_chain` without `--ignore-tests`.
+- `SHIELD-020` must be absent in `tests/fixtures/mcp_servers/safe_filesystem --ignore-tests`.
 
 A fixture scan may exit `0` or `1` depending on findings. Exit code `2` or any other scanner error fails the gate.
 

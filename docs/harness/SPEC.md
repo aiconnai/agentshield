@@ -8,7 +8,7 @@
 | Owner | Ronaldo + agents |
 | Current version in `Cargo.toml` | `0.8.0` |
 | Current adapters | MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules |
-| Current detectors | 19 built-in rules, `SHIELD-001` through `SHIELD-019` |
+| Current detectors | 20 built-in rules, `SHIELD-001` through `SHIELD-020` |
 
 ## Goal
 
