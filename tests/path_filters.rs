@@ -2,7 +2,7 @@ use std::path::Path;
 
 use agentshield::rules::AttackCategory;
 use agentshield::ux::ExplainOptions;
-use agentshield::{scan, ScanOptions};
+use agentshield::{ScanOptions, scan};
 use tempfile::TempDir;
 
 const PACKAGE_JSON: &str = r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#;

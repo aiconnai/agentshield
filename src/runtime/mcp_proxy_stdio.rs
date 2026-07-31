@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::runtime::mcp_proxy::{self, decide, ProxyDecision};
 use crate::runtime::ProxyPolicy;
+use crate::runtime::mcp_proxy::{self, ProxyDecision, decide};
 
 const DOWNSTREAM_UNAVAILABLE_ERROR_CODE: i64 = -32002;
 const DOWNSTREAM_EXIT_TIMEOUT: Duration = Duration::from_secs(2);

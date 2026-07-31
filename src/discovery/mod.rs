@@ -253,7 +253,7 @@ impl RedactedPathRef {
     }
 }
 
-pub(crate) use filesystem::{discover, DiscoveryRequest};
+pub(crate) use filesystem::{DiscoveryRequest, discover};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct DiscoverySource {
@@ -725,10 +725,12 @@ mod tests {
                 .count(),
             1
         );
-        assert!(envelope
-            .sources
-            .iter()
-            .any(|source| source.status == SourceStatus::LimitReached));
+        assert!(
+            envelope
+                .sources
+                .iter()
+                .any(|source| source.status == SourceStatus::LimitReached)
+        );
     }
 
     #[test]

@@ -5,14 +5,14 @@ use std::path::Path;
 use std::path::{Component, PathBuf};
 
 use super::{
-    build_envelope, parse_source, registry, DiagnosticCode, DiscoveryBase, DiscoveryDescriptor,
-    DiscoveryDiagnostic, DiscoveryEnvelope, ParsedDiscoverySource, RedactedPathRef, SourceStatus,
+    DiagnosticCode, DiscoveryBase, DiscoveryDescriptor, DiscoveryDiagnostic, DiscoveryEnvelope,
+    ParsedDiscoverySource, RedactedPathRef, SourceStatus, build_envelope, parse_source, registry,
 };
 #[cfg(unix)]
 use super::{
-    DiscoveryMethod, ProvenanceObservation, MAX_AGGREGATE_BYTES,
-    MAX_CANDIDATE_FILES_PER_INVOCATION, MAX_CANDIDATE_FILES_PER_ROOT,
-    MAX_OPENED_CONFIGS_PER_INVOCATION, MAX_OPENED_CONFIGS_PER_ROOT,
+    DiscoveryMethod, MAX_AGGREGATE_BYTES, MAX_CANDIDATE_FILES_PER_INVOCATION,
+    MAX_CANDIDATE_FILES_PER_ROOT, MAX_OPENED_CONFIGS_PER_INVOCATION, MAX_OPENED_CONFIGS_PER_ROOT,
+    ProvenanceObservation,
 };
 
 #[derive(Debug)]
@@ -173,7 +173,7 @@ mod platform {
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::io::OwnedFd;
 
-    use rustix::fs::{open, openat, Mode, OFlags};
+    use rustix::fs::{Mode, OFlags, open, openat};
     use rustix::io::Errno;
 
     use super::*;
@@ -855,10 +855,12 @@ mod tests {
 
         assert_eq!(envelope.summary.sources, 2);
         assert_eq!(envelope.summary.entries, 1);
-        assert!(envelope
-            .sources
-            .iter()
-            .any(|source| source.status == SourceStatus::Malformed));
+        assert!(
+            envelope
+                .sources
+                .iter()
+                .any(|source| source.status == SourceStatus::Malformed)
+        );
         let serialized = serde_json::to_string(&envelope).expect("serialize");
         assert!(!serialized.contains("secret"));
     }

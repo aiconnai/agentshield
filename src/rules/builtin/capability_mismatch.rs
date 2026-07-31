@@ -427,12 +427,16 @@ mod tests {
 
         let findings = RuleEngine::new().run(&target);
 
-        assert!(findings
-            .iter()
-            .any(|finding| finding.rule_id == "SHIELD-008"));
-        assert!(findings
-            .iter()
-            .any(|finding| finding.rule_id == "SHIELD-019"));
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.rule_id == "SHIELD-008")
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.rule_id == "SHIELD-019")
+        );
     }
 
     #[cfg(feature = "typescript")]
@@ -617,9 +621,10 @@ function evaluate(code: string) { return new Function(code) }
             .iter()
             .find(|tool| tool.name == "evaluate")
             .unwrap();
-        assert!(tool
-            .observed_capabilities
-            .contains(&Capability::DynamicEval));
+        assert!(
+            tool.observed_capabilities
+                .contains(&Capability::DynamicEval)
+        );
         assert!(!tool.capability_observation_complete);
 
         let findings = targets

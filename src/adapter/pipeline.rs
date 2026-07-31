@@ -1,5 +1,5 @@
 use crate::analysis::cross_file::apply_cross_file_sanitization;
-use crate::ir::{execution_surface::ExecutionSurface, SourceFile};
+use crate::ir::{SourceFile, execution_surface::ExecutionSurface};
 use crate::parser;
 
 pub(super) fn build_execution_surface(source_files: &[SourceFile]) -> ExecutionSurface {
@@ -58,10 +58,12 @@ mod tests {
     fn crewai_fixture_preserves_execution_findings() {
         let execution = fixture_execution("crewai_project");
 
-        assert!(execution
-            .commands
-            .iter()
-            .any(|command| command.command_arg.is_tainted()));
+        assert!(
+            execution
+                .commands
+                .iter()
+                .any(|command| command.command_arg.is_tainted())
+        );
         assert!(!execution.network_operations.is_empty());
     }
 
@@ -69,10 +71,12 @@ mod tests {
     fn langchain_fixture_preserves_execution_findings() {
         let execution = fixture_execution("langchain_project");
 
-        assert!(execution
-            .commands
-            .iter()
-            .any(|command| command.command_arg.is_tainted()));
+        assert!(
+            execution
+                .commands
+                .iter()
+                .any(|command| command.command_arg.is_tainted())
+        );
         assert!(!execution.network_operations.is_empty());
     }
 }

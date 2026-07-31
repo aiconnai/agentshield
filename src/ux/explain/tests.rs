@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
+use crate::ScanReport;
 use crate::config::ScanPathFilterSummary;
 use crate::ir::{Framework, Language, ScanTarget, SourceFile};
 use crate::rules::policy::PolicyVerdict;
 use crate::rules::{AttackCategory, Confidence, Evidence, Finding, Severity};
-use crate::ScanReport;
 
 use super::*;
 

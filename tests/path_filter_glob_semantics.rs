@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use agentshield::{scan, ScanOptions};
+use agentshield::{ScanOptions, scan};
 use tempfile::TempDir;
 
 const PACKAGE_JSON: &str = r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#;

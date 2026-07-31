@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use agentshield::ir::Framework;
-use agentshield::{scan, ScanOptions};
+use agentshield::{ScanOptions, scan};
 use tempfile::TempDir;
 
 const ROOT_PACKAGE_JSON: &str = r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#;
@@ -43,11 +43,13 @@ fn subdirectory_scan_uses_ancestor_mcp_metadata_without_expanding_source_boundar
         target.root_path.canonicalize().unwrap(),
         fixture.canonical_root()
     );
-    assert!(target
-        .dependencies
-        .dependencies
-        .iter()
-        .any(|dep| dep.name == "@modelcontextprotocol/sdk"));
+    assert!(
+        target
+            .dependencies
+            .dependencies
+            .iter()
+            .any(|dep| dep.name == "@modelcontextprotocol/sdk")
+    );
     assert_eq!(source_paths(&report), vec!["server.ts"]);
 
     let rendered = agentshield::ux::render_explain(

@@ -1,5 +1,5 @@
-use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::ir::ScanTarget;
+use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
@@ -50,7 +50,7 @@ impl Detector for PromptInjectionDetector {
             // Check for sanitization in the path — if there are intermediate
             // nodes, we still flag but with slightly lower confidence
             let has_sanitization = false; // TaintPath.through contains locations,
-                                          // not sanitizer info — reserved for future use
+            // not sanitizer info — reserved for future use
 
             if has_sanitization {
                 continue;

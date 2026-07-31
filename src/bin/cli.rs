@@ -25,8 +25,8 @@ use rules::cmd_list_rules;
 use runtime::cmd_wrap;
 #[cfg(feature = "runtime-guard")]
 use runtime::{cmd_guard, cmd_mcp_proxy, cmd_mcp_proxy_transport};
-use scan::{cmd_scan, ScanArgs};
-use setup::{cmd_ci_install, cmd_doctor, cmd_init, cmd_quickstart, CiInstallRequest};
+use scan::{ScanArgs, cmd_scan};
+use setup::{CiInstallRequest, cmd_ci_install, cmd_doctor, cmd_init, cmd_quickstart};
 
 #[derive(Parser)]
 #[command(

@@ -9,7 +9,7 @@ AgentShield scans your AI agent tools for command injection, SSRF, credential ex
 - **Inline diagnostics** — security findings shown directly in the editor with severity-colored underlines
 - **Automatic scanning** — rescans on file save (debounced, configurable)
 - **Status bar** — shows scan status and finding count
-- **19 detectors** — SHIELD-001 through SHIELD-019 covering command injection, capability mismatch, SSRF, credential leaks, arbitrary file access, archive traversal, secret leakage, and more
+- **20 detectors** — SHIELD-001 through SHIELD-020 covering command injection, capability mismatch, SSRF, credential leaks, arbitrary file access, archive traversal, secret leakage, and more
 - **Current framework coverage** — MCP servers, OpenClaw skills, CrewAI agents, LangChain/LangGraph tools, GPT Actions, and Cursor Rules
 
 ## Requirements
@@ -100,6 +100,7 @@ Suppressions are managed by the AgentShield CLI using each finding's stable fing
 | SHIELD-017 | Archive Traversal | High |
 | SHIELD-018 | Secret Leakage | Critical |
 | SHIELD-019 | Capability / Description Mismatch | High |
+| SHIELD-020 | Arbitrary Read Exfiltration Chain | High |
 
 ## Links
 

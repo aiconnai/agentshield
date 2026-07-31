@@ -21,6 +21,7 @@ Optional sensor lanes are developer aids. They do not replace the no-argument `s
 | `vscode` | `bash docs/harness/bin/sensors.sh vscode` | `npm ci` and `npm run compile` pass in `vscode/` | VS Code extension changes |
 | `baseline` | `bash docs/harness/bin/sensors.sh baseline` | baseline snapshot writes `.baseline-last` and doctor passes | Planning and complexity snapshots |
 | `audit` | `bash docs/harness/bin/sensors.sh audit` | evidence-only quarterly audit report is generated and doctor passes | Periodic cleanup review |
+| `verify` | `bash docs/harness/bin/sensors.sh verify` | fixture negative controls (known-bad rejected, known-good accepted) pass | Falsifiability hardening |
 
 ## Rust Gates
 
@@ -29,6 +30,7 @@ Optional sensor lanes are developer aids. They do not replace the no-argument `s
 | Format | `cargo fmt --check` |
 | Quick check | `cargo check --all-features` |
 | Clippy | `cargo clippy --all-features -- -D warnings` |
+| Supply chain | `cargo deny check` |
 | Tests | `cargo test --all-features` |
 | Fixture smoke | `bash docs/harness/bin/sensors.sh fixtures` |
 | SARIF smoke | `bash docs/harness/bin/sensors.sh sarif` |
@@ -55,7 +57,7 @@ The gate requires:
 
 ## Fixture Smoke Gate
 
-The fixture smoke gate checks that representative supported targets can be scanned without scanner errors:
+The fixture smoke gate checks that representative supported targets can be scanned without scanner errors and that core `SHIELD-xxx` contracts are falsifiable:
 
 - MCP safe fixture;
 - MCP vulnerable command-injection fixture, expected to fail policy with exit code `1`;
@@ -64,6 +66,27 @@ The fixture smoke gate checks that representative supported targets can be scann
 - LangChain fixture;
 - GPT Actions fixture;
 - Cursor Rules fixture.
+
+Additional fixture obligations are enforced for selected rule-level contracts:
+
+- `SHIELD-001` must be present in `tests/fixtures/mcp_servers/vuln_cmd_inject` without `--ignore-tests`.
+- `SHIELD-001` must be absent in `tests/fixtures/mcp_servers/safe_calculator --ignore-tests`.
+- `SHIELD-007` must be present in `tests/fixtures/gpt_actions`.
+- `SHIELD-007` must be absent in `tests/fixtures/mcp_servers/safe_calculator --ignore-tests`.
+- `SHIELD-011` must be present in `tests/fixtures/mcp_servers/vuln_coercion_eval` without `--ignore-tests`.
+- `SHIELD-011` must be absent in `tests/fixtures/mcp_servers/safe_redacted_logging --ignore-tests`.
+- `SHIELD-002` must be present in `tests/fixtures/hermes_agent`.
+- `SHIELD-002` must be absent in `tests/fixtures/mcp_servers/safe_redacted_logging --ignore-tests`.
+- `SHIELD-003` must be present in `tests/fixtures/mcp_servers/vuln_ssrf` without `--ignore-tests`.
+- `SHIELD-003` must be absent in `tests/fixtures/mcp_servers/safe_calculator --ignore-tests`.
+- `SHIELD-004` must be present in `tests/fixtures/mcp_servers/vuln_read_exfil_chain` without `--ignore-tests`.
+- `SHIELD-004` must be absent in `tests/fixtures/mcp_servers/safe_filesystem --ignore-tests`.
+- `SHIELD-013` must be present in `tests/fixtures/mcp_servers/vuln_metadata_ssrf` without `--ignore-tests`.
+- `SHIELD-013` must be absent in `tests/fixtures/mcp_servers/safe_filesystem --ignore-tests`.
+- `SHIELD-019` must be present in `tests/fixtures/mcp_servers/vuln_read_exfil_chain` without `--ignore-tests`.
+- `SHIELD-019` must be absent in `tests/fixtures/mcp_servers/safe_calculator --ignore-tests`, `tests/fixtures/mcp_servers/safe_filesystem --ignore-tests`, and `tests/fixtures/mcp_servers/safe_redacted_logging --ignore-tests`.
+- `SHIELD-020` must be present in `tests/fixtures/mcp_servers/vuln_read_exfil_chain` without `--ignore-tests`.
+- `SHIELD-020` must be absent in `tests/fixtures/mcp_servers/safe_filesystem --ignore-tests`.
 
 A fixture scan may exit `0` or `1` depending on findings. Exit code `2` or any other scanner error fails the gate.
 

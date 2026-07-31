@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
+use agentshield::ScanReport;
 use agentshield::config::ScanPathFilterSummary;
 use agentshield::ir::{Framework, Language, ScanTarget, SourceFile, SourceLocation, ToolSurface};
 use agentshield::rules::policy::PolicyVerdict;
 use agentshield::rules::{AttackCategory, Confidence, Evidence, Finding, Severity};
-use agentshield::ux::{render_explain, ExplainOptions};
-use agentshield::ScanReport;
+use agentshield::ux::{ExplainOptions, render_explain};
 
 #[test]
 fn explain_shows_concentrated_blocking_hotspots() {

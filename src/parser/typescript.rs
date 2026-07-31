@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use super::{CallSite, FunctionDef, FunctionParam, LanguageParser, ParsedFile};
-use crate::analysis::cross_file::{sanitizer_category, sanitizer_label, SanitizerCategory};
+use crate::analysis::cross_file::{SanitizerCategory, sanitizer_category, sanitizer_label};
 use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::error::Result;
 use crate::ir::execution_surface::*;

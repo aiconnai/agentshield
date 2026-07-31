@@ -16,6 +16,11 @@ The harness is local operational tooling. It is not production CI, and it must n
 | `bin/codex-gate.sh` | Compatibility wrapper | Runs `review-gate.sh` with `REVIEWER_CLI=codex` |
 | `bin/baseline.sh` | Drift evidence | Writes cheap static repository facts to `.baseline-last` |
 | `bin/quarterly-audit.sh` | Periodic evidence | Writes evidence-only audit reports under `audits/` |
+| `clean-state-checklist.md` | Process | Pre-handoff and pre-review scope/state/evidence checklist |
+| `harness-prompt.md` | Process | Instruction precedence, surface map, and change protocol |
+| `repair-guide.md` | Process | Symptom-first verification repair table |
+| `templates/session-handoff.md` | Process | Cross-session handoff template with verified/blocked tracking |
+| `queue/TEMPLATE.md` | Process | Bounded AFK agent queue item template |
 
 ## Layout
 
@@ -73,6 +78,7 @@ bash docs/harness/bin/sensors.sh release
 bash docs/harness/bin/sensors.sh vscode
 bash docs/harness/bin/sensors.sh baseline
 bash docs/harness/bin/sensors.sh audit
+bash docs/harness/bin/sensors.sh verify
 ```
 
 No-argument `sensors.sh` and `sensors.sh full` are equivalent and remain the canonical full local gate. Optional lanes are developer aids and do not replace the full gate for completion claims.
@@ -110,7 +116,7 @@ Exclusions are not a way to make production code look green.
 ## Current Scanner Surface
 
 - Framework adapters: MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules.
-- Rule surface: 19 built-in detectors, `SHIELD-001` through `SHIELD-019`.
+- Rule surface: 20 built-in detectors, `SHIELD-001` through `SHIELD-020`.
 - Output formats: console, JSON, SARIF 2.1.0, HTML, plus DSSE attestation through `certify`.
 - Trust workflows: suppressions, baselines, egress policy generation, optional runtime egress enforcement.
 - Distribution surfaces: GitHub Action, release binaries for 5 targets, VS Code extension.

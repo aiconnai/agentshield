@@ -1,6 +1,6 @@
 use agentshield::runtime::{
-    redact_runtime_event, redact_text, RedactionKind, RuntimeAction, RuntimeEvent,
-    RuntimeEventSource, RuntimeSchemaVersion,
+    RedactionKind, RuntimeAction, RuntimeEvent, RuntimeEventSource, RuntimeSchemaVersion,
+    redact_runtime_event, redact_text,
 };
 use serde_json::json;
 
@@ -42,9 +42,11 @@ fn bearer_token_redaction_preserves_bearer_but_removes_token_value() {
     let report = redact_text(&format!("Authorization: Bearer {token}"));
 
     assert_eq!(report.redactions[0].kind, RedactionKind::BearerToken);
-    assert!(report
-        .redacted_text
-        .contains("Bearer [REDACTED:bearer_token]"));
+    assert!(
+        report
+            .redacted_text
+            .contains("Bearer [REDACTED:bearer_token]")
+    );
     assert!(!report.redacted_text.contains(token));
 }
 
@@ -77,9 +79,11 @@ fn basic_auth_url_redaction_removes_userinfo_but_keeps_url_shape() {
     let report = redact_text(&format!("fetch {url}"));
 
     assert_eq!(report.redactions[0].kind, RedactionKind::BasicAuthUrl);
-    assert!(report
-        .redacted_text
-        .contains("https://[REDACTED:basic_auth]@example.com/path?x=1"));
+    assert!(
+        report
+            .redacted_text
+            .contains("https://[REDACTED:basic_auth]@example.com/path?x=1")
+    );
     assert!(!report.redacted_text.contains("user:pass"));
     assert!(!report.redacted_text.contains("pass"));
 }
@@ -103,9 +107,11 @@ fn aws_secret_access_key_value_only_redaction_removes_standalone_secret() {
     let report = redact_text(&format!("observed {secret}"));
 
     assert_eq!(report.redactions[0].kind, RedactionKind::AwsSecretAccessKey);
-    assert!(report
-        .redacted_text
-        .contains("[REDACTED:aws_secret_access_key]"));
+    assert!(
+        report
+            .redacted_text
+            .contains("[REDACTED:aws_secret_access_key]")
+    );
     assert!(!report.redacted_text.contains(secret));
 }
 
@@ -145,9 +151,11 @@ fn stripe_secret_key_redaction_removes_live_and_test_keys() {
         let report = redact_text(&format!("stripe {key}"));
 
         assert_eq!(report.redactions[0].kind, RedactionKind::StripeSecretKey);
-        assert!(report
-            .redacted_text
-            .contains("[REDACTED:stripe_secret_key]"));
+        assert!(
+            report
+                .redacted_text
+                .contains("[REDACTED:stripe_secret_key]")
+        );
         assert!(!report.redacted_text.contains(&key));
     }
 }
@@ -263,10 +271,12 @@ fn runtime_event_argument_redaction_marks_event_redacted() {
     assert!(redacted_event.redacted);
     assert_eq!(redactions.len(), 1);
     assert!(!redacted_event.arguments.to_string().contains(secret));
-    assert!(redacted_event
-        .arguments
-        .to_string()
-        .contains("[REDACTED:openai_api_key]"));
+    assert!(
+        redacted_event
+            .arguments
+            .to_string()
+            .contains("[REDACTED:openai_api_key]")
+    );
 }
 
 #[test]
@@ -292,9 +302,11 @@ fn runtime_event_arguments_redact_aws_secret_access_key_by_json_key() {
     let serialized_redactions = serde_json::to_string(&redactions).unwrap();
 
     assert!(redacted_event.redacted);
-    assert!(redactions
-        .iter()
-        .any(|redaction| redaction.kind == RedactionKind::AwsSecretAccessKey));
+    assert!(
+        redactions
+            .iter()
+            .any(|redaction| redaction.kind == RedactionKind::AwsSecretAccessKey)
+    );
     assert!(!serialized_event.contains(secret));
     assert!(!serialized_redactions.contains(secret));
     assert!(serialized_event.contains("[REDACTED:aws_secret_access_key]"));
@@ -324,9 +336,11 @@ fn runtime_event_arguments_redact_password_by_json_key() {
     let serialized_redactions = serde_json::to_string(&redactions).unwrap();
 
     assert!(redacted_event.redacted);
-    assert!(redactions
-        .iter()
-        .any(|redaction| redaction.kind == RedactionKind::GenericSecret));
+    assert!(
+        redactions
+            .iter()
+            .any(|redaction| redaction.kind == RedactionKind::GenericSecret)
+    );
     assert!(!serialized_event.contains(password));
     assert!(!serialized_redactions.contains(password));
     assert!(serialized_event.contains("[REDACTED:generic_secret]"));
@@ -540,9 +554,11 @@ fn attacker_set_redacted_flag_is_recomputed_not_trusted() {
     event.redacted = true;
     let (redacted, _redactions) = redact_runtime_event(event);
     assert!(redacted.redacted);
-    assert!(!serde_json::to_string(&redacted.arguments)
-        .unwrap()
-        .contains("ghp_EXAMPLE"));
+    assert!(
+        !serde_json::to_string(&redacted.arguments)
+            .unwrap()
+            .contains("ghp_EXAMPLE")
+    );
 
     // Caller claims redacted:true but there is nothing to redact: the flag is
     // reset to false rather than laundered.

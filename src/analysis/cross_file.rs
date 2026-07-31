@@ -462,8 +462,8 @@ pub fn apply_cross_file_sanitization(
 mod tests {
     use super::*;
     use crate::adapter::auto_detect_and_load;
-    use crate::ir::execution_surface::{FileOpType, FileOperation};
     use crate::ir::SourceLocation;
+    use crate::ir::execution_surface::{FileOpType, FileOperation};
     use crate::parser::{CallSite, FunctionDef};
     use crate::rules::{Finding, RuleEngine};
 

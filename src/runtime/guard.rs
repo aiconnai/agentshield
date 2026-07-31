@@ -1,7 +1,7 @@
 use crate::rules::builtin::metadata_ssrf::references_metadata_endpoint;
 use crate::runtime::{
-    redact_runtime_event, RuntimeEvent, RuntimeGuardFinding, RuntimeGuardResult,
-    RuntimeSchemaVersion, RuntimeSeverity, RuntimeVerdict,
+    RuntimeEvent, RuntimeGuardFinding, RuntimeGuardResult, RuntimeSchemaVersion, RuntimeSeverity,
+    RuntimeVerdict, redact_runtime_event,
 };
 
 const SECRET_RULE_ID: &str = "AGENTSHIELD-RUNTIME-SECRET";

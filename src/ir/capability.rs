@@ -445,10 +445,11 @@ mod tests {
             tool.declared_capabilities,
             BTreeSet::from([Capability::NetworkEgress, Capability::DatabaseRead])
         );
-        assert!(tool
-            .capability_declarations
-            .iter()
-            .all(|declaration| { declaration.source == CapabilityDeclarationSource::Permission }));
+        assert!(
+            tool.capability_declarations.iter().all(|declaration| {
+                declaration.source == CapabilityDeclarationSource::Permission
+            })
+        );
     }
 
     #[test]
@@ -493,10 +494,11 @@ mod tests {
                 Capability::PackageInstall,
             ])
         );
-        assert!(tool
-            .capability_evidence
-            .windows(2)
-            .all(|pair| pair[0].capability <= pair[1].capability));
+        assert!(
+            tool.capability_evidence
+                .windows(2)
+                .all(|pair| pair[0].capability <= pair[1].capability)
+        );
     }
 
     #[test]
@@ -525,10 +527,11 @@ mod tests {
                 Capability::DatabaseWrite,
             ])
         );
-        assert!(tool
-            .capability_declarations
-            .iter()
-            .all(|declaration| { declaration.source == CapabilityDeclarationSource::Description }));
+        assert!(
+            tool.capability_declarations.iter().all(|declaration| {
+                declaration.source == CapabilityDeclarationSource::Description
+            })
+        );
     }
 
     #[test]

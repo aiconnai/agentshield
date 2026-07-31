@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::rules::{AttackCategory, Finding, Severity};
 use crate::ScanReport;
+use crate::rules::{AttackCategory, Finding, Severity};
 
 const MAX_ITEMS: usize = 3;
 

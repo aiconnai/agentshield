@@ -1,56 +1,56 @@
 # Invariants - AgentShield
 
-Rules in this file do not change without explicit owner decision or a documented architectural decision.
+Rules in this file do not change without explicit owner decision or an approved ADR.
 
-## Scanner Architecture Invariants
+## Invariants of the harness (meta-rule)
 
-- Adapters produce IR; detectors consume IR. Adding a framework must not require rewriting existing detectors.
-- All matching adapters must run. Mixed-framework repositories are valid scan targets.
-- `ArgumentSource` remains the taint abstraction used by detectors. Safe variants must not be treated as tainted.
-- Cross-file analysis runs after parsing and before detector execution.
-- Policy is separate from detection. Detectors always emit raw findings; policy decides suppression, filtering, and fail/pass verdicts.
-- No `unwrap()` or panic-prone production path should be introduced for untrusted scan input.
+- A detector result is considered valid only if a falsifying case exists and is demonstrated in the harness.
+- CI and local `sensors` gates must not accept vacuous success:
+  - positive fixture expected to contain `SHIELD-xxx` findings;
+  - matching negative fixture expected to suppress those findings;
+  - the scanner must still produce those findings for real vulnerabilities.
+- The harness can be fast-failing only on true violations of gates, not style debates.
+- Any change to fixtures, core invariants, or rule matrices requires evidence via `review-gate` and an update to the progress notes when scope or validation changed.
 
-## Offline And Privacy Invariants
+## Falsificability contract (what must hold)
 
-- Scanning must be offline-first. Source code must not be uploaded to a service as part of normal scan behavior.
-- GitHub Action network usage is limited to downloading release artifacts and SARIF upload requested by the workflow.
-- Egress runtime wrapping is opt-in and feature-gated; it must not become implicit scan behavior.
-- Local secrets, `.env` files, generated attestations, and private signing material must not be committed accidentally.
+- `cargo test` and rule-level unit tests are mandatory, but not sufficient alone.
+- `sensors.sh full` must include one negative-path check for each `SHIELD-xxx` that is currently shipped.
+- `--ignore-tests` behavior must be tested as a matrix: same source should differ between default and test-excluded runs.
+- `policy.fail-on` must prove both sides:
+  - above threshold with a matching finding must fail CI;
+  - below threshold with only lower-severity findings must pass.
+- `suppressions` and `baseline` must be demonstrated to suppress exactly intended fingerprints only.
+- `--silent` or equivalent optimization flags should not alter finding payload shape or severity ordering.
 
-## Output Contract Invariants
+## Matrix: TP / FP by rule (`SHIELD-xxx`)
 
-- SARIF output must remain SARIF 2.1.0 compatible and acceptable to GitHub Code Scanning.
-- JSON output must remain parseable by the VS Code extension.
-- Finding fingerprints must remain stable for equivalent findings across runs.
-- Baseline and suppression workflows must not hide new findings silently.
-- DSSE certification must represent the scan result that was actually produced.
+| Rule | TP fixture (must fire) | FP fixture/control (must not fire) |
+|---|---|---|
+| SHIELD-001 | `tests/fixtures/mcp_servers/vuln_cmd_inject` (`server.py`), `tests/fixtures/mcp_servers/vuln_ts_cmd_inject` (`server.ts`) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-002 | `tests/fixtures/mcp_servers/vuln_cred_exfil` | `tests/fixtures/mcp_servers/safe_redacted_logging` |
+| SHIELD-003 | `tests/fixtures/mcp_servers/vuln_ssrf`, `tests/fixtures/mcp_servers/vuln_url_parse_ssrf`, `tests/fixtures/mcp_servers/vuln_ts_cmd_inject` | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-004 | `tests/fixtures/mcp_servers/vuln_ts_cmd_inject`, `tests/fixtures/mcp_servers/vuln_read_exfil_chain` | `tests/fixtures/mcp_servers/safe_filesystem` |
+| SHIELD-005 | ⚠️ inline unit tests only (runtime command-invocation analysis) | ⚠️ inline unit tests only (`run` fallback path and non-install commands) |
+| SHIELD-006 | ⚠️ inline unit tests only (`fixture tests::` in `src/rules/builtin/self_modification.rs`) | ⚠️ inline unit tests only |
+| SHIELD-007 | `tests/fixtures/gpt_actions` | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-008 | `tests/fixtures/mcp_servers/vuln_ts_cmd_inject` (`eval`) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-009 | `tests/fixtures/mcp_servers/vuln_unpinned_deps` | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-010 | ⚠️ inline unit tests only | ⚠️ inline unit tests only |
+| SHIELD-011 | `tests/fixtures/mcp_servers/vuln_coercion_eval` | `tests/fixtures/mcp_servers/safe_redacted_logging` |
+| SHIELD-012 | `tests/fixtures/mcp_servers/vuln_unpinned_deps` (no lockfile for manifest+deps) | `tests/fixtures/mcp_servers/safe_calculator` (no deps declared) |
+| SHIELD-013 | `tests/fixtures/mcp_servers/vuln_metadata_ssrf` | `tests/fixtures/mcp_servers/safe_filesystem` |
+| SHIELD-014 | ⚠️ inline unit tests only (`download_exec` rule tests) | ⚠️ inline unit tests only |
+| SHIELD-015 | ⚠️ inline unit tests only (`overbroad_fs` rule tests) | ⚠️ inline unit tests only |
+| SHIELD-016 | ⚠️ inline unit tests only (`unsafe_deser_tests`) | ⚠️ inline unit tests only |
+| SHIELD-017 | ⚠️ inline unit tests only (`archive_traversal` rule tests) | ⚠️ inline unit tests only |
+| SHIELD-018 | `tests/fixtures/mcp_servers/vuln_cred_exfil`, `tests/fixtures/mcp_servers/vuln_cred_exfil/index.ts` | `tests/fixtures/mcp_servers/safe_redacted_logging` |
+| SHIELD-019 | `tests/fixtures/mcp_servers/vuln_read_exfil_chain` | `tests/fixtures/mcp_servers/safe_calculator`, `tests/fixtures/mcp_servers/safe_filesystem`, `tests/fixtures/mcp_servers/safe_redacted_logging` |
+| SHIELD-020 | `tests/fixtures/mcp_servers/vuln_read_exfil_chain` | `tests/fixtures/mcp_servers/safe_filesystem` |
 
-## CLI And Distribution Invariants
+## Required follow-up (for PR2 completion)
 
-- Release binaries should be built with `--features full` so Python, TypeScript, and runtime wrap support are available in distributed artifacts.
-- The `wrap` command remains feature-gated and must be smoke-checked in release workflows when included.
-- The GitHub Action must preserve scan exit codes after optional SARIF upload.
-- The GitHub Action `ignore-tests` input must stay aligned with CLI `--ignore-tests` behavior.
-- The VS Code extension must shell out through a user-configurable binary path or PATH and parse current JSON output.
-
-## Fixture And Test Invariants
-
-- Safe fixtures should stay low-noise and must not gain high-severity findings casually.
-- Vulnerable fixtures should keep proving the intended detector fires.
-- Adapter fixtures should remain concrete examples of supported frameworks.
-- Test-file exclusion must happen before parsing when `--ignore-tests` is active.
-
-## Harness Invariants
-
-- `docs/harness/bin/*` scripts must run under `bash`.
-- `bootstrap.sh` must be read-only and fast.
-- `doctor.sh` must pass after harness docs, scripts, read order, or review policy changes.
-- `sensors.sh` with no args must remain the canonical full local gate.
-- Optional sensor lanes are developer aids and must not replace full-gate completion claims.
-- `review-gate.sh post` must require a strict `REVIEW_VERDICT: PASS` or `REVIEW_VERDICT: FAIL` marker.
-- Harness script changes require independent post-review evidence; a modified gate cannot be the sole reviewer of itself.
-- Harness scripts are local operational tooling and must not be production CI inputs.
-- After two consecutive post-gate failures on the same task, stop and escalate instead of looping.
-- This harness does not rewrite `AGENTS.md`.
-- Baseline and quarterly audit reports are evidence-only until an owner explicitly promotes a check to a gate.
+- Keep this matrix aligned with the next scan/fixture edits.
+- Every new `SHIELD-xxx` must be added to the table before merge.
+- If a rule is moved to fixture-backed coverage, update this table and add/adjust `docs/harness/bin/sensors.sh fixtures` checks accordingly.
+- Any matrix cell marked ⚠️ must be converted to fixture-backed evidence in a future hardening pass.

@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::ScanReport;
 use crate::config::ScanPathFilterSummary;
 use crate::ir::Language;
 use crate::rules::{Finding, Severity};
-use crate::ScanReport;
 
 use super::CoverageConfidence;
 

@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use super::{CallSite, FunctionDef, FunctionParam, LanguageParser, ParsedFile};
-use crate::analysis::cross_file::{sanitizer_category, sanitizer_label, SanitizerCategory};
+use crate::analysis::cross_file::{SanitizerCategory, sanitizer_category, sanitizer_label};
 use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::error::Result;
 use crate::ir::execution_surface::*;
@@ -852,10 +852,12 @@ class Handler:
             .unwrap();
         assert_eq!(handle.params, vec!["url"]);
         assert_eq!(inner.params, vec!["path"]);
-        assert!(parsed
-            .function_params
-            .iter()
-            .any(|param| param.function_name == "inner" && param.param_name == "path"));
+        assert!(
+            parsed
+                .function_params
+                .iter()
+                .any(|param| param.function_name == "inner" && param.param_name == "path")
+        );
         assert_eq!(inner.location.end_line, Some(inner.location.line));
 
         let inner_call = parsed

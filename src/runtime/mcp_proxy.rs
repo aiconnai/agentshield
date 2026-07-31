@@ -6,9 +6,9 @@
 //! forwarding. This module holds the pure, I/O-free decision core; the CLI owns
 //! the stdio loop.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::runtime::{evaluate_runtime_event, RuntimeEvent, RuntimeVerdict};
+use crate::runtime::{RuntimeEvent, RuntimeVerdict, evaluate_runtime_event};
 
 /// JSON-RPC error code returned for a guard-blocked tool call. Within the
 /// implementation-defined range (-32000..-32099).
@@ -77,7 +77,7 @@ pub fn decide(request: &Value, policy: &ProxyPolicy) -> ProxyDecision {
                 &id,
                 "block",
                 "AGENTSHIELD-RUNTIME-INVALID-INPUT",
-            ))
+            ));
         }
     };
 
