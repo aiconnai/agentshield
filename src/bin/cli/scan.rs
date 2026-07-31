@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
+use agentshield::ScanOptions;
 use agentshield::baseline::{BaselineEntry, BaselineFile};
 use agentshield::config::{Config, ScanPathFilter};
 use agentshield::egress::policy::EgressPolicy;
 use agentshield::output::OutputFormat;
 use agentshield::rules::Severity;
 use agentshield::ux::ExplainOptions;
-use agentshield::ScanOptions;
 
 pub(super) struct ScanArgs {
     pub(super) path: PathBuf,

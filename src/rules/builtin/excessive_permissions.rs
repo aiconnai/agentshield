@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use crate::ir::tool_surface::PermissionType;
 use crate::ir::ScanTarget;
+use crate::ir::tool_surface::PermissionType;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };

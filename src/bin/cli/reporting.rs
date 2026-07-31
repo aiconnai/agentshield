@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
+use agentshield::ScanOptions;
 use agentshield::config::Config;
 use agentshield::output::OutputFormat;
-use agentshield::ScanOptions;
 
 pub(super) fn cmd_suppress(
     fingerprint: String,
@@ -101,7 +101,7 @@ pub(super) fn cmd_certify(
     config: Option<PathBuf>,
     ignore_tests: bool,
 ) -> Result<i32, agentshield::error::ShieldError> {
-    use agentshield::certify::envelope::{build_attestation, DsseEnvelope};
+    use agentshield::certify::envelope::{DsseEnvelope, build_attestation};
 
     let options = ScanOptions {
         config_path: config.clone(),

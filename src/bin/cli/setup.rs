@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
+use agentshield::ScanOptions;
 use agentshield::config::{Config, ScanPathFilterSummary};
 use agentshield::doctor::DoctorReport;
 use agentshield::output::OutputFormat;
 use agentshield::rules::Severity;
 use agentshield::ux::{CiInstallOptions, ExplainOptions};
-use agentshield::ScanOptions;
 
 pub(super) struct CiInstallRequest {
     pub output: PathBuf,

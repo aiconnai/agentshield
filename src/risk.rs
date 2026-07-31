@@ -210,8 +210,7 @@ pub(crate) fn render_experimental(
         contributions: &assessment.contributions[..displayed],
         contributions_truncated: assessment.contributions.len() - displayed,
         summary: &assessment.summary,
-        interpretation:
-            "Prioritization index only; not a probability, percentage, grade, or policy verdict.",
+        interpretation: "Prioritization index only; not a probability, percentage, grade, or policy verdict.",
     };
 
     match format {

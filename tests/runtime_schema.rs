@@ -17,9 +17,11 @@ fn runtime_event_schema_requires_schema_version() {
     let schema = runtime_event_schema_json();
     let required = schema["required"].as_array().unwrap();
 
-    assert!(required
-        .iter()
-        .any(|field| field.as_str() == Some("schema_version")));
+    assert!(
+        required
+            .iter()
+            .any(|field| field.as_str() == Some("schema_version"))
+    );
 }
 
 #[test]
@@ -27,7 +29,9 @@ fn runtime_guard_result_schema_requires_schema_version() {
     let schema = runtime_guard_result_schema_json();
     let required = schema["required"].as_array().unwrap();
 
-    assert!(required
-        .iter()
-        .any(|field| field.as_str() == Some("schema_version")));
+    assert!(
+        required
+            .iter()
+            .any(|field| field.as_str() == Some("schema_version"))
+    );
 }

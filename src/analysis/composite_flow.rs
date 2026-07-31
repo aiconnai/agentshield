@@ -3,7 +3,7 @@
 //! This module deliberately does not register a detector or add fields to the
 //! serialized IR. It proves the C.0 contracts needed by SHIELD-020 while the
 //! detector transport decision remains a separate API review.
-#![allow(dead_code)] // C.0 is intentionally test-only until C.1 chooses detector transport.
+// C.0 module intentionally remains test-only until C.1 chooses detector transport.
 
 use std::path::{Path, PathBuf};
 
@@ -453,7 +453,10 @@ mod typescript {
             candidates
         }
 
-        #[allow(clippy::too_many_arguments)]
+        #[expect(
+            clippy::too_many_arguments,
+            reason = "Refactoring this method would trade readability for signature complexity in this IR walk."
+        )]
         fn evaluate_expression(
             &mut self,
             unit_index: usize,

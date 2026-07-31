@@ -1,9 +1,9 @@
 use std::path::Path;
 
+use crate::ScanReport;
 use crate::config::ScanPathFilterSummary;
 use crate::error::ShieldError;
 use crate::rules::{AttackCategory, Finding, Severity};
-use crate::ScanReport;
 
 use super::{hotspots, roots};
 

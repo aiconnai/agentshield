@@ -685,11 +685,13 @@ mod tests {
         assert!(tool_names.contains(&"company_api"));
         assert!(!tool_names.contains(&"legacy"));
 
-        assert!(target
-            .execution
-            .commands
-            .iter()
-            .any(|command| command.function == "npx"));
+        assert!(
+            target
+                .execution
+                .commands
+                .iter()
+                .any(|command| command.function == "npx")
+        );
         assert!(target
             .execution
             .network_operations

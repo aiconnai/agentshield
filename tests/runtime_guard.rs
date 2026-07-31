@@ -1,8 +1,8 @@
 #![cfg(feature = "runtime-guard")]
 
 use agentshield::runtime::{
-    evaluate_runtime_event, RuntimeAction, RuntimeEvent, RuntimeEventSource, RuntimeGuardResult,
-    RuntimeSchemaVersion, RuntimeSeverity, RuntimeVerdict, INVALID_INPUT_RULE_ID,
+    INVALID_INPUT_RULE_ID, RuntimeAction, RuntimeEvent, RuntimeEventSource, RuntimeGuardResult,
+    RuntimeSchemaVersion, RuntimeSeverity, RuntimeVerdict, evaluate_runtime_event,
 };
 use serde_json::json;
 use std::io::Write;

@@ -533,9 +533,11 @@ mod tests {
         assert_eq!(parsed["host"], "evil.com");
         assert_eq!(parsed["port"], 443);
         assert_eq!(parsed["enforcer"], "agentshield");
-        assert!(parsed["reason"]
-            .as_str()
-            .unwrap()
-            .contains("domain not allowed"));
+        assert!(
+            parsed["reason"]
+                .as_str()
+                .unwrap()
+                .contains("domain not allowed")
+        );
     }
 }

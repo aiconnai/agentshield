@@ -996,7 +996,7 @@ deny = []
     fn test_emit_egress_policy_integration() {
         // Scan the vuln_ssrf fixture — it has literal HTTP requests.
         // Build the policy from targets embedded in the report and round-trip it.
-        use crate::{scan, ScanOptions};
+        use crate::{ScanOptions, scan};
         use std::path::Path;
 
         let opts = ScanOptions::default();
