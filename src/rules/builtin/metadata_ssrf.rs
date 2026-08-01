@@ -79,12 +79,10 @@ impl Detector for MetadataSsrfDetector {
             if matches!(path.source.source_type, TaintSourceType::ToolArgument)
                 && matches!(path.sink.sink_type, TaintSinkType::HttpRequest)
             {
-                let Some(target_type) = metadata_target_from_sink_location(
+                let target_type = metadata_target_from_sink_location(
                     &path.sink.location,
                     &target.execution.network_operations,
-                ) else {
-                    continue;
-                };
+                );
                 if has_finding_at_location(&findings, &path.sink.location) {
                     continue;
                 }
@@ -111,8 +109,11 @@ impl Detector for MetadataSsrfDetector {
                         },
                         Evidence {
                             description: format!(
-                                "Sink: HTTP request to {target_type} via '{}'",
-                                path.sink.description
+                                "Sink: HTTP request{} via '{}'",
+                                target_type
+                                    .map(|kind| format!(" to {kind}"))
+                                    .unwrap_or_default(),
+                                path.sink.description,
                             ),
                             location: Some(path.sink.location.clone()),
                             snippet: None,
@@ -135,7 +136,7 @@ impl Detector for MetadataSsrfDetector {
         for net_op in &target.execution.network_operations {
             if let ArgumentSource::Literal(ref url) = net_op.url_arg {
                 if let Some(target_type) = is_metadata_or_private(url) {
-                    if has_finding_at_network_location(&findings, &net_op.location) {
+                    if has_finding_at_location(&findings, &net_op.location) {
                         continue;
                     }
                     findings.push(Finding {
@@ -177,12 +178,9 @@ fn metadata_target_from_sink_location(
     network_operations
         .iter()
         .find(|op| op.location == *sink_loc)
-        .and_then(|op| {
-            if let ArgumentSource::Literal(url) = &op.url_arg {
-                is_metadata_or_private(url)
-            } else {
-                None
-            }
+        .and_then(|op| match &op.url_arg {
+            ArgumentSource::Literal(url) => is_metadata_or_private(url),
+            _ => None,
         })
 }
 
@@ -196,13 +194,6 @@ fn has_finding_at_location(findings: &[Finding], location: &crate::ir::SourceLoc
             .as_ref()
             .is_some_and(|finding_location| finding_location == location)
     })
-}
-
-fn has_finding_at_network_location(
-    findings: &[Finding],
-    location: &crate::ir::SourceLocation,
-) -> bool {
-    has_finding_at_location(findings, location)
 }
 
 #[cfg(test)]
@@ -266,6 +257,30 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].rule_id, "SHIELD-013");
         assert_eq!(findings[0].severity, Severity::Critical);
+        assert!(findings[0].taint_path.is_some());
+    }
+
+    #[test]
+    fn detects_taint_path_to_http_without_literal_url() {
+        let mut target = empty_target();
+        target.data.taint_paths.push(TaintPath {
+            source: TaintSource {
+                source_type: TaintSourceType::ToolArgument,
+                description: "url".into(),
+                location: loc(),
+            },
+            sink: TaintSink {
+                sink_type: TaintSinkType::HttpRequest,
+                description: "requests.get".into(),
+                location: loc(),
+            },
+            through: vec![],
+            confidence: 0.9,
+        });
+
+        let findings = MetadataSsrfDetector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-013");
         assert!(findings[0].taint_path.is_some());
     }
 

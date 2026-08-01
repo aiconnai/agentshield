@@ -46,9 +46,6 @@ pub struct ScanOptions {
     /// Path to config file (defaults to `.agentshield.toml` in scan dir).
     pub config_path: Option<std::path::PathBuf>,
     /// Output format.
-    ///
-    /// Carried through in [`ScanReport::format`] so downstream callers can inspect
-    /// or reuse the caller's chosen format consistently.
     pub format: OutputFormat,
     /// CLI override for fail_on threshold.
     pub fail_on_override: Option<rules::Severity>,
@@ -73,8 +70,6 @@ pub struct ScanReport {
     pub target_name: String,
     pub findings: Vec<Finding>,
     pub verdict: PolicyVerdict,
-    /// Format preference selected by the caller.
-    pub format: OutputFormat,
     /// Absolute (or canonicalized) path to the scanned directory.
     /// Passed to output renderers for stable fingerprint computation.
     pub scan_root: std::path::PathBuf,
@@ -86,12 +81,36 @@ pub struct ScanReport {
 
 /// Run a complete scan: detect framework, parse, analyze, evaluate policy.
 pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
+    scan_with_path_filter_overrides(path, options, &[], &[])
+}
+
+/// Run a complete scan with optional include/exclude patterns layered on top of
+/// the scan configuration.
+///
+/// The override form is used by the CLI so command-line path filters affect the
+/// adapter and detector execution, while keeping [`ScanOptions`] source
+/// compatible for library callers that construct it directly.
+pub fn scan_with_path_filter_overrides(
+    path: &Path,
+    options: &ScanOptions,
+    include_patterns: &[String],
+    exclude_patterns: &[String],
+) -> Result<ScanReport> {
     // Load config
     let config_path = options
         .config_path
         .clone()
         .unwrap_or_else(|| path.join(".agentshield.toml"));
     let mut config = Config::load(&config_path)?;
+
+    // Apply CLI path-filter overrides before constructing the filter used by
+    // adapters. This keeps execution and the reported filter summary aligned.
+    if !include_patterns.is_empty() {
+        config.scan.include.extend(include_patterns.iter().cloned());
+    }
+    if !exclude_patterns.is_empty() {
+        config.scan.exclude.extend(exclude_patterns.iter().cloned());
+    }
 
     // Apply CLI override
     if let Some(fail_on) = options.fail_on_override {
@@ -137,7 +156,6 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
         target_name,
         findings: effective_findings,
         verdict,
-        format: options.format,
         scan_root,
         targets,
         path_filter_summary,
@@ -250,6 +268,10 @@ mod integration_tests {
         assert!(
             report.findings.iter().any(|f| f.rule_id == "SHIELD-004"),
             "Expected SHIELD-004 to coexist with the composite finding"
+        );
+        assert!(
+            !report.findings.iter().any(|f| f.rule_id == "SHIELD-015"),
+            "SHIELD-015 should be suppressed by SHIELD-004 at the same location"
         );
         assert!(!report.verdict.pass);
     }
@@ -492,13 +514,16 @@ mod integration_tests {
             &opts,
         )
         .unwrap();
-        // The fixture has a tool that passes user-controlled `url` to requests.get,
-        // which should trigger SHIELD-003 (general SSRF) and potentially SHIELD-013
-        // (metadata SSRF) via taint paths if populated.
-        // At minimum, SHIELD-003 must fire (parameter -> network call).
+        // The fixture has a tool that passes user-controlled `url` to requests.get.
+        // The taint path is a metadata-SSRF signal even without a literal URL,
+        // and the specific rule suppresses the generic SSRF overlap.
+        assert!(
+            report.findings.iter().any(|f| f.rule_id == "SHIELD-013"),
+            "Expected SHIELD-013 (metadata SSRF) from vuln_metadata_ssrf fixture"
+        );
         assert!(
             report.findings.iter().any(|f| f.rule_id == "SHIELD-003"),
-            "Expected SHIELD-003 (general SSRF) from vuln_metadata_ssrf fixture"
+            "SHIELD-003 remains useful when the taint path has no concrete metadata URL"
         );
         assert!(!report.verdict.pass);
     }

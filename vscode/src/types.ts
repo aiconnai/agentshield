@@ -61,6 +61,7 @@ export type AttackCategory =
   | "self_modification"
   | "prompt_injection_surface"
   | "excessive_permissions"
-  | "data_exfiltration";
+  | "data_exfiltration"
+  | "capability_mismatch";
 
 export type Severity = "info" | "low" | "medium" | "high" | "critical";

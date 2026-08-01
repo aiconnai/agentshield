@@ -58,7 +58,7 @@ impl RuleEngine {
                 .iter()
                 .flat_map(|detector| detector.run(input)),
         );
-        findings
+        apply_overlapping_rule_suppression(findings)
     }
 
     /// List metadata for all registered rules.
@@ -121,6 +121,22 @@ fn apply_overlapping_rule_suppression(findings: Vec<Finding>) -> Vec<Finding> {
 
 fn should_suppress(candidate: &Finding, dominant: &Finding) -> bool {
     if !same_source_location(candidate.location.as_ref(), dominant.location.as_ref()) {
+        return false;
+    }
+
+    // A tainted URL is enough to retain the critical SHIELD-013 signal, but it
+    // is not proof that the destination is metadata/private. Keep the generic
+    // SHIELD-003 finding in that uncertain case; suppress it only when the
+    // dominant finding carries a concrete metadata/private indication (or is a
+    // synthetic dominant finding with no taint path).
+    if candidate.rule_id == "SHIELD-003"
+        && dominant.rule_id == "SHIELD-013"
+        && dominant.taint_path.is_some()
+        && !dominant
+            .evidence
+            .iter()
+            .any(|evidence| evidence.description.starts_with("Sink: HTTP request to "))
+    {
         return false;
     }
 

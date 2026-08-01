@@ -66,10 +66,10 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         .unwrap_or_else(|| path.join(".agentshield.toml"));
     let mut cfg = Config::load(&config_path)?;
     if !include_patterns.is_empty() {
-        cfg.scan.include.extend(include_patterns);
+        cfg.scan.include.extend(include_patterns.iter().cloned());
     }
     if !exclude_patterns.is_empty() {
-        cfg.scan.exclude.extend(exclude_patterns);
+        cfg.scan.exclude.extend(exclude_patterns.iter().cloned());
     }
 
     let fail_on = parse_optional_severity(fail_on_str.as_deref())?;
@@ -85,7 +85,12 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         ignore_tests,
     };
 
-    let mut report = match agentshield::scan(&path, &options) {
+    let mut report = match agentshield::scan_with_path_filter_overrides(
+        &path,
+        &options,
+        &include_patterns,
+        &exclude_patterns,
+    ) {
         Ok(report) => report,
         Err(err) if explain && agentshield::ux::is_no_adapter(&err) => {
             let rendered = agentshield::ux::render_no_adapter_explain(
