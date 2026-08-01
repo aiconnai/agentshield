@@ -20,6 +20,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     permissions:
+      actions: read       # Required for workflow metadata during SARIF upload
+      contents: read
       security-events: write  # Required for SARIF upload
 
     steps:
