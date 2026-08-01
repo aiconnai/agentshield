@@ -182,6 +182,62 @@ fn exclude_suppresses_dependency_findings_from_requirements_txt() {
 }
 
 #[test]
+fn exclude_suppresses_npm_lockfile_detection() {
+    let fixture = FilterFixture::new();
+    fixture.write(
+        "package-lock.json",
+        r#"{"lockfileVersion":3,"packages":{}}"#,
+    );
+    fixture.write(
+        ".agentshield.toml",
+        "[scan]\nexclude = [\"package-lock.json\"]\n",
+    );
+    fixture.write("src/main.py", SAFE_TOOL);
+
+    let report = scan(fixture.path(), &ScanOptions::default()).unwrap();
+
+    assert!(
+        report
+            .targets
+            .iter()
+            .all(|target| target.dependencies.lockfile.is_none()),
+        "excluded package-lock.json must not be selected as the lockfile"
+    );
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == "SHIELD-012"),
+        "without an allowed lockfile, SHIELD-012 should remain visible"
+    );
+}
+
+#[test]
+fn cli_path_filter_overrides_apply_to_scan_execution() {
+    let fixture = FilterFixture::new();
+    fixture.write("src/allowed.py", VULNERABLE_TOOL);
+    fixture.write("legacy/excluded.py", VULNERABLE_TOOL);
+
+    let report = agentshield::scan_with_path_filter_overrides(
+        fixture.path(),
+        &ScanOptions::default(),
+        &[],
+        &["legacy/**".to_string()],
+    )
+    .unwrap();
+
+    assert!(source_paths(&report).contains(&"src/allowed.py".to_string()));
+    assert!(!source_paths(&report).contains(&"legacy/excluded.py".to_string()));
+    assert!(!report.findings.iter().any(|finding| {
+        finding.rule_id == "SHIELD-001"
+            && finding
+                .location
+                .as_ref()
+                .is_some_and(|location| location.file.ends_with("legacy/excluded.py"))
+    }));
+}
+
+#[test]
 fn exclude_suppresses_tool_metadata_findings_from_tools_json() {
     let fixture = FilterFixture::new();
     fixture.write(".agentshield.toml", "[scan]\nexclude = [\"tools.json\"]\n");

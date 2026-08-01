@@ -1428,7 +1428,7 @@ pub(super) fn parse_dependencies(
             ("yarn.lock", dependency_surface::LockfileFormat::YarnLock),
         ] {
             let lock_path = root.join(filename);
-            if lock_path.exists() {
+            if lock_path.exists() && filter.allows_path(root, &lock_path) {
                 let content = std::fs::read_to_string(&lock_path).unwrap_or_default();
                 let (all_pinned, all_hashed) = detect_dependency_lock_confidence(format, &content);
                 surface.lockfile = Some(LockfileInfo {

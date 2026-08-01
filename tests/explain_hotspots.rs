@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use agentshield::ScanReport;
 use agentshield::config::ScanPathFilterSummary;
 use agentshield::ir::{Framework, Language, ScanTarget, SourceFile, SourceLocation, ToolSurface};
-use agentshield::output::OutputFormat;
 use agentshield::rules::policy::PolicyVerdict;
 use agentshield::rules::{AttackCategory, Confidence, Evidence, Finding, Severity};
 use agentshield::ux::{ExplainOptions, render_explain};
@@ -80,7 +79,6 @@ fn report(findings: Vec<Finding>) -> ScanReport {
             fail_threshold: Severity::High,
         },
         scan_root: PathBuf::from("/repo"),
-        format: OutputFormat::Console,
         targets: vec![ScanTarget {
             name: "fixture".into(),
             framework: Framework::Mcp,

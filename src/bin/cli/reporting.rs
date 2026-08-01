@@ -37,10 +37,7 @@ pub(super) fn cmd_suppress(
         return Ok(0);
     }
 
-    let workspace = config_path
-        .parent()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
+    let workspace = config_workspace(&config_path);
     let options = ScanOptions {
         config_path: Some(config_path.clone()),
         format: OutputFormat::Console,
@@ -117,6 +114,14 @@ pub(super) fn cmd_suppress(
     );
 
     Ok(0)
+}
+
+fn config_workspace(config_path: &std::path::Path) -> PathBuf {
+    config_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 pub(super) fn cmd_list_suppressions(
@@ -214,4 +219,26 @@ pub(super) fn cmd_certify(
     }
 
     Ok(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::config_workspace;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn default_config_path_scans_current_workspace() {
+        assert_eq!(
+            config_workspace(Path::new(".agentshield.toml")),
+            PathBuf::from(".")
+        );
+    }
+
+    #[test]
+    fn explicit_config_path_scans_its_parent_workspace() {
+        assert_eq!(
+            config_workspace(Path::new("project/.agentshield.toml")),
+            PathBuf::from("project")
+        );
+    }
 }
