@@ -2,6 +2,9 @@ pub mod builtin;
 pub mod finding;
 pub mod policy;
 
+use std::collections::HashSet;
+use std::path::PathBuf;
+
 use crate::analysis::DetectionInput;
 use crate::ir::ScanTarget;
 use crate::ir::SourceLocation;
@@ -92,45 +95,86 @@ const OVERLAPPING_RULE_PAIRS: &[(&str, &str)] = &[
     ("SHIELD-011", "SHIELD-016"), // Dynamic eval/import suppression suppresses unsafe deserialization overlap
 ];
 
-fn apply_overlapping_rule_suppression(findings: Vec<Finding>) -> Vec<Finding> {
-    let mut suppressed = vec![false; findings.len()];
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct SourceLocationKey {
+    file: PathBuf,
+    line: usize,
+    column: usize,
+    end_line: Option<usize>,
+    end_column: Option<usize>,
+}
 
-    for i in 0..findings.len() {
-        let candidate = &findings[i];
-        if suppressed[i] {
-            continue;
-        }
-
-        for (j, dominant) in findings.iter().enumerate() {
-            if i == j || suppressed[i] {
-                continue;
-            }
-
-            if should_suppress(candidate, dominant) {
-                suppressed[i] = true;
-            }
+impl From<&SourceLocation> for SourceLocationKey {
+    fn from(location: &SourceLocation) -> Self {
+        Self {
+            file: location.file.clone(),
+            line: location.line,
+            column: location.column,
+            end_line: location.end_line,
+            end_column: location.end_column,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct SuppressionKey {
+    dominant_rule: &'static str,
+    location: SourceLocationKey,
+}
+
+fn apply_overlapping_rule_suppression(findings: Vec<Finding>) -> Vec<Finding> {
+    // Only dominant rules can suppress a candidate. Indexing those keys avoids
+    // comparing every finding with every other finding on the scan path.
+    let suppressors: HashSet<SuppressionKey> = findings
+        .iter()
+        .filter_map(|dominant| {
+            let dominant_rule = dominant_rule_for_dominant(dominant.rule_id.as_str())?;
+            let location = dominant.location.as_ref()?;
+            dominant_finding_can_suppress(dominant).then_some(SuppressionKey {
+                dominant_rule,
+                location: location.into(),
+            })
+        })
+        .collect();
 
     findings
         .into_iter()
-        .enumerate()
-        .filter_map(|(idx, finding)| if suppressed[idx] { None } else { Some(finding) })
+        .filter(|candidate| {
+            let Some(dominant_rule) = dominant_rule_for_candidate(candidate.rule_id.as_str())
+            else {
+                return true;
+            };
+            let Some(location) = candidate.location.as_ref() else {
+                return true;
+            };
+
+            !suppressors.contains(&SuppressionKey {
+                dominant_rule,
+                location: location.into(),
+            })
+        })
         .collect()
 }
 
-fn should_suppress(candidate: &Finding, dominant: &Finding) -> bool {
-    if !same_source_location(candidate.location.as_ref(), dominant.location.as_ref()) {
-        return false;
-    }
+fn dominant_rule_for_candidate(candidate_rule: &str) -> Option<&'static str> {
+    OVERLAPPING_RULE_PAIRS
+        .iter()
+        .find_map(|(dominant, dominated)| (*dominated == candidate_rule).then_some(*dominant))
+}
 
+fn dominant_rule_for_dominant(dominant_rule: &str) -> Option<&'static str> {
+    OVERLAPPING_RULE_PAIRS
+        .iter()
+        .find_map(|(dominant, _)| (*dominant == dominant_rule).then_some(*dominant))
+}
+
+fn dominant_finding_can_suppress(dominant: &Finding) -> bool {
     // A tainted URL is enough to retain the critical SHIELD-013 signal, but it
     // is not proof that the destination is metadata/private. Keep the generic
     // SHIELD-003 finding in that uncertain case; suppress it only when the
     // dominant finding carries a concrete metadata/private indication (or is a
     // synthetic dominant finding with no taint path).
-    if candidate.rule_id == "SHIELD-003"
-        && dominant.rule_id == "SHIELD-013"
+    if dominant.rule_id == "SHIELD-013"
         && dominant.taint_path.is_some()
         && !dominant
             .evidence
@@ -140,24 +184,7 @@ fn should_suppress(candidate: &Finding, dominant: &Finding) -> bool {
         return false;
     }
 
-    overlap_dominates(candidate.rule_id.as_str(), dominant.rule_id.as_str())
-        .is_some_and(|(dominant_rule, _)| dominant.rule_id == dominant_rule)
-}
-
-fn overlap_dominates(candidate_rule: &str, dominant_rule: &str) -> Option<(String, String)> {
-    OVERLAPPING_RULE_PAIRS
-        .iter()
-        .find_map(|(dominant, dominated)| {
-            (candidate_rule == *dominated && dominant_rule == *dominant)
-                .then_some((dominant.to_string(), dominated.to_string()))
-        })
-}
-
-fn same_source_location(left: Option<&SourceLocation>, right: Option<&SourceLocation>) -> bool {
-    match (left, right) {
-        (Some(a), Some(b)) => a.file == b.file && a.line == b.line,
-        _ => false,
-    }
+    true
 }
 
 #[cfg(test)]
@@ -312,5 +339,32 @@ mod tests {
         assert!(!ids.contains(&"SHIELD-018"));
         assert!(ids.contains(&"SHIELD-011"));
         assert!(!ids.contains(&"SHIELD-016"));
+    }
+
+    #[test]
+    fn keeps_overlapping_rules_for_distinct_spans_on_the_same_line() {
+        let mut first_span = loc();
+        first_span.column = 4;
+        first_span.end_line = Some(first_span.line);
+        first_span.end_column = Some(14);
+
+        let mut second_span = first_span.clone();
+        second_span.column = 16;
+        second_span.end_column = Some(33);
+
+        let findings = vec![
+            simple_finding("SHIELD-004", Some(first_span)),
+            simple_finding("SHIELD-015", Some(second_span)),
+        ];
+
+        let filtered = apply_overlapping_rule_suppression(findings);
+        let ids: Vec<_> = filtered
+            .iter()
+            .map(|finding| finding.rule_id.as_str())
+            .collect();
+
+        assert_eq!(filtered.len(), 2);
+        assert!(ids.contains(&"SHIELD-004"));
+        assert!(ids.contains(&"SHIELD-015"));
     }
 }
