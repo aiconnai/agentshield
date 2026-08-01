@@ -187,7 +187,7 @@ impl LanguageParser for PythonParser {
         for (line_idx, line) in lines.iter().enumerate() {
             let line_num = line_idx + 1;
             let trimmed = line.trim();
-            let indent = line.len() - line.trim_start().len();
+            let indent = line.chars().take_while(|c| c.is_whitespace()).count();
 
             if !trimmed.is_empty() {
                 while current_functions
@@ -405,7 +405,6 @@ impl LanguageParser for PythonParser {
                     .unwrap_or("");
                 let arg_source =
                     classify_argument(first_arg_str, &param_names, &parsed.sanitized_vars);
-
                 parsed.call_sites.push(CallSite {
                     callee: func_name.to_string(),
                     arguments: vec![arg_source.clone()],

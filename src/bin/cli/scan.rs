@@ -16,6 +16,8 @@ pub(super) struct ScanArgs {
     pub(super) output_path: Option<PathBuf>,
     pub(super) ignore_tests: bool,
     pub(super) baseline_path: Option<PathBuf>,
+    pub(super) include_patterns: Vec<String>,
+    pub(super) exclude_patterns: Vec<String>,
     pub(super) write_baseline_path: Option<PathBuf>,
     pub(super) emit_egress_policy_path: Option<PathBuf>,
     pub(super) explain: bool,
@@ -31,6 +33,8 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         output_path,
         ignore_tests,
         baseline_path,
+        include_patterns,
+        exclude_patterns,
         write_baseline_path,
         emit_egress_policy_path,
         explain,
@@ -61,8 +65,14 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         .clone()
         .unwrap_or_else(|| path.join(".agentshield.toml"));
     let mut cfg = Config::load(&config_path)?;
+    if !include_patterns.is_empty() {
+        cfg.scan.include.extend(include_patterns);
+    }
+    if !exclude_patterns.is_empty() {
+        cfg.scan.exclude.extend(exclude_patterns);
+    }
 
-    let fail_on = parse_optional_severity(fail_on_str.as_deref());
+    let fail_on = parse_optional_severity(fail_on_str.as_deref())?;
     let effective_ignore_tests = ignore_tests || cfg.scan.ignore_tests;
     let effective_path_filter =
         ScanPathFilter::from_scan_config(&cfg.scan, effective_ignore_tests)?;
@@ -153,14 +163,20 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
     Ok(if report.verdict.pass { 0 } else { 1 })
 }
 
-fn parse_optional_severity(value: Option<&str>) -> Option<Severity> {
-    value.and_then(|s| {
-        let sev = Severity::from_str_lenient(s);
-        if sev.is_none() {
-            eprintln!("Warning: unknown severity '{}', using config default", s);
+fn parse_optional_severity(
+    value: Option<&str>,
+) -> Result<Option<Severity>, agentshield::error::ShieldError> {
+    match value {
+        Some(raw) => {
+            let sev = Severity::from_str_lenient(raw).ok_or_else(|| {
+                agentshield::error::ShieldError::Config(format!(
+                    "unknown severity '{raw}' (expected info, low, medium, high, or critical)"
+                ))
+            })?;
+            Ok(Some(sev))
         }
-        sev
-    })
+        None => Ok(None),
+    }
 }
 
 fn write_rendered(

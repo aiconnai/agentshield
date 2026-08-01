@@ -48,43 +48,16 @@ impl super::Adapter for LangChainAdapter {
             return true;
         }
 
-        // Check Python files for langchain imports (top-level only)
-        if let Ok(entries) = std::fs::read_dir(root) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "py") {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if content.contains("from langchain")
-                            || content.contains("import langchain")
-                            || content.contains("from langgraph")
-                            || content.contains("import langgraph")
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Also check src/ directory (common LangChain layout)
-        let src_dir = root.join("src");
-        if src_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&src_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.extension().is_some_and(|e| e == "py") {
-                        if let Ok(content) = std::fs::read_to_string(&path) {
-                            if content.contains("from langchain")
-                                || content.contains("import langchain")
-                                || content.contains("from langgraph")
-                                || content.contains("import langgraph")
-                            {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
+        if super::mcp::has_recursive_python_import(
+            root,
+            &[
+                "from langchain",
+                "import langchain",
+                "from langgraph",
+                "import langgraph",
+            ],
+        ) {
+            return true;
         }
 
         false
@@ -137,7 +110,9 @@ impl super::Adapter for LangChainAdapter {
 mod tests {
     use super::*;
     use crate::adapter::Adapter;
+    use std::io::Write;
     use std::path::PathBuf;
+    use tempfile::TempDir;
 
     #[test]
     fn test_detect_langchain_via_pyproject() {
@@ -224,5 +199,18 @@ mod tests {
                 sf.path
             );
         }
+    }
+
+    #[test]
+    fn test_detect_langchain_nested_python_import() {
+        let tmp_root = TempDir::new().unwrap();
+        let nested_dir = tmp_root.path().join("src/pkg");
+        std::fs::create_dir_all(&nested_dir).unwrap();
+
+        let mut file = std::fs::File::create(nested_dir.join("tool.py")).unwrap();
+        writeln!(file, "from langchain_core import chat_models").unwrap();
+
+        let adapter = LangChainAdapter;
+        assert!(adapter.detect(tmp_root.path()));
     }
 }

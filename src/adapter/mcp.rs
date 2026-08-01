@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::analysis::AnalysisBundle;
-use crate::analysis::composite_flow::SourceUnit;
-use crate::analysis::composite_flow::ToolFlowInput;
-use crate::analysis::composite_flow::build_composite_flow_candidates;
+use serde_json::Value;
+
+use crate::analysis::composite_flow::{SourceUnit, ToolFlowInput, build_composite_flow_candidates};
 use crate::analysis::cross_file::apply_cross_file_sanitization;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
@@ -131,18 +131,25 @@ fn load_mcp_target(
     let mut source_files = Vec::new();
     let mut execution = ExecutionSurface::default();
     let mut tool_declarations = Vec::new();
+    let mut python_tools = Vec::new();
 
     // Collect source files
     collect_source_files_with_filter(root, filter, &mut source_files)?;
     for source_file in &source_files {
-        if matches!(
-            source_file.language,
-            Language::TypeScript | Language::JavaScript
-        ) {
-            tool_declarations.extend(extract_mcp_tool_declarations_from_source(
-                &source_file.path,
-                &source_file.content,
-            ));
+        match source_file.language {
+            Language::TypeScript | Language::JavaScript => {
+                tool_declarations.extend(extract_mcp_tool_declarations_from_source(
+                    &source_file.path,
+                    &source_file.content,
+                ));
+            }
+            Language::Python => {
+                python_tools.extend(extract_mcp_tools_from_source(
+                    &source_file.path,
+                    &source_file.content,
+                ));
+            }
+            _ => {}
         }
     }
 
@@ -169,7 +176,8 @@ fn load_mcp_target(
     );
 
     let mut tool_decls_for_composite = Vec::with_capacity(tool_declarations.len());
-    let mut tools = Vec::with_capacity(tool_declarations.len());
+    let mut tools = python_tools;
+    tools.reserve(tool_declarations.len());
 
     for (declaration, binding) in tool_declarations.into_iter().zip(operation_bindings) {
         let mut tool = declaration.tool;
@@ -311,6 +319,28 @@ pub fn is_test_file(path: &Path) -> bool {
     false
 }
 
+pub(crate) fn has_recursive_python_import(root: &Path, needles: &[&str]) -> bool {
+    let walker = ignore::WalkBuilder::new(root)
+        .hidden(true)
+        .git_ignore(true)
+        .build();
+
+    for entry in walker.flatten() {
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("py") {
+            continue;
+        }
+
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if needles.iter().any(|needle| content.contains(needle)) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 #[derive(Debug, Clone)]
 struct McpToolDeclaration {
     tool: ToolSurface,
@@ -356,6 +386,7 @@ fn extract_mcp_tool_declarations_from_source(
     content: &str,
 ) -> Vec<McpToolDeclaration> {
     let mut declarations = Vec::new();
+
     let mut offset = 0;
 
     while let Some(relative_start) = find_next_mcp_tool_call(&content[offset..]) {
@@ -1023,6 +1054,133 @@ fn parse_string_literal_at(content: &str, offset: usize) -> Option<(String, usiz
     None
 }
 
+fn extract_mcp_python_decorators(path: &Path, content: &str) -> Vec<ToolSurface> {
+    let mut tools = Vec::new();
+
+    let mut pending_tool_name: Option<String> = None;
+    let mut pending_description: Option<String> = None;
+    let mut pending_line: Option<usize> = None;
+
+    for (line_idx, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+
+        if let Some((explicit_name, description)) = parse_python_decorator_tool(trimmed) {
+            pending_tool_name = explicit_name;
+            pending_description = description;
+            pending_line = Some(line_idx + 1);
+            continue;
+        }
+
+        // A decorator applies to the next top-level function definition.
+        if pending_line.is_some() {
+            if let Some(name) = parse_python_function_name(trimmed) {
+                let tool_name = pending_tool_name.take().unwrap_or_else(|| name.to_string());
+                let description = pending_description.take();
+                tools.push(ToolSurface {
+                    name: tool_name,
+                    description,
+                    input_schema: None,
+                    output_schema: None,
+                    declared_permissions: Vec::new(),
+                    defined_at: Some(source_loc(path, pending_line.unwrap_or(line_idx + 1))),
+                    declared_capabilities: Default::default(),
+                    capability_declarations: Vec::new(),
+                    observed_capabilities: Default::default(),
+                    capability_observation_complete: false,
+                    capability_evidence: Vec::new(),
+                });
+                pending_line = None;
+                continue;
+            }
+
+            if !trimmed.is_empty() && !trimmed.starts_with('@') && !trimmed.starts_with("\"\"\"") {
+                pending_tool_name = None;
+                pending_description = None;
+                pending_line = None;
+            }
+        }
+    }
+
+    dedupe_tools_by_name(tools)
+}
+
+fn extract_mcp_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
+    let mut tools = if path.extension().and_then(|ext| ext.to_str()) == Some("py") {
+        extract_mcp_python_decorators(path, content)
+    } else {
+        Vec::new()
+    };
+
+    tools.extend(
+        extract_mcp_tool_declarations_from_source(path, content)
+            .into_iter()
+            .map(|declaration| declaration.tool),
+    );
+    dedupe_tools_by_name(tools)
+}
+
+fn parse_python_decorator_tool(line: &str) -> Option<(Option<String>, Option<String>)> {
+    let trimmed = line.trim();
+    if !trimmed.starts_with('@') {
+        return None;
+    }
+
+    let call_idx = trimmed.find(".tool(").or_else(|| trimmed.find("tool("))?;
+    let open_paren = trimmed[call_idx..]
+        .find('(')
+        .and_then(|idx| call_idx.checked_add(idx + 1))?;
+    let Some((name, after_name)) = parse_string_literal_at(trimmed, open_paren) else {
+        let arg_slice = &trimmed[open_paren..];
+        return Some((
+            parse_python_kwarg_string_arg(arg_slice, "name"),
+            parse_python_kwarg_string_arg(arg_slice, "description"),
+        ));
+    };
+    Some((Some(name), parse_next_string_argument(trimmed, after_name)))
+}
+
+fn parse_next_string_argument(content: &str, offset: usize) -> Option<String> {
+    let mut index = skip_whitespace(content, offset);
+    if content[index..].starts_with(',') {
+        index += 1;
+    } else {
+        return None;
+    }
+
+    let index = skip_whitespace(content, index);
+    parse_string_literal_at(content, index).map(|(value, _)| value)
+}
+
+fn parse_python_kwarg_string_arg(args: &str, key: &str) -> Option<String> {
+    let needle = format!("{key}=");
+    let idx = args.find(&needle)?;
+    let rest = &args[idx + needle.len()..];
+    let rest = rest.trim_start();
+    parse_string_literal_at(rest, 0).map(|(value, _)| value)
+}
+
+fn parse_python_function_name(line: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with("def ") && !trimmed.starts_with("async def ") {
+        return None;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("def ") {
+        let func = rest.split('(').next()?.trim();
+        if func.is_empty() {
+            return None;
+        }
+        return Some(func.to_string());
+    }
+
+    let rest = trimmed.strip_prefix("async def ")?;
+    let func = rest.split('(').next()?.trim();
+    if func.is_empty() {
+        return None;
+    }
+    Some(func.to_string())
+}
+
 fn skip_whitespace(content: &str, mut offset: usize) -> usize {
     while let Some(ch) = content[offset..].chars().next() {
         if !ch.is_whitespace() {
@@ -1207,7 +1365,7 @@ pub(super) fn parse_dependencies(
         }
     }
 
-    // Check for actual Python lockfiles
+    // Check for Python lockfiles
     for (filename, format) in [
         ("Pipfile.lock", LockfileFormat::PipenvLock),
         ("poetry.lock", LockfileFormat::PoetryLock),
@@ -1215,11 +1373,13 @@ pub(super) fn parse_dependencies(
     ] {
         let lock_path = root.join(filename);
         if lock_path.exists() && filter.allows_path(root, &lock_path) {
+            let content = std::fs::read_to_string(&lock_path).unwrap_or_default();
+            let (all_pinned, all_hashed) = detect_dependency_lock_confidence(format, &content);
             surface.lockfile = Some(LockfileInfo {
                 path: lock_path,
                 format,
-                all_pinned: true,
-                all_hashed: false,
+                all_pinned,
+                all_hashed,
             });
             break;
         }
@@ -1255,19 +1415,424 @@ pub(super) fn parse_dependencies(
             }
         }
 
-        // Check for lockfile
-        let lock = root.join("package-lock.json");
-        if lock.exists() {
-            surface.lockfile = Some(LockfileInfo {
-                path: lock,
-                format: dependency_surface::LockfileFormat::NpmLock,
-                all_pinned: true,
-                all_hashed: false,
-            });
+        // Check for npm / yarn / pnpm lockfiles
+        for (filename, format) in [
+            (
+                "package-lock.json",
+                dependency_surface::LockfileFormat::NpmLock,
+            ),
+            (
+                "pnpm-lock.yaml",
+                dependency_surface::LockfileFormat::PnpmLock,
+            ),
+            ("yarn.lock", dependency_surface::LockfileFormat::YarnLock),
+        ] {
+            let lock_path = root.join(filename);
+            if lock_path.exists() {
+                let content = std::fs::read_to_string(&lock_path).unwrap_or_default();
+                let (all_pinned, all_hashed) = detect_dependency_lock_confidence(format, &content);
+                surface.lockfile = Some(LockfileInfo {
+                    path: lock_path,
+                    format,
+                    all_pinned,
+                    all_hashed,
+                });
+                break;
+            }
         }
     }
 
     surface
+}
+
+fn detect_dependency_lock_confidence(
+    format: dependency_surface::LockfileFormat,
+    content: &str,
+) -> (bool, bool) {
+    match format {
+        dependency_surface::LockfileFormat::PipenvLock => detect_pipenv_lock_confidence(content),
+        dependency_surface::LockfileFormat::PoetryLock => detect_poetry_lock_confidence(content),
+        dependency_surface::LockfileFormat::UvLock => detect_uv_lock_confidence(content),
+        dependency_surface::LockfileFormat::NpmLock => detect_npm_lock_confidence(content),
+        dependency_surface::LockfileFormat::PnpmLock => detect_pnpm_lock_confidence(content),
+        dependency_surface::LockfileFormat::YarnLock => detect_yarn_lock_confidence(content),
+        dependency_surface::LockfileFormat::PipRequirements => (false, false),
+    }
+}
+
+fn detect_pipenv_lock_confidence(content: &str) -> (bool, bool) {
+    let Ok(value) = serde_json::from_str::<Value>(content) else {
+        return (false, false);
+    };
+
+    let mut all_pinned = true;
+    let mut all_hashed = true;
+    let mut packages_seen = 0usize;
+
+    for bucket_name in ["default", "develop", "packages", "dev-packages"] {
+        if let Some(bucket) = value.get(bucket_name).and_then(|v| v.as_object()) {
+            for (_, meta) in bucket {
+                let Some(meta_obj) = meta.as_object() else {
+                    continue;
+                };
+                packages_seen += 1;
+
+                let version = meta_obj
+                    .get("version")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .trim();
+                if !is_exact_pinned_version(version) {
+                    all_pinned = false;
+                }
+
+                let has_hash = meta_obj
+                    .get("hashes")
+                    .and_then(|v| v.as_array())
+                    .is_some_and(|hashes| !hashes.is_empty());
+                if !has_hash {
+                    all_hashed = false;
+                }
+            }
+        }
+    }
+
+    if packages_seen == 0 {
+        (false, false)
+    } else {
+        (all_pinned, all_hashed)
+    }
+}
+
+fn detect_poetry_lock_confidence(content: &str) -> (bool, bool) {
+    let Ok(value) = content.parse::<toml::Value>() else {
+        return (false, false);
+    };
+
+    let mut all_pinned = true;
+    let mut all_hashed = true;
+    let mut packages_seen = 0usize;
+
+    let Some(packages) = value.get("package").and_then(|v| v.as_array()) else {
+        return (false, false);
+    };
+
+    for pkg in packages {
+        let Some(pkg_obj) = pkg.as_table() else {
+            continue;
+        };
+        packages_seen += 1;
+
+        let version = pkg_obj
+            .get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        if !is_exact_pinned_version(version) {
+            all_pinned = false;
+        }
+
+        // Poetry lockfiles typically carry checksums in package.files[].hashes entries.
+        let mut package_hashed = false;
+        if let Some(files) = pkg_obj.get("files").and_then(|v| v.as_array()) {
+            if files.iter().any(|entry| {
+                entry
+                    .as_table()
+                    .is_some_and(|file_entry| file_entry.get("hash").is_some())
+            }) {
+                package_hashed = true;
+            }
+        }
+
+        if !package_hashed {
+            all_hashed = false;
+        }
+    }
+
+    if packages_seen == 0 {
+        (false, false)
+    } else {
+        (all_pinned, all_hashed)
+    }
+}
+
+fn detect_uv_lock_confidence(content: &str) -> (bool, bool) {
+    let Ok(value) = content.parse::<toml::Value>() else {
+        return (false, false);
+    };
+
+    let mut all_pinned = true;
+    let mut all_hashed = true;
+    let mut packages_seen = 0usize;
+
+    let Some(packages) = value
+        .get("package")
+        .or_else(|| value.get("packages"))
+        .and_then(|v| v.as_array())
+    else {
+        return (false, false);
+    };
+
+    for pkg in packages {
+        let Some(pkg_obj) = pkg.as_table() else {
+            continue;
+        };
+        packages_seen += 1;
+
+        let version = pkg_obj
+            .get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        if !is_exact_pinned_version(version) {
+            all_pinned = false;
+        }
+
+        let has_hash = pkg_obj.get("hash").is_some()
+            || pkg_obj
+                .get("hashes")
+                .is_some_and(|v| !v.as_array().is_none_or(|arr| arr.is_empty()));
+        if !has_hash {
+            all_hashed = false;
+        }
+    }
+
+    if packages_seen == 0 {
+        (false, false)
+    } else {
+        (all_pinned, all_hashed)
+    }
+}
+
+fn detect_npm_lock_confidence(content: &str) -> (bool, bool) {
+    let Ok(value) = serde_json::from_str::<Value>(content) else {
+        return (false, false);
+    };
+
+    let mut all_pinned = true;
+    let mut all_hashed = true;
+    let mut packages_seen = 0usize;
+
+    if let Some(packages) = value.get("packages").and_then(|v| v.as_object()) {
+        for (_, pkg_value) in packages {
+            if let Some(pkg_obj) = pkg_value.as_object() {
+                packages_seen += 1;
+
+                let version = pkg_obj
+                    .get("version")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                if !is_exact_pinned_version(version) {
+                    all_pinned = false;
+                }
+
+                let has_integrity = pkg_obj
+                    .get("integrity")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|v| !v.trim().is_empty());
+                if !has_integrity {
+                    all_hashed = false;
+                }
+            }
+        }
+    }
+
+    if let Some(dependencies) = value.get("dependencies").and_then(|v| v.as_object()) {
+        for (_, dep_value) in dependencies {
+            if let Some(dep_obj) = dep_value.as_object() {
+                if let Some(version) = dep_obj.get("version").and_then(|v| v.as_str()) {
+                    packages_seen += 1;
+                    if !is_exact_pinned_version(version) {
+                        all_pinned = false;
+                    }
+
+                    let has_integrity = dep_obj
+                        .get("integrity")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|v| !v.trim().is_empty());
+                    if !has_integrity {
+                        all_hashed = false;
+                    }
+                } else if let Some(nested_deps) =
+                    dep_obj.get("dependencies").and_then(|v| v.as_object())
+                {
+                    for (_, nested_dep_value) in nested_deps {
+                        if let Some(nested_obj) = nested_dep_value.as_object() {
+                            packages_seen += 1;
+                            let version = nested_obj
+                                .get("version")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default();
+                            if !is_exact_pinned_version(version) {
+                                all_pinned = false;
+                            }
+
+                            let has_integrity = nested_obj
+                                .get("integrity")
+                                .and_then(|v| v.as_str())
+                                .is_some_and(|v| !v.trim().is_empty());
+                            if !has_integrity {
+                                all_hashed = false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if packages_seen == 0 {
+        (false, false)
+    } else {
+        (all_pinned, all_hashed)
+    }
+}
+
+fn detect_pnpm_lock_confidence(content: &str) -> (bool, bool) {
+    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(content) else {
+        return (false, false);
+    };
+
+    let mut all_pinned = true;
+    let mut all_hashed = true;
+    let mut packages_seen = 0usize;
+
+    let Some(packages) = value
+        .as_mapping()
+        .and_then(|m| m.get("packages"))
+        .and_then(|v| v.as_mapping())
+    else {
+        return (false, false);
+    };
+
+    for (_key, package_value) in packages {
+        let Some(package_obj) = package_value.as_mapping() else {
+            continue;
+        };
+        packages_seen += 1;
+
+        let version = package_obj
+            .get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim();
+        if !is_exact_pinned_version(version) {
+            all_pinned = false;
+        }
+
+        let has_integrity = package_obj
+            .get("resolution")
+            .and_then(|v| v.as_mapping())
+            .and_then(|r| r.get("integrity"))
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| !v.trim().is_empty())
+            || package_obj
+                .get("integrity")
+                .and_then(|v| v.as_str())
+                .is_some_and(|v| !v.trim().is_empty());
+        if !has_integrity {
+            all_hashed = false;
+        }
+    }
+
+    if packages_seen == 0 {
+        (false, false)
+    } else {
+        (all_pinned, all_hashed)
+    }
+}
+
+fn detect_yarn_lock_confidence(content: &str) -> (bool, bool) {
+    let mut all_pinned = true;
+    let mut all_hashed = true;
+    let mut packages_seen = 0usize;
+
+    let mut in_package_block = false;
+    let mut current_has_version = false;
+    let mut current_has_integrity = false;
+
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let is_package_header =
+            !raw_line.starts_with(' ') && !raw_line.starts_with('\t') && line.ends_with(':');
+        if is_package_header {
+            if in_package_block {
+                if !current_has_version {
+                    all_pinned = false;
+                }
+                if !current_has_integrity {
+                    all_hashed = false;
+                }
+            }
+
+            in_package_block = !line.starts_with("__");
+            current_has_version = false;
+            current_has_integrity = false;
+            if in_package_block {
+                packages_seen += 1;
+            }
+            continue;
+        }
+
+        if !in_package_block {
+            continue;
+        }
+
+        if raw_line.starts_with(' ') || raw_line.starts_with('\t') {
+            if line.starts_with("version ") {
+                current_has_version = true;
+            }
+            if line.starts_with("resolved ") || line.starts_with("integrity ") {
+                current_has_integrity = true;
+            }
+        }
+    }
+
+    if in_package_block {
+        if !current_has_version {
+            all_pinned = false;
+        }
+        if !current_has_integrity {
+            all_hashed = false;
+        }
+    }
+
+    if packages_seen == 0 {
+        (false, false)
+    } else {
+        (all_pinned, all_hashed)
+    }
+}
+
+fn is_exact_pinned_version(version: &str) -> bool {
+    let version = version.trim();
+    if version.is_empty() {
+        return false;
+    }
+
+    let normalized = version
+        .trim_start_matches("==")
+        .trim_start_matches("~=")
+        .trim_start_matches('=')
+        .trim_start_matches("v")
+        .trim();
+
+    if normalized.contains('*')
+        || normalized.contains('x')
+        || normalized.contains('>')
+        || normalized.contains('<')
+        || normalized.contains('^')
+        || normalized.contains('~')
+        || normalized.contains('|')
+        || normalized.contains(',')
+        || normalized.contains(' ')
+    {
+        return false;
+    }
+
+    true
 }
 
 /// Find the 1-based line number where a JSON key (e.g. `"package-name"`) appears.
@@ -2026,5 +2591,42 @@ function handleFetch(url: string) { return fetch(url) }
         assert!(!bindings[0].handler_resolved);
         assert!(bindings[0].execution.network_operations.is_empty());
         assert!(bindings[0].resolved_callees.is_empty());
+    }
+
+    #[test]
+    fn extracts_python_mcp_tool_decorators() {
+        let content = r#"
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("demo")
+
+@mcp.tool(name="search", description="Search web")
+async def search(query: str):
+    return []
+
+@mcp.tool()
+def status():
+    return {}
+"#;
+
+        let tools = extract_mcp_tools_from_source(Path::new("src/mcp/server.py"), content);
+        assert_eq!(tools.len(), 2);
+        assert_eq!(tools[0].name, "search");
+        assert_eq!(tools[0].description.as_deref(), Some("Search web"));
+        assert_eq!(tools[1].name, "status");
+    }
+
+    #[test]
+    fn extracts_python_mcp_tool_call_syntax() {
+        let content = r#"
+server = FastMCP("demo")
+
+server.tool("echo", "Run echo command")
+"#;
+
+        let tools = extract_mcp_tools_from_source(Path::new("src/mcp/server.py"), content);
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "echo");
+        assert_eq!(tools[0].description.as_deref(), Some("Run echo command"));
     }
 }

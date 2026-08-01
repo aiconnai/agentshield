@@ -27,10 +27,25 @@ export function resolveBinary(configured: string): string {
   return configured || "agentshield";
 }
 
-export function buildScanArgs(workspacePath: string, ignoreTests: boolean): string[] {
+export function buildScanArgs(
+  workspacePath: string,
+  ignoreTests: boolean,
+  configPath = "",
+  baselinePath = "",
+  failOn = ""
+): string[] {
   const args = ["scan", workspacePath, "--format", "json"];
   if (ignoreTests) {
     args.push("--ignore-tests");
+  }
+  if (configPath && configPath.trim().length > 0) {
+    args.push("--config", configPath.trim());
+  }
+  if (baselinePath && baselinePath.trim().length > 0) {
+    args.push("--baseline", baselinePath.trim());
+  }
+  if (failOn && failOn.trim().length > 0) {
+    args.push("--fail-on", failOn.trim());
   }
   return args;
 }
@@ -49,9 +64,18 @@ export async function runScan(
   const binary = findBinary();
   const config = vscode.workspace.getConfiguration("agentshield");
   const ignoreTests = config.get<boolean>("ignoreTests", true);
+  const failOn = config.get<string>("failOn", "");
+  const configPath = config.get<string>("configPath", "");
+  const baselinePath = config.get<string>("baselinePath", "");
   const timeout = config.get<number>("timeout", 30) * 1000;
 
-  const args = buildScanArgs(workspacePath, ignoreTests);
+  const args = buildScanArgs(
+    workspacePath,
+    ignoreTests,
+    configPath,
+    baselinePath,
+    failOn
+  );
 
   output.appendLine(`> ${binary} ${args.join(" ")}`);
 
@@ -75,10 +99,10 @@ export async function runScan(
     // Binary not found
     if (isExecError(err) && err.code === "ENOENT") {
       output.appendLine(
-        `Binary not found: "${binary}". Install via: cargo install agent-shield`
+        `Binary not found: "${binary}". Install via: brew tap limaronaldo/engram && brew install agentshield (macOS) or cargo install agentshield`
       );
       vscode.window.showWarningMessage(
-        `AgentShield binary not found. Install via "cargo install agent-shield" or set agentshield.binaryPath.`
+        `AgentShield binary not found. Install via "brew tap limaronaldo/engram && brew install agentshield" or "cargo install agentshield".`
       );
       return null;
     }
