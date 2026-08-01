@@ -95,6 +95,14 @@ enum Commands {
         #[arg(long, value_name = "PATH")]
         baseline: Option<PathBuf>,
 
+        /// Extra include patterns for scan path filtering (repeatable).
+        #[arg(long, value_name = "PATTERN")]
+        include: Vec<String>,
+
+        /// Extra exclude patterns for scan path filtering (repeatable).
+        #[arg(long, value_name = "PATTERN")]
+        exclude: Vec<String>,
+
         /// Write all current findings as a baseline file
         #[arg(long, value_name = "PATH")]
         write_baseline: Option<PathBuf>,
@@ -324,6 +332,8 @@ fn main() {
             output,
             ignore_tests,
             baseline,
+            include: include_patterns,
+            exclude: exclude_patterns,
             write_baseline,
             emit_egress_policy,
             explain,
@@ -336,6 +346,8 @@ fn main() {
             output_path: output,
             ignore_tests,
             baseline_path: baseline,
+            include_patterns,
+            exclude_patterns,
             write_baseline_path: write_baseline,
             emit_egress_policy_path: emit_egress_policy,
             explain,

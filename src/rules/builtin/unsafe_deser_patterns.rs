@@ -126,3 +126,75 @@ fn is_comment_start(line: &str, idx: usize, language: Language) -> bool {
         _ => line[idx..].starts_with('#') || line[idx..].starts_with("//"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::Language;
+
+    #[test]
+    fn detects_unsafe_deserializer_case_insensitive() {
+        assert_eq!(is_unsafe_deserializer("PickLe.LoaDs"), Some("pickle.loads"));
+        assert_eq!(
+            is_unsafe_deserializer("Yaml.UnSafe_Load"),
+            Some("yaml.unsafe_load")
+        );
+    }
+
+    #[test]
+    fn strips_python_literals_from_code_scan() {
+        let mut state = LiteralScanState::default();
+        let yaml_quote = code_outside_literals(
+            "cfg = \"pickle.loads(user_input)\"",
+            Language::Python,
+            &mut state,
+        );
+        assert!(!yaml_quote.contains("pickle.loads"));
+        assert!(yaml_quote.contains("cfg = "));
+
+        let yaml_quote = code_outside_literals(
+            "val = 'yaml.unsafe_load(data)'",
+            Language::Python,
+            &mut state,
+        );
+        assert!(!yaml_quote.contains("yaml.unsafe_load"));
+    }
+
+    #[test]
+    fn strips_python_triple_quoted_blocks() {
+        let mut state = LiteralScanState::default();
+        let before = code_outside_literals("yaml.load(data)", Language::Python, &mut state);
+        assert_eq!(before, "yaml.load(data)");
+
+        assert_eq!(
+            code_outside_literals("\"\"\"", Language::Python, &mut state),
+            "   "
+        );
+        let in_block =
+            code_outside_literals("  pickle.loads(user_input)", Language::Python, &mut state);
+        assert!(!in_block.contains("pickle.loads"));
+        let _ = code_outside_literals("\"\"\"", Language::Python, &mut state);
+        let after = code_outside_literals("yaml.load(real)", Language::Python, &mut state);
+        assert_eq!(after, "yaml.load(real)");
+    }
+
+    #[test]
+    fn strips_js_comments_and_string_literals() {
+        assert!(
+            !code_outside_literals(
+                "console.log('eval()') // vm.runInContext('x')",
+                Language::TypeScript,
+                &mut LiteralScanState::default()
+            )
+            .contains("vm.runInContext")
+        );
+    }
+
+    #[test]
+    fn keeps_non_literal_js_function_calls() {
+        let line = "payload = JSON.parse(user_input)";
+        let mut state = LiteralScanState::default();
+        let output = code_outside_literals(line, Language::TypeScript, &mut state);
+        assert_eq!(output, line);
+    }
+}

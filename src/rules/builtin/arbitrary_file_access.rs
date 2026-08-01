@@ -76,3 +76,69 @@ impl Detector for ArbitraryFileAccessDetector {
         findings
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir;
+    use crate::ir::execution_surface::{FileOpType, FileOperation};
+    use std::path::PathBuf;
+
+    fn target_with_file_ops(file_ops: Vec<FileOperation>) -> ir::ScanTarget {
+        ir::ScanTarget {
+            name: "sample".into(),
+            framework: ir::Framework::Mcp,
+            root_path: PathBuf::from("."),
+            tools: vec![],
+            execution: crate::ir::ExecutionSurface {
+                commands: vec![],
+                file_operations: file_ops,
+                network_operations: vec![],
+                env_accesses: vec![],
+                dynamic_exec: vec![],
+            },
+            data: ir::DataSurface::default(),
+            dependencies: ir::DependencySurface::default(),
+            provenance: ir::ProvenanceSurface::default(),
+            source_files: vec![],
+        }
+    }
+
+    fn loc() -> crate::ir::SourceLocation {
+        crate::ir::SourceLocation {
+            file: PathBuf::from("test.py"),
+            line: 1,
+            column: 0,
+            end_line: None,
+            end_column: None,
+        }
+    }
+
+    #[test]
+    fn flags_parameter_file_path() {
+        let target = target_with_file_ops(vec![FileOperation {
+            operation: FileOpType::Read,
+            path_arg: crate::ir::ArgumentSource::Parameter {
+                name: "path".into(),
+            },
+            location: loc(),
+        }]);
+
+        let findings = ArbitraryFileAccessDetector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-004");
+        assert_eq!(findings[0].severity, crate::rules::Severity::High);
+    }
+
+    #[test]
+    fn ignores_literal_file_path() {
+        let target = target_with_file_ops(vec![FileOperation {
+            operation: FileOpType::Read,
+            path_arg: crate::ir::ArgumentSource::Literal("fixtures/data.json".into()),
+            location: loc(),
+        }]);
+
+        let findings = ArbitraryFileAccessDetector.run(&target);
+        assert!(findings.is_empty());
+    }
+}

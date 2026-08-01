@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::error::Result;
+use crate::rules::policy::PolicyVerdict;
 use crate::rules::{Finding, OwaspMcp, RuleMetadata, Severity};
 
 use serde_json::{Value, json};
@@ -25,6 +26,33 @@ pub fn render_with_metadata(
     target_name: &str,
     scan_root: &Path,
     rule_metadata: &[RuleMetadata],
+) -> Result<String> {
+    render_impl(findings, target_name, scan_root, rule_metadata, None)
+}
+
+/// Render SARIF with registry metadata and the evaluated policy verdict.
+pub fn render_with_metadata_and_verdict(
+    findings: &[Finding],
+    target_name: &str,
+    scan_root: &Path,
+    rule_metadata: &[RuleMetadata],
+    verdict: &PolicyVerdict,
+) -> Result<String> {
+    render_impl(
+        findings,
+        target_name,
+        scan_root,
+        rule_metadata,
+        Some(verdict),
+    )
+}
+
+fn render_impl(
+    findings: &[Finding],
+    target_name: &str,
+    scan_root: &Path,
+    rule_metadata: &[RuleMetadata],
+    verdict: Option<&PolicyVerdict>,
 ) -> Result<String> {
     let meta_by_id: BTreeMap<&str, &RuleMetadata> =
         rule_metadata.iter().map(|m| (m.id.as_str(), m)).collect();
@@ -129,13 +157,26 @@ pub fn render_with_metadata(
 
             // Merge remediation and fingerprint into the properties bag.
             let fingerprint = f.fingerprint(scan_root);
-            result["properties"] = match &f.remediation {
-                Some(remediation) => json!({
-                    "fingerprint": fingerprint,
-                    "remediation": remediation,
-                }),
-                None => json!({ "fingerprint": fingerprint }),
-            };
+            let mut properties = json!({
+                "fingerprint": fingerprint,
+                "attack_category": f.attack_category.to_string(),
+                "confidence": f.confidence.to_string(),
+                "result_severity": f.severity,
+            });
+            if let Some(verdict) = verdict {
+                properties["verdict"] = json!(verdict.pass);
+                properties["fail_threshold"] = json!(verdict.fail_threshold);
+            }
+            if let Some(ref remediation) = f.remediation {
+                properties["remediation"] = json!(remediation);
+            }
+            if let Some(ref taint_path) = f.taint_path {
+                if let Ok(taint_value) = serde_json::to_value(taint_path) {
+                    properties["taint_path"] = taint_value;
+                }
+            }
+
+            result["properties"] = properties;
 
             Some(result)
         })

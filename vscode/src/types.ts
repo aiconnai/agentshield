@@ -18,7 +18,7 @@ export interface Finding {
   rule_name: string;
   severity: Severity;
   confidence: "low" | "medium" | "high";
-  attack_category: string;
+  attack_category: AttackCategory;
   message: string;
   location: SourceLocation | null;
   evidence: Evidence[];
@@ -50,5 +50,17 @@ export interface PolicyVerdict {
   highest_severity: Severity | null;
   fail_threshold: string;
 }
+
+export type AttackCategory =
+  | "command_injection"
+  | "code_injection"
+  | "credential_exfiltration"
+  | "ssrf"
+  | "arbitrary_file_access"
+  | "supply_chain"
+  | "self_modification"
+  | "prompt_injection_surface"
+  | "excessive_permissions"
+  | "data_exfiltration";
 
 export type Severity = "info" | "low" | "medium" | "high" | "critical";

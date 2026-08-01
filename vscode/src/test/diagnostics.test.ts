@@ -54,7 +54,7 @@ const finding = {
   rule_name: "Unsafe tool",
   severity: "high" as const,
   confidence: "high" as const,
-  attack_category: "execution",
+  attack_category: "command_injection" as const,
   message: "Unsafe command",
   location: { file: "/workspace/a.py", line: 2, column: 3, end_line: null, end_column: null },
   evidence: [{

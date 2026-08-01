@@ -199,6 +199,22 @@ fn print_doctor_console(report: &DoctorReport) {
     println!("Fail on: {}", report.fail_on);
     println!("Ignore tests: {}", report.ignore_tests);
     println!(
+        "Include: {}",
+        if report.include_patterns.is_empty() {
+            "<none>".to_string()
+        } else {
+            report.include_patterns.join(", ")
+        }
+    );
+    println!(
+        "Exclude: {}",
+        if report.exclude_patterns.is_empty() {
+            "<none>".to_string()
+        } else {
+            report.exclude_patterns.join(", ")
+        }
+    );
+    println!(
         "Features: python={}, typescript={}, runtime={}",
         report.enabled_features.python,
         report.enabled_features.typescript,

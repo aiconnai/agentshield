@@ -241,12 +241,27 @@ impl Config {
     /// Called automatically by `load()`. Exposed for testing via
     /// `validate_for_test()`.
     fn validate(&self) -> Result<()> {
+        let mut seen_fingerprints = std::collections::HashSet::new();
         for s in &self.policy.suppressions {
             if s.reason.trim().is_empty() {
                 return Err(ShieldError::Config(format!(
                     "Suppression for fingerprint '{}' must have a non-empty reason",
                     s.fingerprint,
                 )));
+            }
+            if !seen_fingerprints.insert(s.fingerprint.clone()) {
+                return Err(ShieldError::Config(format!(
+                    "Duplicate suppression entry for fingerprint '{}'",
+                    s.fingerprint
+                )));
+            }
+            if let Some(expires) = &s.expires {
+                chrono::NaiveDate::parse_from_str(expires, "%Y-%m-%d").map_err(|_| {
+                    ShieldError::Config(format!(
+                        "Invalid suppression expiry date '{expires}' for fingerprint '{}'; expected YYYY-MM-DD",
+                        s.fingerprint
+                    ))
+                })?;
             }
         }
         let _ = ScanPathFilter::from_scan_config(&self.scan, self.scan.ignore_tests)?;

@@ -2,7 +2,7 @@
   "name": "agentshield",
   "displayName": "AgentShield",
   "description": "Security scanner for AI agent extensions — inline findings for MCP, LangChain, CrewAI, OpenClaw",
-  "version": "0.1.0",
+  "version": "0.8.7",
   "publisher": "aiconnai",
   "license": "MIT",
   "repository": {
@@ -29,7 +29,16 @@
     "workspaceContains:**/package.json",
     "workspaceContains:**/pyproject.toml",
     "workspaceContains:**/SKILL.md",
-    "workspaceContains:**/langgraph.json"
+    "workspaceContains:**/langgraph.json",
+    "workspaceContains:**/.cursorrules",
+    "workspaceContains:**/openapi.json",
+    "workspaceContains:**/openapi.yaml",
+    "workspaceContains:**/openapi.yml",
+    "workspaceContains:**/.agentshield.toml",
+    "workspaceContains:**/requirements.txt",
+    "workspaceContains:**/Cargo.toml",
+    "workspaceContains:**/hermes.json",
+    "workspaceContains:**/.hermes.md"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -46,6 +55,22 @@
           "type": "string",
           "default": "",
           "description": "Path to agentshield binary (leave empty to use PATH)"
+        },
+        "agentshield.configPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to .agentshield.toml (leave empty to auto-detect in workspace)"
+        },
+        "agentshield.baselinePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional baseline file to filter existing findings (leave empty to disable)"
+        },
+        "agentshield.failOn": {
+          "type": "string",
+          "default": "",
+          "enum": ["", "info", "low", "medium", "high", "critical"],
+          "description": "Optional minimum severity to fail on (defaults to config value)"
         },
         "agentshield.ignoreTests": {
           "type": "boolean",

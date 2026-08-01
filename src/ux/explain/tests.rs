@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::ScanReport;
 use crate::config::ScanPathFilterSummary;
 use crate::ir::{Framework, Language, ScanTarget, SourceFile};
+use crate::output::OutputFormat;
 use crate::rules::policy::PolicyVerdict;
 use crate::rules::{AttackCategory, Confidence, Evidence, Finding, Severity};
 
@@ -46,6 +47,7 @@ fn report(findings: Vec<Finding>) -> ScanReport {
             fail_threshold: Severity::High,
         },
         scan_root: PathBuf::from("."),
+        format: OutputFormat::Console,
         targets: vec![ScanTarget {
             name: "fixture".into(),
             framework: Framework::Mcp,

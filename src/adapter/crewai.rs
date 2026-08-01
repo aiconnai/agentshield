@@ -49,42 +49,16 @@ impl super::Adapter for CrewAiAdapter {
         }
 
         // Check Python files for crewai imports (only top-level, not recursive)
-        if let Ok(entries) = std::fs::read_dir(root) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "py") {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if content.contains("from crewai")
-                            || content.contains("import crewai")
-                            || content.contains("from crewai_tools")
-                            || content.contains("import crewai_tools")
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Also check src/ directory for imports (common CrewAI layout)
-        let src_dir = root.join("src");
-        if src_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&src_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.extension().is_some_and(|e| e == "py") {
-                        if let Ok(content) = std::fs::read_to_string(&path) {
-                            if content.contains("from crewai")
-                                || content.contains("import crewai")
-                                || content.contains("from crewai_tools")
-                                || content.contains("import crewai_tools")
-                            {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
+        if super::mcp::has_recursive_python_import(
+            root,
+            &[
+                "from crewai",
+                "import crewai",
+                "from crewai_tools",
+                "import crewai_tools",
+            ],
+        ) {
+            return true;
         }
 
         false
@@ -137,7 +111,9 @@ impl super::Adapter for CrewAiAdapter {
 mod tests {
     use super::*;
     use crate::adapter::Adapter;
+    use std::io::Write;
     use std::path::PathBuf;
+    use tempfile::TempDir;
 
     #[test]
     fn test_detect_crewai_via_pyproject() {
@@ -228,5 +204,18 @@ mod tests {
                 sf.path
             );
         }
+    }
+
+    #[test]
+    fn test_detect_crewai_nested_python_import() {
+        let tmp_root = TempDir::new().unwrap();
+        let nested_dir = tmp_root.path().join("src/pkg");
+        std::fs::create_dir_all(&nested_dir).unwrap();
+
+        let mut file = std::fs::File::create(nested_dir.join("tool.py")).unwrap();
+        writeln!(file, "from crewai_tools import BaseTool").unwrap();
+
+        let adapter = CrewAiAdapter;
+        assert!(adapter.detect(tmp_root.path()));
     }
 }

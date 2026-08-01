@@ -46,6 +46,9 @@ pub struct ScanOptions {
     /// Path to config file (defaults to `.agentshield.toml` in scan dir).
     pub config_path: Option<std::path::PathBuf>,
     /// Output format.
+    ///
+    /// Carried through in [`ScanReport::format`] so downstream callers can inspect
+    /// or reuse the caller's chosen format consistently.
     pub format: OutputFormat,
     /// CLI override for fail_on threshold.
     pub fail_on_override: Option<rules::Severity>,
@@ -70,6 +73,8 @@ pub struct ScanReport {
     pub target_name: String,
     pub findings: Vec<Finding>,
     pub verdict: PolicyVerdict,
+    /// Format preference selected by the caller.
+    pub format: OutputFormat,
     /// Absolute (or canonicalized) path to the scanned directory.
     /// Passed to output renderers for stable fingerprint computation.
     pub scan_root: std::path::PathBuf,
@@ -132,6 +137,7 @@ pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
         target_name,
         findings: effective_findings,
         verdict,
+        format: options.format,
         scan_root,
         targets,
         path_filter_summary,

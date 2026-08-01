@@ -21,6 +21,8 @@ pub struct DoctorReport {
     pub config_found: bool,
     pub fail_on: String,
     pub ignore_tests: bool,
+    pub include_patterns: Vec<String>,
+    pub exclude_patterns: Vec<String>,
     pub enabled_features: EnabledFeatures,
     pub detected_adapters: Vec<String>,
     pub available_adapters: Vec<String>,
@@ -55,6 +57,8 @@ pub fn run_doctor(
         config_found,
         fail_on: config.policy.fail_on.to_string(),
         ignore_tests,
+        include_patterns: config.scan.include.clone(),
+        exclude_patterns: config.scan.exclude.clone(),
         enabled_features: EnabledFeatures {
             python: cfg!(feature = "python"),
             typescript: cfg!(feature = "typescript"),
@@ -82,6 +86,8 @@ mod tests {
         assert!(!report.config_found);
         assert_eq!(report.fail_on, "high");
         assert!(!report.ignore_tests);
+        assert!(report.include_patterns.is_empty());
+        assert!(report.exclude_patterns.is_empty());
         assert_eq!(report.enabled_features.python, cfg!(feature = "python"));
         assert_eq!(
             report.enabled_features.typescript,

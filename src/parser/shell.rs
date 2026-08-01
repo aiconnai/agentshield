@@ -402,6 +402,7 @@ curl "$safe_path"
         assert!(matches!(
             parsed.network_operations[0].url_arg,
             ArgumentSource::Parameter { ref name } if name == "$1"
+
         ));
     }
 
