@@ -174,6 +174,7 @@ fn render_impl(
                 if let Ok(taint_value) = serde_json::to_value(taint_path) {
                     properties["taint_path"] = taint_value;
                 }
+                result["codeFlows"] = build_sarif_code_flow(taint_path);
             }
 
             result["properties"] = properties;
@@ -193,20 +194,99 @@ fn render_impl(
         driver["taxonomies"] = json!(taxonomies);
     }
 
+    let mut run = json!({
+        "tool": { "driver": driver },
+        "results": results,
+        "automationDetails": {
+            "id": format!("agentshield/{}", target_name),
+        },
+    });
+
+    if let Some(verdict) = verdict {
+        run["properties"] = json!({
+            "pass": verdict.pass,
+            "fail_threshold": verdict.fail_threshold,
+            "total_findings": verdict.total_findings,
+            "effective_findings": verdict.effective_findings,
+        });
+        run["invocations"] = json!([{
+            "executionSuccessful": verdict.pass,
+        }]);
+    }
+
     let sarif = json!({
         "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
         "version": "2.1.0",
-        "runs": [{
-            "tool": { "driver": driver },
-            "results": results,
-            "automationDetails": {
-                "id": format!("agentshield/{}", target_name),
-            },
-        }],
+        "runs": [run],
     });
 
     let output = serde_json::to_string_pretty(&sarif)?;
     Ok(output)
+}
+
+fn build_sarif_code_flow(taint_path: &crate::ir::data_surface::TaintPath) -> Value {
+    let mut thread_flow_locations: Vec<Value> = Vec::new();
+
+    let src_loc = &taint_path.source.location;
+    thread_flow_locations.push(json!({
+        "location": {
+            "message": { "text": format!("Source ({:?}): {}", taint_path.source.source_type, taint_path.source.description) },
+            "physicalLocation": {
+                "artifactLocation": {
+                    "uri": src_loc.file.display().to_string(),
+                },
+                "region": {
+                    "startLine": src_loc.line,
+                    "startColumn": src_loc.column + 1,
+                }
+            }
+        },
+        "importance": "essential",
+        "nestingLevel": 0
+    }));
+
+    for (i, hop) in taint_path.through.iter().enumerate() {
+        thread_flow_locations.push(json!({
+            "location": {
+                "message": { "text": format!("Step {}", i + 1) },
+                "physicalLocation": {
+                    "artifactLocation": {
+                        "uri": hop.file.display().to_string(),
+                    },
+                    "region": {
+                        "startLine": hop.line,
+                        "startColumn": hop.column + 1,
+                    }
+                }
+            },
+            "importance": "important",
+            "nestingLevel": 0
+        }));
+    }
+
+    let sink_loc = &taint_path.sink.location;
+    thread_flow_locations.push(json!({
+        "location": {
+            "message": { "text": format!("Sink ({:?}): {}", taint_path.sink.sink_type, taint_path.sink.description) },
+            "physicalLocation": {
+                "artifactLocation": {
+                    "uri": sink_loc.file.display().to_string(),
+                },
+                "region": {
+                    "startLine": sink_loc.line,
+                    "startColumn": sink_loc.column + 1,
+                }
+            }
+        },
+        "importance": "essential",
+        "nestingLevel": 0
+    }));
+
+    json!([{
+        "threadFlows": [{
+            "locations": thread_flow_locations
+        }]
+    }])
 }
 
 fn severity_to_sarif_level(severity: Severity) -> &'static str {
@@ -345,5 +425,95 @@ mod tests {
             [0]["results"];
         assert_eq!(results_bare, results_meta);
         assert_eq!(results_bare[0]["properties"]["fingerprint"], fp);
+    }
+
+    #[test]
+    fn renders_code_flow_for_taint_path() {
+        use crate::ir::data_surface::{
+            TaintPath, TaintSink, TaintSinkType, TaintSource, TaintSourceType,
+        };
+        use crate::rules::policy::PolicyVerdict;
+
+        let mut finding = make_finding("SHIELD-001");
+        finding.taint_path = Some(TaintPath {
+            source: TaintSource {
+                source_type: TaintSourceType::ToolArgument,
+                description: "cmd argument".into(),
+                location: SourceLocation {
+                    file: PathBuf::from("src/tools.py"),
+                    line: 5,
+                    column: 0,
+                    end_line: None,
+                    end_column: None,
+                },
+            },
+            sink: TaintSink {
+                sink_type: TaintSinkType::ProcessExec,
+                description: "subprocess.run".into(),
+                location: SourceLocation {
+                    file: PathBuf::from("src/tools.py"),
+                    line: 25,
+                    column: 4,
+                    end_line: None,
+                    end_column: None,
+                },
+            },
+            through: vec![SourceLocation {
+                file: PathBuf::from("src/tools.py"),
+                line: 15,
+                column: 2,
+                end_line: None,
+                end_column: None,
+            }],
+            confidence: 0.9,
+        });
+
+        let verdict = PolicyVerdict {
+            pass: false,
+            total_findings: 1,
+            effective_findings: 1,
+            highest_severity: Some(Severity::Critical),
+            fail_threshold: Severity::High,
+        };
+
+        let rendered = super::render_with_metadata_and_verdict(
+            &[finding],
+            "fixture",
+            Path::new("."),
+            &[],
+            &verdict,
+        )
+        .unwrap();
+
+        let log: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+        let run = &log["runs"][0];
+        assert_eq!(run["properties"]["pass"], false);
+        assert_eq!(run["invocations"][0]["executionSuccessful"], false);
+
+        let result = &run["results"][0];
+        let code_flows = result["codeFlows"].as_array().unwrap();
+        assert_eq!(code_flows.len(), 1);
+        let locations = code_flows[0]["threadFlows"][0]["locations"]
+            .as_array()
+            .unwrap();
+        assert_eq!(locations.len(), 3); // Source + Step 1 + Sink
+        assert!(
+            locations[0]["location"]["message"]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Source")
+        );
+        assert!(
+            locations[1]["location"]["message"]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Step 1")
+        );
+        assert!(
+            locations[2]["location"]["message"]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Sink")
+        );
     }
 }

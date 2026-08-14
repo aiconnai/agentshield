@@ -360,4 +360,30 @@ mod tests {
             "redacted logging fixture should not trigger secret leakage: {findings:?}"
         );
     }
+
+    #[test]
+    fn detects_secret_store_to_response_to_llm() {
+        let mut target = empty_target();
+        target.data.taint_paths.push(TaintPath {
+            source: TaintSource {
+                source_type: TaintSourceType::SecretStore,
+                description: "keychain.get_api_key()".into(),
+                location: loc(),
+            },
+            sink: TaintSink {
+                sink_type: TaintSinkType::ResponseToLlm,
+                description: "tool_response".into(),
+                location: loc(),
+            },
+            through: vec![],
+            confidence: 0.95,
+        });
+
+        let findings = SecretLeakageDetector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-018");
+        assert_eq!(findings[0].severity, Severity::High);
+        assert!(findings[0].message.contains("secret store"));
+        assert!(findings[0].message.contains("LLM response"));
+    }
 }

@@ -10,14 +10,15 @@ use crate::ir::{ArgumentSource, Language, SourceLocation};
 
 pub struct ShellParser;
 
-static CURL_WGET_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?m)\b(curl|wget)\s+").expect("static regex pattern is valid"));
+static CURL_WGET_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?m)\b(curl|wget|aria2c|http|https)\s+").expect("static regex pattern is valid")
+});
 
 static EVAL_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?m)\beval\s+").expect("static regex pattern is valid"));
 
 static INSTALL_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?m)\b(pip3?\s+install|npm\s+install|npm\s+i\b|yarn\s+add|pnpm\s+add)")
+    Regex::new(r"(?m)\b(pip3?\s+install|npm\s+install|npm\s+i\b|yarn\s+add|pnpm\s+add|cargo\s+install|gem\s+install|go\s+install)")
         .expect("static regex pattern is valid")
 });
 
@@ -463,5 +464,27 @@ curl "$safe_path"
         let code = "res=\"`cmd1` `cmd2`\"";
         let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
         assert_eq!(parsed.commands.len(), 2);
+    }
+
+    #[test]
+    fn detects_aria2c_and_httpie() {
+        let code = "aria2c https://example.com/file.tar.gz\nhttp https://api.example.com/data\n";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert_eq!(parsed.network_operations.len(), 2);
+        assert_eq!(parsed.network_operations[0].function, "aria2c");
+        assert_eq!(parsed.network_operations[1].function, "http");
+    }
+
+    #[test]
+    fn detects_cargo_gem_and_go_install() {
+        let code = "cargo install evil-crate\ngem install evil-gem\ngo install github.com/evil/pkg@latest\n";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert_eq!(parsed.commands.len(), 3);
+        assert!(
+            parsed
+                .commands
+                .iter()
+                .all(|c| c.function == "package_install")
+        );
     }
 }

@@ -403,4 +403,48 @@ mod tests {
             "Phase 2 should not fire on Parameter sources (that's SHIELD-003)"
         );
     }
+
+    #[test]
+    fn detects_ipv6_metadata_and_private_patterns() {
+        let mut target = empty_target();
+        target.execution.network_operations.push(NetworkOperation {
+            function: "requests.get".into(),
+            url_arg: ArgumentSource::Literal("http://[fd00:ec2::254]/latest/meta-data/".into()),
+            method: Some("GET".into()),
+            sends_data: false,
+            location: loc(),
+        });
+        target.execution.network_operations.push(NetworkOperation {
+            function: "fetch".into(),
+            url_arg: ArgumentSource::Literal("http://169.254.170.2/v2/metadata".into()),
+            method: Some("GET".into()),
+            sends_data: false,
+            location: SourceLocation {
+                file: PathBuf::from("test.py"),
+                line: 20,
+                column: 0,
+                end_line: None,
+                end_column: None,
+            },
+        });
+        target.execution.network_operations.push(NetworkOperation {
+            function: "axios.get".into(),
+            url_arg: ArgumentSource::Literal("http://[::1]:8080/admin".into()),
+            method: Some("GET".into()),
+            sends_data: false,
+            location: SourceLocation {
+                file: PathBuf::from("test.py"),
+                line: 30,
+                column: 0,
+                end_line: None,
+                end_column: None,
+            },
+        });
+
+        let findings = MetadataSsrfDetector.run(&target);
+        assert_eq!(findings.len(), 3);
+        assert_eq!(findings[0].rule_id, "SHIELD-013");
+        assert_eq!(findings[1].rule_id, "SHIELD-013");
+        assert_eq!(findings[2].rule_id, "SHIELD-013");
+    }
 }

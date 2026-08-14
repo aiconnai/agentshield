@@ -82,7 +82,7 @@ pub fn render(
 </tr>"#,
                 sev_class = sev_class,
                 severity = f.severity.to_string().to_uppercase(),
-                rule_id = f.rule_id,
+                rule_id = html_escape(&f.rule_id),
                 rule_name = html_escape(&f.rule_name),
                 message = html_escape(&f.message),
                 location = html_escape(&location),
@@ -90,7 +90,7 @@ pub fn render(
                 confidence = f.confidence,
                 evidence = evidence_html,
                 remediation = html_escape(remediation),
-                fingerprint = fingerprint,
+                fingerprint = html_escape(&fingerprint),
             )
         })
         .collect();
@@ -272,4 +272,60 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#x27;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rules::{AttackCategory, Confidence};
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_html_escape_special_chars() {
+        let input = "<script>alert('xss' & \"foo\")</script>";
+        let escaped = html_escape(input);
+        assert_eq!(
+            escaped,
+            "&lt;script&gt;alert(&#x27;xss&#x27; &amp; &quot;foo&quot;)&lt;/script&gt;"
+        );
+    }
+
+    #[test]
+    fn test_html_report_escapes_xss_in_target_and_finding() {
+        let finding = Finding {
+            rule_id: "<SHIELD-XSS>".into(),
+            rule_name: "XSS <Rule>".into(),
+            severity: Severity::High,
+            confidence: Confidence::High,
+            attack_category: AttackCategory::CommandInjection,
+            message: "<img src=x onerror=alert(1)>".into(),
+            location: None,
+            evidence: vec![],
+            taint_path: None,
+            remediation: Some("<script>fix()</script>".into()),
+            cwe_id: None,
+        };
+
+        let verdict = PolicyVerdict {
+            pass: false,
+            total_findings: 1,
+            effective_findings: 1,
+            highest_severity: Some(Severity::High),
+            fail_threshold: Severity::High,
+        };
+
+        let html = render(
+            &[finding],
+            &verdict,
+            "<script>bad_target</script>",
+            &PathBuf::from("/tmp"),
+        )
+        .unwrap();
+
+        assert!(!html.contains("<script>bad_target</script>"));
+        assert!(html.contains("&lt;script&gt;bad_target&lt;/script&gt;"));
+        assert!(!html.contains("<img src=x"));
+        assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"));
+        assert!(html.contains("&lt;SHIELD-XSS&gt;"));
+    }
 }

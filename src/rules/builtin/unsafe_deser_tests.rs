@@ -162,3 +162,45 @@ fn ignores_yaml_load_in_markdown() {
     let findings = UnsafeDeserDetector.run(&target);
     assert!(findings.is_empty());
 }
+
+#[test]
+fn detects_jsonpickle_marshal_and_shelve() {
+    let target_jsonpickle = target_with_source(
+        Language::Python,
+        "import jsonpickle\nobj = jsonpickle.decode(payload)\n",
+    );
+    let findings = UnsafeDeserDetector.run(&target_jsonpickle);
+    assert_eq!(findings.len(), 1);
+    assert!(findings[0].message.contains("jsonpickle.decode"));
+
+    let target_marshal = target_with_source(
+        Language::Python,
+        "import marshal\ncode = marshal.loads(raw_bytes)\n",
+    );
+    let findings = UnsafeDeserDetector.run(&target_marshal);
+    assert_eq!(findings.len(), 1);
+    assert!(findings[0].message.contains("marshal.loads"));
+
+    let target_shelve = target_with_source(
+        Language::Python,
+        "import shelve\ndb = shelve.open(user_path)\n",
+    );
+    let findings = UnsafeDeserDetector.run(&target_shelve);
+    assert_eq!(findings.len(), 1);
+    assert!(findings[0].message.contains("shelve.open"));
+}
+
+#[test]
+fn detects_js_function_constructor() {
+    let mut target = empty_target();
+    target.execution.dynamic_exec.push(DynamicExec {
+        function: "new Function(".into(),
+        code_arg: ArgumentSource::Parameter {
+            name: "code_str".into(),
+        },
+        location: loc(),
+    });
+    let findings = UnsafeDeserDetector.run(&target);
+    assert_eq!(findings.len(), 1);
+    assert!(findings[0].message.contains("Function("));
+}

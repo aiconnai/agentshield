@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.8] - 2026-08-14
+
+### Added
+
+- SARIF 2.1.0 `codeFlows` and `threadFlows` for taint paths, providing end-to-end dataflow visualization in SARIF viewers and GitHub Code Scanning.
+- Run-level policy verdict metadata (`pass`, `fail_threshold`, `total_findings`, `effective_findings`, `invocations.executionSuccessful`) in SARIF output.
+- `ScanReport::render(&self, format: OutputFormat) -> Result<String>` library API for standardized report generation.
+- JSON output `schema_version` and severity summary statistics (`critical`, `high`, `medium`, `low`, `info`).
+- Shell parser support for `http`/`https` (HTTPie), `aria2c`, `cargo install`, `gem install`, and `go install`.
+- MCP adapter support for bare Python decorators (`@mcp.tool`, `@tool`) without parentheses.
+- Dedicated unit tests for High and Critical detectors (SHIELD-013, SHIELD-015, SHIELD-016, SHIELD-017, SHIELD-018).
+- CI workflow step for VS Code extension compilation.
+
+### Changed
+
+- `agentshield suppress` now uses `toml_edit` to mutate `.agentshield.toml` in-place, preserving comments, formatting, and layout.
+- Tightened SHIELD-007 (Prompt Injection Surface) to verify tainted URL arguments for fallback requests.
+- Tightened SHIELD-014 (Download-Write-Execute Chain) to verify script/executable targets or matching executed file arguments.
+
+### Fixed
+
+- Escaped `rule_id`, `target_name`, and `fingerprint` in HTML reports to prevent XSS.
+- Expanded VS Code extension activation events to cover all 7 supported framework patterns.
+- Updated VS Code scanner missing binary warning with Homebrew tap installation instructions.
+
 ## [0.8.7] - 2026-06-15
 
 ### Added
