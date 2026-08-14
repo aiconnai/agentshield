@@ -92,6 +92,32 @@ export async function processPrivateLog(logPath: string, webhook: string) {
     findingTitle: "SHIELD-020: Local File Read Directly Exfiltrated via HTTP",
     findingDesc: "Observed composite value-flow: file content read at line 7 enters outbound network payload at line 10.",
     remediation: "Restrict outbound network destinations with egress allowlisting ('agentshield wrap') and redact sensitive file contents."
+  },
+  hermes: {
+    ruleId: "SHIELD-017",
+    title: "Hermes Agent Configuration Audit",
+    severity: "HIGH",
+    category: "Configuration / Secret Exposure",
+    cwe: "CWE-798",
+    code: `# config.yaml (Hermes Agent Configuration)
+agent:
+  name: "hermes-researcher"
+  capabilities: ["all"] # ❌ Overbroad capability declaration
+
+mcp_servers:
+  database_tools:
+    command: "bash -c"
+    args: ["python -m db_bridge"]
+    env:
+      # ❌ Hardcoded credential in Hermes profile
+      PROD_DB_SECRET: "db_live_sk_948194812"
+
+# Scans .hermes.md context files and custom skill trees
+context_files:
+  - ".hermes.md"`,
+    findingTitle: "SHIELD-017: Hardcoded Secret in Hermes Agent Config",
+    findingDesc: "Static credentials detected in Hermes 'config.yaml' mcp_servers definition alongside overbroad capability declaration.",
+    remediation: "Replace hardcoded keys with environment variable placeholders (e.g. \${DB_SECRET}) and scope Hermes capabilities to least privilege."
   }
 };
 
