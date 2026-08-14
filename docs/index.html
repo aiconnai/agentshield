@@ -3,13 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AgentShield — Security Scanner & Runtime Guard for AI Agent Extensions</title>
-  <meta name="description" content="AgentShield is an offline-first, multi-framework security scanner and runtime guard for AI agent tools, MCP servers, OpenClaw skills, CrewAI, LangChain, and GPT Actions.">
-  <meta name="keywords" content="AI agent security, MCP security scanner, Model Context Protocol, LangChain security, CrewAI scanner, prompt injection, SSRF, tool security, SARIF, GitHub Actions">
-  <meta property="og:title" content="AgentShield — AI Agent Security Scanner & Runtime Guard">
+  <title>AgentShield — AI Agent Security Scanner for ChatGPT, Claude, Antigravity, Cursor, Codex & MCP</title>
+  <meta name="description" content="Offline-first security scanner & runtime guard for AI agent tools: ChatGPT Actions, Claude Code & Desktop, Google Antigravity, OpenAI Codex & Agents SDK, Cursor Rules, Hermes Agent, CrewAI, LangGraph, and Model Context Protocol (MCP) servers.">
+  <meta name="keywords" content="ChatGPT security, OpenAI Codex security, Google Antigravity, Antigravity SDK, Claude Code security, Claude Desktop MCP, Model Context Protocol, MCP security scanner, Cursor Rules, Hermes Agent, LangGraph, CrewAI, OpenClaw, Browser Use, AI Agent SAST, prompt injection scanner, SSRF scanner, SARIF, GitHub Code Scanning">
+  <meta property="og:title" content="AgentShield — AI Agent Security & SAST for ChatGPT, Claude, Antigravity, Codex & MCP">
   <meta property="og:description" content="Find risky behavior in MCP and AI agent extensions before they ship. 100% offline, cross-function taint tracking, auto-remediation, and SARIF output.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://aiconnai.github.io/agentshield/">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "AgentShield",
+    "headline": "AI Agent Security Scanner & Runtime Guard",
+    "operatingSystem": "Linux, macOS, Windows",
+    "applicationCategory": "SecurityApplication",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "softwareVersion": "1.0.0",
+    "description": "Offline security scanner and runtime guard for AI agent extensions across MCP, ChatGPT Actions, Google Antigravity, Claude Code, OpenAI Codex, Cursor Rules, Hermes Agent, LangGraph, and CrewAI.",
+    "url": "https://aiconnai.github.io/agentshield/",
+    "downloadUrl": "https://crates.io/crates/agent-shield",
+    "author": {
+      "@type": "Organization",
+      "name": "AgentShield Contributors"
+    }
+  }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -59,7 +82,7 @@
       </div>
       <h1>Don't Let AI Agents Execute Rogue Tools.</h1>
       <p>
-        One unvetted MCP tool can read your AWS secrets, execute arbitrary bash commands, or pivot through your private VPC. <strong>AgentShield hunts down command injection, credential exfiltration, and toxic flows in &lt;50ms — 100% offline.</strong>
+        One unvetted tool can read your AWS secrets, execute arbitrary shell scripts, or pivot through your private VPC. <strong>AgentShield hardens agents built on ChatGPT, Claude Code & Desktop, Google Antigravity, OpenAI Codex, Cursor, Hermes Agent, LangGraph, and CrewAI in &lt;50ms — 100% offline.</strong>
       </p>
       <div class="hero-cta">
         <a href="#quickstart" class="btn btn-primary">
@@ -341,36 +364,36 @@ server.tool(
 
       <div class="ecosystem-grid">
         <div class="ecosystem-card">
+          <h4>ChatGPT & OpenAI Codex</h4>
+          <p>Audits Custom GPT Actions, OpenAPI schemas, OpenAI Agents SDK tool definitions, and Codex code execution surfaces.</p>
+        </div>
+        <div class="ecosystem-card">
+          <h4>Google Antigravity & Gemini</h4>
+          <p>Hardens Google Antigravity (AGY) agent tools, subagents, and Gemini tool-calling workflows against command injection and SSRF.</p>
+        </div>
+        <div class="ecosystem-card">
+          <h4>Claude Desktop & Claude Code</h4>
+          <p>Validates MCP configurations, server manifests, and terminal capabilities before agents execute tools on your machine.</p>
+        </div>
+        <div class="ecosystem-card">
+          <h4>Model Context Protocol (MCP)</h4>
+          <p>Deep AST and interprocedural taint analysis for TypeScript and Python MCP servers, tool schemas, and stdio/SSE endpoints.</p>
+        </div>
+        <div class="ecosystem-card">
+          <h4>Cursor & Cursor Rules</h4>
+          <p>Analyzes <code>.cursorrules</code> and AI IDE guidance files for toxic prompt injection, unauthorized network egress, and shell execution.</p>
+        </div>
+        <div class="ecosystem-card">
           <h4>Hermes Agent</h4>
           <p>Audits Hermes config/profiles (<code>config.yaml</code>, <code>~/.hermes/</code>), <code>mcp_servers</code> definitions, <code>.hermes.md</code> context surfaces, and skill trees.</p>
         </div>
         <div class="ecosystem-card">
-          <h4>Model Context Protocol (MCP)</h4>
-          <p>Scans TypeScript and Python MCP servers, manifests, schemas, and stdio/SSE endpoints.</p>
-        </div>
-        <div class="ecosystem-card">
-          <h4>Claude Desktop & Claude Code</h4>
-          <p>Validates MCP configurations before agents execute tools on your workstation.</p>
-        </div>
-        <div class="ecosystem-card">
-          <h4>Cursor & Cursor Rules</h4>
-          <p>Analyzes <code>.cursorrules</code> and tool guidance files for risky prompts, network egress, and command execution.</p>
-        </div>
-        <div class="ecosystem-card">
-          <h4>OpenAI Agents & GPT Actions</h4>
-          <p>Parses OpenAI function calling schemas, OpenAPI specs, and action manifests.</p>
-        </div>
-        <div class="ecosystem-card">
           <h4>LangChain & LangGraph</h4>
-          <p>Audits Python and TypeScript tool code, graph nodes, and dependency surfaces.</p>
+          <p>Audits Python and TypeScript multi-agent graphs, tool nodes, and dependency supply chain hygiene.</p>
         </div>
         <div class="ecosystem-card">
-          <h4>CrewAI Agents</h4>
-          <p>Audits CrewAI Python tool projects, custom <code>BaseTool</code> classes, and <code>@tool</code> decorators.</p>
-        </div>
-        <div class="ecosystem-card">
-          <h4>OpenClaw Skills</h4>
-          <p>Checks OpenClaw <code>SKILL.md</code> files, capabilities, and associated execution scripts.</p>
+          <h4>CrewAI, OpenClaw & Browser Use</h4>
+          <p>Protects autonomous role-playing agents, OpenClaw <code>SKILL.md</code> skills, and browser automation workflows (Playwright MCP, Browser Use).</p>
         </div>
       </div>
     </div>
