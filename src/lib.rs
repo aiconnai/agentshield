@@ -132,7 +132,10 @@ pub fn scan_with_path_filter_overrides(
     let ignore_tests = options.ignore_tests || config.scan.ignore_tests;
     let path_filter = ScanPathFilter::from_scan_config(&config.scan, ignore_tests)?;
     let path_filter_summary = path_filter.summary();
-    let bundles = adapter::auto_detect_analysis_with_filter(path, &path_filter)?;
+    let mut bundles = adapter::auto_detect_analysis_with_filter(path, &path_filter)?;
+
+    // Perform interprocedural call-graph taint propagation
+    crate::analysis::interprocedural::analyze_and_enrich_targets(&mut bundles);
 
     // Run detectors on all targets (built-in + custom)
     let mut engine = RuleEngine::new();

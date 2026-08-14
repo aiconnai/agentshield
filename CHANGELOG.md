@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-14
+
+### Added
+
+- **General Availability (GA) & Interprocedural Call-Graph Taint Engine**:
+  - Implemented cross-function and cross-method dataflow analysis in `src/analysis/interprocedural.rs`.
+  - Automated call-graph construction across Python and TypeScript modules.
+  - Interprocedural taint propagation tracking untrusted inputs passed through utility functions, helper wrappers, and class methods to downstream sinks (`subprocess.run`, `fetch`, arbitrary file operations).
+  - Enriched multi-hop `TaintPath` synthesis across all core detectors (`SHIELD-001`, `SHIELD-003`, `SHIELD-004`, `SHIELD-020`).
+- **Production API Stabilization**:
+  - Stabilized public library surfaces, IR types, and CLI interfaces.
+
 ## [0.9.3] - 2026-08-14
 
 ### Added
