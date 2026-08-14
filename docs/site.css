@@ -264,12 +264,48 @@ body {
   margin-bottom: 4px;
 }
 
-.metric-label {
+/* Models Compatibility Strip */
+.models-strip {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 36px auto 0;
+  max-width: 1050px;
+}
+
+.model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.model-badge:hover {
+  border-color: var(--border-highlight);
+  background: var(--bg-surface-elevated);
+  transform: translateY(-1px);
+}
+
+.model-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-emerald);
+}
+
+.model-vendor {
+  font-size: 0.75rem;
+  color: var(--text-muted);
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 /* Pain Points Section */

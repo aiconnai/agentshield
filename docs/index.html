@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AgentShield — AI Agent Security Scanner for ChatGPT, Claude, Antigravity, Cursor, Codex & MCP</title>
-  <meta name="description" content="Offline-first security scanner & runtime guard for AI agent tools: ChatGPT Actions, Claude Code & Desktop, Google Antigravity, OpenAI Codex & Agents SDK, Cursor Rules, Hermes Agent, CrewAI, LangGraph, and Model Context Protocol (MCP) servers.">
-  <meta name="keywords" content="ChatGPT security, OpenAI Codex security, Google Antigravity, Antigravity SDK, Claude Code security, Claude Desktop MCP, Model Context Protocol, MCP security scanner, Cursor Rules, Hermes Agent, LangGraph, CrewAI, OpenClaw, Browser Use, AI Agent SAST, prompt injection scanner, SSRF scanner, SARIF, GitHub Code Scanning">
-  <meta property="og:title" content="AgentShield — AI Agent Security & SAST for ChatGPT, Claude, Antigravity, Codex & MCP">
+  <title>AgentShield — AI Agent Security for Gemini 3.7, DeepSeek-V4, Grok 4.6, Claude 3.7, GPT-5 & Antigravity</title>
+  <meta name="description" content="Offline security scanner & runtime guard for AI agent tools: Compatible with Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, Claude 3.7 Sonnet, GPT-5, Qwen3.8, GLM-5.3, OpenAI Codex, Google Antigravity, Cursor, and Model Context Protocol (MCP).">
+  <meta name="keywords" content="Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, Claude 3.7 Sonnet, Qwen3.8, GLM-5.3, GPT-5, OpenAI Codex, Google Antigravity, ChatGPT security, MCP security scanner, Model Context Protocol, Cursor Rules, Hermes Agent, LangGraph, CrewAI, AI Agent SAST, prompt injection scanner, SSRF scanner, SARIF">
+  <meta property="og:title" content="AgentShield — Universal AI Agent Security for All Frontier LLMs">
   <meta property="og:description" content="Find risky behavior in MCP and AI agent extensions before they ship. 100% offline, cross-function taint tracking, auto-remediation, and SARIF output.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://aiconnai.github.io/agentshield/">
@@ -15,7 +15,7 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "AgentShield",
-    "headline": "AI Agent Security Scanner & Runtime Guard",
+    "headline": "Universal AI Agent Security Scanner & Runtime Guard",
     "operatingSystem": "Linux, macOS, Windows",
     "applicationCategory": "SecurityApplication",
     "offers": {
@@ -24,7 +24,7 @@
       "priceCurrency": "USD"
     },
     "softwareVersion": "1.0.0",
-    "description": "Offline security scanner and runtime guard for AI agent extensions across MCP, ChatGPT Actions, Google Antigravity, Claude Code, OpenAI Codex, Cursor Rules, Hermes Agent, LangGraph, and CrewAI.",
+    "description": "Offline security scanner and runtime guard for AI agent tools compatible with Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, Claude 3.7, GPT-5, Qwen3.8, GLM-5.3, Google Antigravity, OpenAI Codex, Cursor Rules, Hermes Agent, and MCP.",
     "url": "https://aiconnai.github.io/agentshield/",
     "downloadUrl": "https://crates.io/crates/agent-shield",
     "author": {
@@ -78,11 +78,11 @@
   <section class="hero">
     <div class="container">
       <div class="hero-tag">
-        <span>🔥 THE AGENT SECURITY FIREWALL</span> v1.0.0 GA Released
+        <span>🔥 UNIVERSAL AGENT SECURITY FIREWALL</span> v1.0.0 GA
       </div>
       <h1>Don't Let AI Agents Execute Rogue Tools.</h1>
       <p>
-        One unvetted tool can read your AWS secrets, execute arbitrary shell scripts, or pivot through your private VPC. <strong>AgentShield hardens agents built on ChatGPT, Claude Code & Desktop, Google Antigravity, OpenAI Codex, Cursor, Hermes Agent, LangGraph, and CrewAI in &lt;50ms — 100% offline.</strong>
+        One unvetted tool can read your AWS secrets, execute arbitrary shell scripts, or pivot through your private VPC. <strong>AgentShield provides model-agnostic, zero-trust security for agents powered by Gemini 3.7 Flash, DeepSeek-V4-Pro, Grok 4.6, Claude 3.7, GPT-5, Qwen3.8-27B, GLM-5.3, OpenAI Codex, and Google Antigravity in &lt;50ms — 100% offline.</strong>
       </p>
       <div class="hero-cta">
         <a href="#quickstart" class="btn btn-primary">
@@ -111,19 +111,19 @@
           <div class="terminal-title">bash — agentshield scan . --explain</div>
         </div>
         <div class="terminal-body" id="hero-terminal">
-          <div><span class="t-prompt">$</span> <span class="t-cmd">agentshield scan ./mcp-server --fail-on high --explain</span></div>
-          <div class="t-banner">  AgentShield v1.0.0 (offline security scanner)</div>
-          <div class="t-dim">  Target: ./mcp-server [Framework: MCP (Python)]</div>
-          <div class="t-dim">  Parsed 12 files (AST + Interprocedural Call Graph) in 24ms</div>
+          <div><span class="t-prompt">$</span> <span class="t-cmd">agentshield scan ./agent-tools --fail-on high --explain</span></div>
+          <div class="t-banner">  AgentShield v1.0.0 (offline agent security engine)</div>
+          <div class="t-dim">  Target: ./agent-tools [Adapters: MCP, OpenAI Codex, Google Antigravity]</div>
+          <div class="t-dim">  Parsed 18 files (AST + Interprocedural Call Graph) in 24ms</div>
           <br>
-          <div><span class="t-crit">[BLOCKED]</span> <span class="t-target">server.py:18</span> <span class="t-crit">SHIELD-001 (Critical)</span> — Interprocedural Command Injection</div>
-          <div class="t-dim">  Flow: Tool 'run_git' param 'branch' -> helper_exec() -> subprocess.run(shell=True)</div>
+          <div><span class="t-crit">[BLOCKED]</span> <span class="t-target">tools/executor.py:18</span> <span class="t-crit">SHIELD-001 (Critical)</span> — Interprocedural Command Injection</div>
+          <div class="t-dim">  Flow: Tool 'exec_task' param 'query' -> helper_format() -> subprocess.run(shell=True)</div>
           <br>
-          <div><span class="t-warn">[FIXABLE]</span> <span class="t-target">config.py:42</span> <span class="t-warn">SHIELD-016 (High)</span> — Insecure yaml.load() deserializer</div>
+          <div><span class="t-warn">[FIXABLE]</span> <span class="t-target">config/settings.py:42</span> <span class="t-warn">SHIELD-016 (High)</span> — Insecure yaml.load() deserializer</div>
           <div class="t-dim">  Remediation: Auto-fixable in 1 click</div>
           <br>
           <div><span class="t-prompt">$</span> <span class="t-cmd">agentshield fix .</span></div>
-          <div class="t-pass">[PASS] Fixed SHIELD-016 in config.py: replaced 'yaml.load' -> 'yaml.safe_load'</div>
+          <div class="t-pass">[PASS] Fixed SHIELD-016 in settings.py: replaced 'yaml.load' -> 'yaml.safe_load'</div>
           <div><span class="t-pass">✔ 1 patch applied cleanly. Zero vulnerabilities remaining.</span></div>
         </div>
       </div>
@@ -151,6 +151,20 @@
           <div class="metric-label">Auto-Remediation</div>
         </div>
       </div>
+
+      <!-- Frontier Models Compatibility Strip -->
+      <div style="margin-top: 36px; text-align: center;">
+        <span style="font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;">Compatible with All Frontier LLMs & Agent Architectures</span>
+        <div class="models-strip">
+          <span class="model-badge"><span class="model-dot"></span>Gemini 3.7 Flash <span class="model-vendor">Google</span></span>
+          <span class="model-badge"><span class="model-dot"></span>DeepSeek-V4-Pro <span class="model-vendor">DeepSeek</span></span>
+          <span class="model-badge"><span class="model-dot"></span>Grok 4.6 <span class="model-vendor">xAI</span></span>
+          <span class="model-badge"><span class="model-dot"></span>Claude 3.7 Sonnet <span class="model-vendor">Anthropic</span></span>
+          <span class="model-badge"><span class="model-dot"></span>GPT-5 & Codex <span class="model-vendor">OpenAI</span></span>
+          <span class="model-badge"><span class="model-dot"></span>Qwen3.8-27B <span class="model-vendor">Alibaba Cloud</span></span>
+          <span class="model-badge"><span class="model-dot"></span>GLM-5.3 <span class="model-vendor">Zhipu AI</span></span>
+          <span class="model-badge"><span class="model-dot"></span>Google Antigravity <span class="model-vendor">Google</span></span>
+          <span class="model-badge"><span class="model-dot"></span>Llama 4 & Hermes <span class="model-vendor">Open Source</span></span>
     </div>
   </section>
 
