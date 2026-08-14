@@ -25,7 +25,7 @@ call those tools.
 
 It runs as a CLI, GitHub Action, or library, keeps source code on your machine,
 and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML
-reports. The current release line is `0.9.1`.
+reports. The current release line is `0.9.2`.
 
 ## At a glance
 
@@ -179,7 +179,7 @@ Download from the [latest release](https://github.com/aiconnai/agentshield/relea
 For container consumers, the release image tag is:
 
 ```text
-ghcr.io/aiconnai/agentshield:0.9.1
+ghcr.io/aiconnai/agentshield:0.9.2
 ```
 
 ### Docker
@@ -187,9 +187,9 @@ ghcr.io/aiconnai/agentshield:0.9.1
 The GHCR image is built with the `full` feature set, including runtime `wrap` support and experimental runtime guard commands. The image is published for `linux/amd64` and `linux/arm64`.
 
 ```bash
-docker pull ghcr.io/aiconnai/agentshield:0.9.1
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.9.1 scan .
-docker run --rm ghcr.io/aiconnai/agentshield:0.9.1 --version
+docker pull ghcr.io/aiconnai/agentshield:0.9.2
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.9.2 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:0.9.2 --version
 ```
 
 If the GHCR package is private in your organization, authenticate first:

@@ -2,7 +2,7 @@
   "name": "agentshield",
   "displayName": "AgentShield",
   "description": "Security scanner for AI agent extensions — inline findings for MCP, LangChain, CrewAI, OpenClaw",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "publisher": "aiconnai",
   "license": "MIT",
   "repository": {
@@ -46,6 +46,10 @@
       {
         "command": "agentshield.scan",
         "title": "AgentShield: Scan Workspace"
+      },
+      {
+        "command": "agentshield.fix",
+        "title": "AgentShield: Auto-Remediate Fixable Findings"
       }
     ],
     "configuration": {
@@ -60,6 +64,11 @@
           "type": "string",
           "default": "",
           "description": "Optional path to .agentshield.toml (leave empty to auto-detect in workspace)"
+        },
+        "agentshield.rulesDir": {
+          "type": "string",
+          "default": "",
+          "description": "Optional directory containing custom declarative rules (*.yaml, *.yml, *.json)"
         },
         "agentshield.baselinePath": {
           "type": "string",
@@ -86,6 +95,11 @@
           "type": "boolean",
           "default": true,
           "description": "Scan workspace when opened"
+        },
+        "agentshield.enableQuickFix": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Lightbulb Quick-Fix code actions for fixable findings"
         },
         "agentshield.timeout": {
           "type": "number",
