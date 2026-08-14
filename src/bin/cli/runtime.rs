@@ -92,6 +92,48 @@ pub(super) fn cmd_mcp_proxy_transport(
     .map_err(agentshield::error::ShieldError::Io)
 }
 
+#[cfg(all(feature = "runtime-guard", feature = "runtime"))]
+pub(super) fn cmd_guard_http_sse(
+    listen: String,
+    target: String,
+    config_path: Option<PathBuf>,
+    audit_log: Option<PathBuf>,
+) -> agentshield::error::Result<i32> {
+    use agentshield::runtime::mcp_proxy_http::{HttpSseProxyConfig, run_http_sse_proxy};
+    use std::net::ToSocketAddrs;
+    use url::Url;
+
+    let listen_addr = listen
+        .to_socket_addrs()
+        .map_err(agentshield::error::ShieldError::Io)?
+        .next()
+        .ok_or_else(|| {
+            agentshield::error::ShieldError::Config(format!("Invalid listen address: {}", listen))
+        })?;
+
+    let target_url = Url::parse(&target).map_err(|e| {
+        agentshield::error::ShieldError::Config(format!("Invalid target URL: {}", e))
+    })?;
+
+    let policy = load_proxy_policy(config_path);
+
+    let config = HttpSseProxyConfig {
+        listen_addr,
+        target_url,
+        policy,
+        audit_log,
+    };
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(agentshield::error::ShieldError::Io)?;
+
+    rt.block_on(run_http_sse_proxy(config))?;
+
+    Ok(0)
+}
+
 #[cfg(feature = "runtime")]
 pub(super) fn cmd_wrap(
     policy_path: PathBuf,
