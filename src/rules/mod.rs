@@ -1,14 +1,16 @@
 pub mod builtin;
+pub mod custom;
 pub mod finding;
 pub mod policy;
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::analysis::DetectionInput;
 use crate::ir::ScanTarget;
 use crate::ir::SourceLocation;
 
+pub use custom::{CustomRuleDef, CustomRuleDetector, load_custom_rules_from_dir};
 pub use finding::{
     AttackCategory, Confidence, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
@@ -32,6 +34,7 @@ pub(crate) trait ContextDetector: Send + Sync {
 pub struct RuleEngine {
     detectors: Vec<Box<dyn Detector>>,
     context_detectors: Vec<Box<dyn ContextDetector>>,
+    custom_detectors: Vec<CustomRuleDetector>,
 }
 
 impl RuleEngine {
@@ -40,16 +43,32 @@ impl RuleEngine {
         Self {
             detectors: builtin::all_detectors(),
             context_detectors: builtin::all_context_detectors(),
+            custom_detectors: Vec::new(),
         }
+    }
+
+    /// Add custom rule detectors to the engine.
+    pub fn with_custom_rules(mut self, custom: Vec<CustomRuleDetector>) -> Self {
+        self.custom_detectors.extend(custom);
+        self
+    }
+
+    /// Load custom rules from a directory into this engine.
+    pub fn load_custom_rules_from(&mut self, dir: &Path) -> crate::error::Result<()> {
+        let loaded = custom::load_custom_rules_from_dir(dir)?;
+        self.custom_detectors.extend(loaded);
+        Ok(())
     }
 
     /// Run all detectors against a scan target.
     pub fn run(&self, target: &ScanTarget) -> Vec<Finding> {
-        let findings: Vec<Finding> = self.detectors.iter().flat_map(|d| d.run(target)).collect();
+        let mut findings: Vec<Finding> =
+            self.detectors.iter().flat_map(|d| d.run(target)).collect();
+        findings.extend(self.custom_detectors.iter().flat_map(|d| d.run(target)));
         apply_overlapping_rule_suppression(findings)
     }
 
-    /// Run all built-in detectors, including contextual detectors.
+    /// Run all built-in detectors, including contextual and custom detectors.
     pub(crate) fn run_with_context(&self, input: &DetectionInput<'_>) -> Vec<Finding> {
         let mut findings = self
             .detectors
@@ -61,12 +80,19 @@ impl RuleEngine {
                 .iter()
                 .flat_map(|detector| detector.run(input)),
         );
+        findings.extend(
+            self.custom_detectors
+                .iter()
+                .flat_map(|detector| detector.run(input.target)),
+        );
         apply_overlapping_rule_suppression(findings)
     }
 
-    /// List metadata for all registered rules.
+    /// List metadata for all registered rules, including custom rules.
     pub fn list_rules(&self) -> Vec<RuleMetadata> {
-        self.detectors.iter().map(|d| d.metadata()).collect()
+        let mut rules: Vec<RuleMetadata> = self.detectors.iter().map(|d| d.metadata()).collect();
+        rules.extend(self.custom_detectors.iter().map(|d| d.metadata()));
+        rules
     }
 
     /// List metadata for all scanner rules, including future contextual detectors.
@@ -77,6 +103,7 @@ impl RuleEngine {
             .map(|d| d.metadata())
             .collect::<Vec<_>>();
         rules.extend(self.context_detectors.iter().map(|d| d.metadata()));
+        rules.extend(self.custom_detectors.iter().map(|d| d.metadata()));
         rules
     }
 }

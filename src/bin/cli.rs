@@ -122,6 +122,10 @@ enum Commands {
         /// Add an experimental informational risk index (console or JSON only)
         #[arg(long)]
         experimental_risk: bool,
+
+        /// Directory containing custom declarative rules (*.yaml, *.yml, *.json)
+        #[arg(long, value_name = "PATH")]
+        rules_dir: Option<PathBuf>,
     },
 
     /// First-run setup: create config, inspect coverage, and run an explained scan
@@ -154,6 +158,10 @@ enum Commands {
         /// Output format (table, json)
         #[arg(long, short = 'f', default_value = "table")]
         format: String,
+
+        /// Optional directory containing custom declarative rules (*.yaml, *.yml, *.json)
+        #[arg(long, value_name = "PATH")]
+        rules_dir: Option<PathBuf>,
     },
 
     /// Generate a starter .agentshield.toml config file
@@ -355,6 +363,7 @@ fn main() {
             emit_egress_policy,
             explain,
             experimental_risk,
+            rules_dir,
         } => cmd_scan(ScanArgs {
             path,
             config,
@@ -369,6 +378,7 @@ fn main() {
             emit_egress_policy_path: emit_egress_policy,
             explain,
             experimental_risk,
+            rules_dir,
         }),
         Commands::Quickstart {
             path,
@@ -397,7 +407,7 @@ fn main() {
                 suite,
             }),
         },
-        Commands::ListRules { format } => cmd_list_rules(format),
+        Commands::ListRules { format, rules_dir } => cmd_list_rules(format, rules_dir),
         Commands::Init { force } => cmd_init(force),
         Commands::Suppress {
             fingerprint,

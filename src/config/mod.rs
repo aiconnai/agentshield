@@ -13,7 +13,17 @@ pub struct Config {
     #[serde(default)]
     pub scan: ScanConfig,
     #[serde(default)]
+    pub rules: RulesConfig,
+    #[serde(default)]
     pub runtime: RuntimeConfig,
+}
+
+/// `[rules]` section of the config file.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RulesConfig {
+    /// Directory containing custom declarative rules (*.yaml, *.yml, *.json).
+    #[serde(default)]
+    pub custom_dir: Option<std::path::PathBuf>,
 }
 
 /// `[scan]` section of the config file.
