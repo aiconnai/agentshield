@@ -237,6 +237,15 @@ body {
   margin: 0 auto 36px;
 }
 
+.hero-cta {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 56px;
+  flex-wrap: wrap;
+}
+
 /* Metrics Bar */
 .metrics-bar {
   display: grid;
