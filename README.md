@@ -25,7 +25,7 @@ call those tools.
 
 It runs as a CLI, GitHub Action, or library, keeps source code on your machine,
 and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML
-reports. The current release line is `0.8.7`.
+reports. The current release line is `0.8.8`.
 
 ## At a glance
 
@@ -137,7 +137,7 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 
 ```bash
 # Install the current release from GitHub with the full feature set
-cargo install --git https://github.com/aiconnai/agentshield --tag v0.8.7 --features full --force
+cargo install --git https://github.com/aiconnai/agentshield --tag v0.8.8 --features full --force
 
 # First-run setup: config + explained first scan
 agentshield quickstart
@@ -179,7 +179,7 @@ Download from the [latest release](https://github.com/aiconnai/agentshield/relea
 For container consumers, the release image tag is:
 
 ```text
-ghcr.io/aiconnai/agentshield:0.8.7
+ghcr.io/aiconnai/agentshield:0.8.8
 ```
 
 ### Docker
@@ -187,9 +187,9 @@ ghcr.io/aiconnai/agentshield:0.8.7
 The GHCR image is built with the `full` feature set, including runtime `wrap` support and experimental runtime guard commands. The image is published for `linux/amd64` and `linux/arm64`.
 
 ```bash
-docker pull ghcr.io/aiconnai/agentshield:0.8.7
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.7 scan .
-docker run --rm ghcr.io/aiconnai/agentshield:0.8.7 --version
+docker pull ghcr.io/aiconnai/agentshield:0.8.8
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.8 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:0.8.8 --version
 ```
 
 If the GHCR package is private in your organization, authenticate first:
@@ -455,5 +455,5 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- list-rules
 ```
 
-For release-specific notes, see `docs/releases/0.8.6.md`,
-`docs/releases/0.8.7.md`, and `docs/RELEASE_CHECKLIST.md`.
+For release-specific notes, see `docs/releases/0.8.7.md`,
+`docs/releases/0.8.8.md`, and `docs/RELEASE_CHECKLIST.md`.
