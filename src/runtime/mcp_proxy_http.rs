@@ -21,6 +21,8 @@ use crate::runtime::ProxyPolicy;
 use crate::runtime::mcp_proxy::{ProxyDecision, decide};
 use crate::runtime::redaction::redact_text;
 
+const MAX_HTTP_BODY_BYTES: usize = 10 * 1024 * 1024;
+
 /// Telemetry metrics for the HTTP / SSE proxy.
 #[derive(Debug, Default, Serialize)]
 pub struct ProxyMetrics {
@@ -187,6 +189,17 @@ async fn handle_connection(
             }
         }
         headers.push(header_line);
+    }
+
+    if content_length > MAX_HTTP_BODY_BYTES {
+        return send_http_response(
+            &mut client_write,
+            413,
+            "Payload Too Large",
+            "text/plain",
+            b"HTTP request body exceeds maximum allowed size (10MB)\n",
+        )
+        .await;
     }
 
     // Handle health endpoint
@@ -561,5 +574,40 @@ mod tests {
         assert!(resp.contains("HTTP/1.1 200 OK"));
         assert!(resp.contains(r#""status": "ok""#));
         assert!(resp.contains(r#""proxy": "agentshield-sse""#));
+    }
+
+    #[tokio::test]
+    async fn test_payload_too_large() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listen_addr = listener.local_addr().unwrap();
+
+        let config = Arc::new(HttpSseProxyConfig {
+            listen_addr,
+            target_url: Url::parse("http://127.0.0.1:9999").unwrap(),
+            policy: ProxyPolicy::default(),
+            audit_log: None,
+        });
+        let metrics = Arc::new(AtomicMetrics::new());
+
+        let cfg_clone = Arc::clone(&config);
+        let met_clone = Arc::clone(&metrics);
+        tokio::spawn(async move {
+            if let Ok((stream, peer)) = listener.accept().await {
+                let _ = handle_connection(stream, peer, cfg_clone, met_clone).await;
+            }
+        });
+
+        let mut client = TcpStream::connect(listen_addr).await.unwrap();
+        client
+            .write_all(b"POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 20000000\r\n\r\n")
+            .await
+            .unwrap();
+
+        let mut resp = String::new();
+        let (read_half, _) = client.split();
+        let mut reader = BufReader::new(read_half);
+        reader.read_to_string(&mut resp).await.unwrap();
+
+        assert!(resp.contains("HTTP/1.1 413 Payload Too Large"));
     }
 }
