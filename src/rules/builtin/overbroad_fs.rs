@@ -61,6 +61,50 @@ impl Detector for OverbroadFsDetector {
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
+        // Phase 1: Check taint paths from ToolArgument -> FileWrite
+        for path in &target.data.taint_paths {
+            if matches!(
+                path.source.source_type,
+                crate::ir::data_surface::TaintSourceType::ToolArgument
+            ) && matches!(
+                path.sink.sink_type,
+                crate::ir::data_surface::TaintSinkType::FileWrite
+            ) {
+                findings.push(Finding {
+                    rule_id: "SHIELD-015".into(),
+                    rule_name: "Overbroad Filesystem Scope".into(),
+                    severity: Severity::High,
+                    confidence: Confidence::High,
+                    attack_category: AttackCategory::ArbitraryFileAccess,
+                    message: format!(
+                        "Tool parameter '{}' flows to file write '{}' without scope restriction",
+                        path.source.description, path.sink.description
+                    ),
+                    location: Some(path.sink.location.clone()),
+                    evidence: vec![
+                        Evidence {
+                            description: format!("Source: {}", path.source.description),
+                            location: Some(path.source.location.clone()),
+                            snippet: None,
+                        },
+                        Evidence {
+                            description: format!("Sink: {}", path.sink.description),
+                            location: Some(path.sink.location.clone()),
+                            snippet: None,
+                        },
+                    ],
+                    taint_path: Some(path.clone()),
+                    remediation: Some(
+                        "Validate the path parameter against an allowlist of permitted \
+                         directories. Use path canonicalization and check that the \
+                         resolved path stays within the allowed scope."
+                            .into(),
+                    ),
+                    cwe_id: Some("CWE-552".into()),
+                });
+            }
+        }
+
         for file_op in &target.execution.file_operations {
             match &file_op.path_arg {
                 crate::ir::ArgumentSource::Literal(path_str) => {
@@ -260,5 +304,59 @@ mod tests {
 
         let findings = OverbroadFsDetector.run(&target);
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn detects_home_expansion_and_windows_drive_roots() {
+        let mut target = empty_target();
+        target.execution.file_operations.push(FileOperation {
+            operation: FileOpType::Read,
+            path_arg: ArgumentSource::Literal("os.path.expanduser('~')".into()),
+            location: loc(),
+        });
+        target.execution.file_operations.push(FileOperation {
+            operation: FileOpType::Write,
+            path_arg: ArgumentSource::Literal("C:\\".into()),
+            location: SourceLocation {
+                file: PathBuf::from("win.py"),
+                line: 15,
+                column: 0,
+                end_line: None,
+                end_column: None,
+            },
+        });
+
+        let findings = OverbroadFsDetector.run(&target);
+        assert_eq!(findings.len(), 2);
+        assert!(findings[0].message.contains("home directory expansion"));
+        assert!(findings[1].message.contains("root or home directory path"));
+    }
+
+    #[test]
+    fn detects_taint_path_to_file_write() {
+        use crate::ir::data_surface::{
+            TaintPath, TaintSink, TaintSinkType, TaintSource, TaintSourceType,
+        };
+
+        let mut target = empty_target();
+        target.data.taint_paths.push(TaintPath {
+            source: TaintSource {
+                source_type: TaintSourceType::ToolArgument,
+                description: "dest_path".into(),
+                location: loc(),
+            },
+            sink: TaintSink {
+                sink_type: TaintSinkType::FileWrite,
+                description: "open(dest_path, 'w')".into(),
+                location: loc(),
+            },
+            through: vec![],
+            confidence: 0.9,
+        });
+
+        let findings = OverbroadFsDetector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-015");
+        assert!(findings[0].taint_path.is_some());
     }
 }

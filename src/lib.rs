@@ -45,7 +45,7 @@ use rules::{Finding, RuleEngine};
 pub struct ScanOptions {
     /// Path to config file (defaults to `.agentshield.toml` in scan dir).
     pub config_path: Option<std::path::PathBuf>,
-    /// Output format.
+    /// Preferred output format for callers that render the resulting [`ScanReport`].
     pub format: OutputFormat,
     /// CLI override for fail_on threshold.
     pub fail_on_override: Option<rules::Severity>,
@@ -77,6 +77,13 @@ pub struct ScanReport {
     /// Used by callers that need to inspect the IR (e.g., `--emit-egress-policy`).
     pub targets: Vec<ScanTarget>,
     pub path_filter_summary: ScanPathFilterSummary,
+}
+
+impl ScanReport {
+    /// Render this report in the specified output format.
+    pub fn render(&self, format: OutputFormat) -> Result<String> {
+        render_report(self, format)
+    }
 }
 
 /// Run a complete scan: detect framework, parse, analyze, evaluate policy.

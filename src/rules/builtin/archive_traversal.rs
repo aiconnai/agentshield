@@ -312,4 +312,50 @@ mod tests {
         let findings = ArchiveTraversalDetector.run(&target);
         assert!(findings.is_empty());
     }
+
+    #[test]
+    fn detects_shutil_unpack_archive_and_tarfile_extractall() {
+        let mut target = empty_target();
+        target.source_files.push(SourceFile {
+            path: PathBuf::from("unpack.py"),
+            language: Language::Python,
+            content: "import shutil\nshutil.unpack_archive(uploaded_file, '/tmp/output')\n".into(),
+            size_bytes: 70,
+            content_hash: "def123".into(),
+        });
+        target.source_files.push(SourceFile {
+            path: PathBuf::from("tar_extract.py"),
+            language: Language::Python,
+            content:
+                "import tarfile\nwith tarfile.open(name) as tar:\n    tar.extractall('/tmp')\n"
+                    .into(),
+            size_bytes: 80,
+            content_hash: "ghi456".into(),
+        });
+
+        let findings = ArchiveTraversalDetector.run(&target);
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].rule_id, "SHIELD-017");
+        assert_eq!(findings[1].rule_id, "SHIELD-017");
+    }
+
+    #[test]
+    fn no_finding_when_commonpath_or_startswith_check_is_present() {
+        let mut target = empty_target();
+        target.source_files.push(SourceFile {
+            path: PathBuf::from("safe_tar.py"),
+            language: Language::Python,
+            content: "import tarfile, os\n\
+                tar = tarfile.open(name)\n\
+                for member in tar.getmembers():\n\
+                    if os.path.commonpath([dest, os.path.abspath(member.name)]) == dest:\n\
+                        tar.extract(member, dest)\n"
+                .into(),
+            size_bytes: 180,
+            content_hash: "jkl789".into(),
+        });
+
+        let findings = ArchiveTraversalDetector.run(&target);
+        assert!(findings.is_empty());
+    }
 }

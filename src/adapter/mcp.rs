@@ -1125,6 +1125,10 @@ fn parse_python_decorator_tool(line: &str) -> Option<(Option<String>, Option<Str
         return None;
     }
 
+    if trimmed.ends_with(".tool") || trimmed == "@tool" {
+        return Some((None, None));
+    }
+
     let call_idx = trimmed.find(".tool(").or_else(|| trimmed.find("tool("))?;
     let open_paren = trimmed[call_idx..]
         .find('(')
@@ -2628,5 +2632,22 @@ server.tool("echo", "Run echo command")
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "echo");
         assert_eq!(tools[0].description.as_deref(), Some("Run echo command"));
+    }
+
+    #[test]
+    fn extracts_python_bare_mcp_tool_decorators() {
+        let content = r#"
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("demo")
+
+@mcp.tool
+def calculate(expr: str):
+    return eval(expr)
+"#;
+
+        let tools = extract_mcp_tools_from_source(Path::new("src/mcp/server.py"), content);
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "calculate");
     }
 }
