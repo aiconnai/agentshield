@@ -3,38 +3,33 @@
 **Find risky behavior in MCP and AI agent extensions before they ship.**
 
 [![CI](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml/badge.svg)](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/Release-v1.0.0%20GA-success.svg)](https://github.com/aiconnai/agentshield/releases/tag/v1.0.0)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
+[![VS Code](https://img.shields.io/badge/VS%20Code-v1.0.0-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=aiconnai.agentshield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
-
-
 
 - [Contributing](CONTRIBUTING.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Security Policy](SECURITY.md)
 - [License](LICENSE)
-AgentShield is an offline Rust scanner for teams shipping tool-enabled agents
-across the current agent stack. Native adapters cover MCP servers, OpenClaw
-skills, Hermes Agent configs, CrewAI, LangChain/LangGraph, GPT Actions, and
-Cursor Rules; the same checks help harden repos built around OpenAI Agents SDK,
-Claude Code, Claude Desktop MCP setups, Browser Use, FastMCP, GitHub MCP Server,
-Playwright MCP, and other MCP-heavy workflows. It catches command injection,
-credential exfiltration, SSRF, unsafe file access, runtime package installs,
-prompt-injection surfaces, and dependency hygiene issues before an agent can
-call those tools.
 
-It runs as a CLI, GitHub Action, or library, keeps source code on your machine,
-and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML
-reports. The current release line is `1.0.0`.
+AgentShield is an offline, high-performance Rust security engine for teams shipping tool-enabled AI agents across the modern AI stack. Native adapters cover MCP servers, OpenClaw skills, Hermes Agent configs, CrewAI, LangChain/LangGraph, GPT Actions, and Cursor Rules; the same checks help harden repositories built around OpenAI Agents SDK, Claude Code, Claude Desktop MCP setups, Browser Use, FastMCP, GitHub MCP Server, Playwright MCP, and other tool-heavy workflows.
+
+It catches command injection, credential exfiltration, SSRF, unsafe file access, runtime package installs, prompt-injection surfaces, and dependency hygiene issues before an agent can call those tools.
+
+AgentShield runs as a CLI, GitHub Action, VS Code extension, or Rust library. It operates 100% offline, keeping source code on your machine, and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML reports. The current release line is `1.0.0` (General Availability).
 
 ## At a glance
 
 | Area | What AgentShield does |
 |------|------------------------|
 | Scanner surface | Normalizes seven framework/client families into one IR: MCP, OpenClaw, Hermes Agent, CrewAI, LangChain/LangGraph, GPT Actions, and Cursor Rules. |
-| Detection | Runs 20 built-in rules for command execution, credential exfiltration, composite toxic flows, capability mismatch, SSRF, filesystem risk, runtime installs, prompt surfaces, dependency hygiene, unsafe deserialization, secret leakage, and more. |
-| Workflow fit | Works locally, in CI, and in GitHub Code Scanning without sending source code to a hosted service. |
-| Boundary | AgentShield is not a hosted monitoring service, runtime sandbox, or allowlist marketplace. Experimental runtime guard entrypoints are available behind opt-in feature flags; the stable contract is static scanning plus policy evaluation. |
+| Interprocedural Taint | Deep cross-function & cross-method call-graph analysis tracking untrusted inputs through utility wrappers to execution sinks in Python and TypeScript. |
+| Detection | 20 built-in contextual rules plus a declarative YAML custom rule engine (`.agentshield/rules/*.yaml`). |
+| Automated Remediation | Instant auto-fixing (`agentshield fix`) and VS Code lightbulb code actions (`Cmd + .`) for unsafe deserializers and unpinned dependencies. |
+| Runtime Guard | Reverse proxy for MCP stdio and HTTP/SSE streams inspecting tool calls in real time and redacting leaked secrets. |
+| Workflow fit | Works locally, in CI, in VS Code, and in GitHub Code Scanning without sending source code to a hosted service. |
 
 For runtime guard scope and roadmap, see [docs/RUNTIME_GUARD.md](docs/RUNTIME_GUARD.md).
 
@@ -94,15 +89,26 @@ workflow that runs CodeQL, Gitleaks, Semgrep CE, and AgentShield together.
 |---------|:-----------:|:--------:|:--------------:|
 | Rust single binary | Yes | No | No |
 | Offline / local-first | Yes | Partial | No |
-| Multi-framework adapters | Yes | MCP-focused | MCP-focused |
-| Static analysis | tree-sitter + targeted parsers | Regex-oriented | Runtime/cloud-oriented |
-| Cross-file sanitizer analysis | Yes | No | No |
-| SARIF output | Yes | No | No |
-| GitHub Action | Yes | No | No |
+| Multi-framework adapters | Yes (7 frameworks) | MCP-focused | MCP-focused |
+| Interprocedural Call-Graph Taint | Yes | No | No |
+| Declarative Custom Rules (`.yaml`) | Yes | No | No |
+| Automated Remediation (`fix`) | Yes | No | No |
+| Runtime Guard MCP Proxy (stdio/SSE) | Yes | No | No |
+| Static analysis | tree-sitter + AST + regex | Regex-oriented | Runtime/cloud-oriented |
+| SARIF & HTML output | Yes | No | No |
+| GitHub Action & VS Code Extension | Yes | No | No |
 
 ---
 
 ## Quick Start
+
+### VS Code Extension
+
+Install the [AgentShield VS Code Extension](https://marketplace.visualstudio.com/items?itemName=aiconnai.agentshield) from the Visual Studio Marketplace for inline security findings and lightbulb quick-fixes:
+
+- **Inline Diagnostics**: Findings are highlighted as you type and on file save.
+- **Lightbulb Quick-Fixes (`Cmd + .` / `Alt + Enter`)**: Instant 1-click remediation for unsafe deserializers (`yaml.load` $\to$ `safe_load`) and unpinned dependencies.
+- **Interactive Suppressions**: Suppress false positives with a rationale saved directly to `.agentshield.toml`.
 
 ### GitHub Action
 
@@ -136,17 +142,27 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 ### CLI
 
 ```bash
-# Install the current release from GitHub with the full feature set
-cargo install --git https://github.com/aiconnai/agentshield --tag v0.8.8 --features full --force
+# Install the v1.0.0 GA release with the full feature set
+cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.0 --features full --force
 
 # First-run setup: config + explained first scan
 agentshield quickstart
 
-# Discover allowlisted local client configs without executing or scanning them
-agentshield discover --no-default-paths --root .
-
-# Understand the gate, coverage, confidence, and next actions
+# Scan an agent extension or MCP repository
 agentshield scan . --ignore-tests --fail-on high --explain
+
+# Automatically remediate fixable findings (preview diff with --dry-run)
+agentshield fix . --dry-run
+agentshield fix .
+
+# Scan with custom declarative rules
+agentshield scan . --rules-dir .agentshield/rules
+
+# Run runtime guard reverse-proxy for remote MCP SSE/HTTP endpoint
+agentshield guard --listen 127.0.0.1:8080 --target http://127.0.0.1:3000
+
+# Discover allowlisted local client configs without executing them
+agentshield discover --no-default-paths --root .
 
 # Add a GitHub Actions workflow
 agentshield ci install
@@ -161,11 +177,8 @@ agentshield ci install --baseline .agentshield-baseline.json
 # Generate a standalone HTML report
 agentshield scan ./my-agent-extension --format html --output report.html
 
-# List all rules
+# List all built-in and custom rules
 agentshield list-rules
-
-# Create starter config
-agentshield init
 ```
 
 If you only need static scanning in a published crates.io version, `cargo
@@ -301,13 +314,46 @@ process exit status. SARIF, HTML, and DSSE remain unchanged.
 
 ## Detection Rules
 
-AgentShield ships built-in rules for command execution, credential exfiltration, SSRF, arbitrary file access, runtime package installation, self-modification, prompt injection surfaces, excessive permissions, dependency hygiene, dynamic code execution, metadata service access, download-and-execute flows, overbroad filesystem capabilities, unsafe deserialization, archive traversal, and secret leakage.
+AgentShield ships 20 built-in contextual rules covering command execution, credential exfiltration, composite toxic flows, SSRF, arbitrary file access, runtime package installation, prompt injection surfaces, excessive capabilities, dependency hygiene, dynamic code execution, metadata service access, unsafe deserialization, and secret leakage.
 
 Use the CLI for the authoritative rule list in your installed version:
 
 ```bash
 agentshield list-rules
 agentshield list-rules --format json
+```
+
+### Custom Declarative Rules
+
+You can define custom organization security policies in `.agentshield/rules/*.yaml` or pass `--rules-dir <path>`:
+
+```yaml
+id: "ORG-001"
+name: "Banned Production Credentials"
+description: "Detects legacy hardcoded connection strings"
+severity: "high"
+attack_category: "credential_access"
+cwe_id: "CWE-798"
+match:
+  regex: "postgres://prod_admin:[^@]+@"
+  file_glob: "*.{py,ts,js}"
+  message: "Hardcoded production database connection string detected"
+  remediation: "Inject database credentials via environment variables or secret store"
+```
+
+Banned dependency rules and prohibited tool name rules are also supported:
+
+```yaml
+id: "ORG-002"
+name: "Banned Deprecated Library"
+description: "Disallow telnetlib in agent tools"
+severity: "medium"
+attack_category: "supply_chain"
+match:
+  banned_dependencies:
+    - name: "telnetlib"
+      reason: "Insecure unencrypted remote protocol"
+  tool_name_regex: "^telnet_"
 ```
 
 ---
