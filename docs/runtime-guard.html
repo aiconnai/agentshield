@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Runtime Guard — AgentShield</title>
+  <meta name="description" content="AgentShield Runtime Guard: Real-time MCP proxy for stdio and HTTP/SSE streams inspecting tool calls and redacting leaked credentials.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="site.css">
+  <style>
+    .guard-hero { padding: 60px 0 40px; text-align: center; }
+    .guard-hero h1 { font-size: 2.8rem; margin-bottom: 14px; }
+    .guard-section { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 32px; margin-bottom: 30px; }
+    .guard-section h3 { font-size: 1.4rem; margin-bottom: 14px; color: var(--text-primary); }
+    .guard-code { background: #0d1117; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 18px; font-family: var(--font-mono); font-size: 0.9rem; overflow-x: auto; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+
+  <!-- Navigation -->
+  <header class="navbar">
+    <div class="container nav-container">
+      <a href="index.html" class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+        <span>AgentShield</span>
+        <span class="badge-version">v1.0.0 GA</span>
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="index.html#features">Features</a></li>
+          <li><a href="rules.html">Rules</a></li>
+          <li><a href="runtime-guard.html" style="color: var(--text-primary);">Runtime Guard</a></li>
+          <li><a href="release-notes.html">Releases</a></li>
+        </ul>
+      </nav>
+      <div class="nav-actions">
+        <a href="https://github.com/aiconnai/agentshield" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">GitHub</a>
+        <a href="index.html#quickstart" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="guard-hero">
+      <h1>Runtime Guard & MCP Proxy</h1>
+      <p style="color: var(--text-secondary); max-width: 720px; margin: 0 auto;">
+        AgentShield's real-time interception proxy validates tool calls, enforces parameter allowlists, and strips sensitive data from outgoing responses.
+      </p>
+    </div>
+
+    <div class="guard-section">
+      <h3>1. Remote HTTP / SSE MCP Proxy</h3>
+      <p style="color: var(--text-secondary);">
+        Place AgentShield in front of remote or containerized MCP HTTP/SSE endpoints. It inspects all JSON-RPC <code>tools/call</code> messages, blocks policy violations, and redacts leaked credentials from streaming responses.
+      </p>
+      <pre class="guard-code"><code># Start reverse-proxy listening on localhost:8080 forwarding to remote server
+agentshield guard --listen 127.0.0.1:8080 --target http://127.0.0.1:3000
+
+# With policy enforcement threshold:
+agentshield guard --listen 127.0.0.1:8080 --target http://127.0.0.1:3000 --fail-on block</code></pre>
+    </div>
+
+    <div class="guard-section">
+      <h3>2. Stdio MCP Process Wrapper</h3>
+      <p style="color: var(--text-secondary);">
+        Bridge local stdio MCP processes directly into Claude Desktop or coding agents while enforcing runtime guard invariants:
+      </p>
+      <pre class="guard-code"><code># Bridge stdio process
+agentshield guard --mcp-proxy -- npx -y @modelcontextprotocol/server-postgres "postgresql://..."</code></pre>
+    </div>
+
+    <div class="guard-section">
+      <h3>3. Egress Policy Enforcement</h3>
+      <p style="color: var(--text-secondary);">
+        Automatically generate network egress allowlists based on static tool scans, then lock outbound traffic with <code>agentshield wrap</code>:
+      </p>
+      <pre class="guard-code"><code># 1. Generate egress policy from static scan
+agentshield scan . --emit-egress-policy agentshield.egress.toml
+
+# 2. Run agent execution wrapped by local egress proxy
+agentshield wrap --policy agentshield.egress.toml -- python agent_worker.py</code></pre>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-bottom">
+      <p>&copy; 2026 AI Conn AI (aiconnai). Open source under MIT OR Apache-2.0 License. <a href="index.html" style="color: var(--color-emerald);">Back to Home</a></p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -106,7 +106,7 @@ workflow that runs CodeQL, Gitleaks, Semgrep CE, and AgentShield together.
 
 ### VS Code Extension
 
-Install the [AgentShield VS Code Extension](https://marketplace.visualstudio.com/items?itemName=aiconnai.agentshield) from the Visual Studio Marketplace for inline security findings and lightbulb quick-fixes:
+Install the [AgentShield VS Code Extension](vscode/) for inline security findings and lightbulb quick-fixes:
 
 - **Inline Diagnostics**: Findings are highlighted as you type and on file save.
 - **Lightbulb Quick-Fixes (`Cmd + .` / `Alt + Enter`)**: Instant 1-click remediation for unsafe deserializers (`yaml.load` $\to$ `safe_load`) and unpinned dependencies.
