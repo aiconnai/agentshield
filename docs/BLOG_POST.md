@@ -162,8 +162,7 @@ This suggests that while MCP server authors are generally careful about not runn
 
 ```bash
 # Install AgentShield
-brew tap limaronaldo/engram && brew install agentshield
-# or: cargo install agent-shield
+cargo install agent-shield
 
 # Scan any MCP server before using it
 agentshield scan /path/to/mcp-server
@@ -207,9 +206,6 @@ Today, AgentShield's stable capability is local static scanning plus policy eval
 Install it:
 
 ```bash
-# Via Homebrew
-brew tap limaronaldo/engram && brew install agentshield
-
 # Via cargo
 cargo install agent-shield
 

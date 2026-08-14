@@ -76,7 +76,7 @@ Completed Feb 20, 2026. Scanned 7 Anthropic reference MCP servers. See `docs/VAL
 
 ## ~~2. Test GitHub Action End-to-End~~ — Done
 
-Tested Feb 20, 2026. Test repo: [`limaronaldo/agentshield-test`](https://github.com/limaronaldo/agentshield-test)
+Tested Feb 20, 2026. Test repo: [`aiconnai/agentshield-test`](https://github.com/aiconnai/agentshield-test)
 
 ### Results
 
@@ -128,7 +128,7 @@ Features deferred from v0.1.0:
 | ~~VS Code extension~~ | ~~[IBVI-485](https://linear.app/mbras/issue/IBVI-485)~~ | ~~Done v0.2.4~~ | ~~Done — inline diagnostics, auto-scan, status bar~~ |
 | ~~LangChain adapter~~ | ~~[IBVI-486](https://linear.app/mbras/issue/IBVI-486)~~ | ~~Done v0.2.4~~ | ~~Done — 4 adapters (MCP, OpenClaw, CrewAI, LangChain), 95 tests~~ |
 | ~~CrewAI adapter~~ | ~~[IBVI-487](https://linear.app/mbras/issue/IBVI-487)~~ | ~~Done v0.2.4~~ | ~~Done — 3 adapters (MCP, OpenClaw, CrewAI), 89 tests~~ |
-| ~~PR annotation test~~ | ~~[IBVI-488](https://linear.app/mbras/issue/IBVI-488)~~ | ~~Done v0.2.3~~ | ~~Done — [PR #1](https://github.com/limaronaldo/agentshield-test/pull/1), 7 inline annotations~~ |
+| ~~PR annotation test~~ | ~~[IBVI-488](https://linear.app/mbras/issue/IBVI-488)~~ | ~~Done v0.2.3~~ | ~~Done — [PR #1](https://github.com/aiconnai/agentshield-test/pull/1), 7 inline annotations~~ |
 
 ---
 
@@ -160,7 +160,7 @@ Eliminates false positives from internal helper functions that receive already-v
 |---------|--------|--------|--------|
 | ~~Test file exclusion (`--ignore-tests`)~~ | — | ~~Done v0.2.3~~ | ~~Done~~ |
 | ~~Re-scan 7 Anthropic servers with v0.2.3~~ | — | ~~Done v0.2.3~~ | ~~Done — 170 → 69 findings (59% reduction)~~ |
-| ~~PR annotation test~~ | ~~[IBVI-488](https://linear.app/mbras/issue/IBVI-488)~~ | ~~Done v0.2.3~~ | ~~Done — [PR #1](https://github.com/limaronaldo/agentshield-test/pull/1)~~ |
+| ~~PR annotation test~~ | ~~[IBVI-488](https://linear.app/mbras/issue/IBVI-488)~~ | ~~Done v0.2.3~~ | ~~Done — [PR #1](https://github.com/aiconnai/agentshield-test/pull/1)~~ |
 | Blog post / announcement | [IBVI-484](https://linear.app/mbras/issue/IBVI-484) | Medium | High — launch content |
 | ~~VS Code extension~~ | ~~[IBVI-485](https://linear.app/mbras/issue/IBVI-485)~~ | ~~Done v0.2.4~~ | ~~Done — inline diagnostics, auto-scan, status bar~~ |
 | ~~LangChain adapter~~ | ~~[IBVI-486](https://linear.app/mbras/issue/IBVI-486)~~ | ~~Done v0.2.4~~ | ~~Done — 4 adapters (MCP, OpenClaw, CrewAI, LangChain), 95 tests~~ |
@@ -211,7 +211,7 @@ Completed Feb 20, 2026. See [IBVI-488](https://linear.app/mbras/issue/IBVI-488).
 
 ### What was tested
 
-Created [PR #1](https://github.com/limaronaldo/agentshield-test/pull/1) on `limaronaldo/agentshield-test` with `src/tools.py` containing intentional vulnerabilities (SHIELD-001, -002, -003, -004, -006, -007, -011).
+Created [PR #1](https://github.com/aiconnai/agentshield-test/pull/1) on `aiconnai/agentshield-test` with `src/tools.py` containing intentional vulnerabilities (SHIELD-001, -002, -003, -004, -006, -007, -011).
 
 ### Results
 

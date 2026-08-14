@@ -260,7 +260,7 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 - `suppress` / `list-suppressions` CLI commands manage `.agentshield.toml` suppressions
 - `certify` command generates DSSE attestation envelopes with optional Ed25519 signing
 - `--emit-egress-policy` analyzes scan results and generates a starter egress policy
-- PR inline annotations verified via [agentshield-test PR #1](https://github.com/limaronaldo/agentshield-test/pull/1) (IBVI-488)
+- PR inline annotations verified via [agentshield-test PR #1](https://github.com/aiconnai/agentshield-test/pull/1) (IBVI-488)
 
 ## Version History
 

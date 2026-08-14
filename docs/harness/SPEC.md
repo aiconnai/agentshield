@@ -5,7 +5,7 @@
 | Project | `agentshield` / Cargo package `agent-shield` |
 | Active program | Scanner hardening and release-surface parity |
 | Started | 2026-06-05 |
-| Owner | Ronaldo + agents |
+| Owner | AgentShield Contributors |
 | Current version in `Cargo.toml` | `0.8.0` |
 | Current adapters | MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules |
 | Current detectors | 20 built-in rules, `SHIELD-001` through `SHIELD-020` |

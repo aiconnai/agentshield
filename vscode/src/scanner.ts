@@ -105,10 +105,10 @@ export async function runScan(
     // Binary not found
     if (isExecError(err) && err.code === "ENOENT") {
       output.appendLine(
-        `Binary not found: "${binary}". Install via: brew tap limaronaldo/engram && brew install agentshield (macOS) or cargo install agentshield`
+        `Binary not found: "${binary}". Install via: cargo install agent-shield or download from GitHub Releases.`
       );
       vscode.window.showWarningMessage(
-        `AgentShield binary not found. Install via "brew tap limaronaldo/engram && brew install agentshield" or "cargo install agentshield".`
+        `AgentShield binary not found. Install via "cargo install agent-shield" or download from GitHub Releases.`
       );
       return null;
     }

@@ -2,7 +2,7 @@
 name = "agent-shield"
 version = "1.0.0"
 edition = "2024"
-authors = ["Ronaldo Lima"]
+authors = ["AgentShield Contributors"]
 description = "Security scanner for AI agent extensions — offline-first, multi-framework, SARIF output"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/aiconnai/agentshield"

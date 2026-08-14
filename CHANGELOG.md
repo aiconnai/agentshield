@@ -226,7 +226,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `is_test_file()` matches directories (`test/`, `tests/`, `__tests__/`, `__pycache__/`), suffixes (`.test.*`, `.spec.*`), prefixes (`test_*.py`), and config files (`conftest.py`, `jest.config.*`)
   - Available via CLI flag, `.agentshield.toml` `[scan] ignore_tests = true`, GitHub Action input, and library API
   - `ignore_tests: bool` parameter added to `Adapter::load()` and `auto_detect_and_load()`
-- **PR inline annotations verified (IBVI-488)** — tested on [`agentshield-test` PR #1](https://github.com/limaronaldo/agentshield-test/pull/1) with 7 inline annotations on `tools.py`
+- **PR inline annotations verified (IBVI-488)** — tested on [`agentshield-test` PR #1](https://github.com/aiconnai/agentshield-test/pull/1) with 7 inline annotations on `tools.py`
 - 5-platform release binaries
 
 ### Changed
@@ -282,7 +282,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - TSX/JSX file support via `LANGUAGE_TSX` grammar
   - Feature-gated: `typescript` feature (enabled by default)
   - Regex fallback preserved when feature is disabled (`--no-default-features`)
-- **Homebrew formula** — `brew tap limaronaldo/engram && brew install agentshield`
+- **Homebrew formula** — `cargo install agent-shield`
 - **Pre-built binaries** — 5-platform release (Linux x86/arm64, macOS x86/arm64, Windows)
 
 ### Changed
