@@ -4,11 +4,13 @@
 
 [![CI](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml/badge.svg)](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/Release-v1.0.0%20GA-success.svg)](https://github.com/aiconnai/agentshield/releases/tag/v1.0.0)
+[![Website](https://img.shields.io/badge/Website-aiconnai.github.io%2Fagentshield-emerald.svg)](https://aiconnai.github.io/agentshield/)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
 [![VS Code](https://img.shields.io/badge/VS%20Code-v1.0.0-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=aiconnai.agentshield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
 
+- [Website & Interactive Playground](https://aiconnai.github.io/agentshield/)
 - [Contributing](CONTRIBUTING.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Security Policy](SECURITY.md)

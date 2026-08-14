@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "publisher": "aiconnai",
   "license": "MIT",
+  "homepage": "https://aiconnai.github.io/agentshield",
   "repository": {
     "type": "git",
     "url": "https://github.com/aiconnai/agentshield"
