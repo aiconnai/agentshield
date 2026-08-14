@@ -122,13 +122,14 @@ context_files:
 };
 
 const INSTALL_COMMANDS = {
-  cli: `# Install AgentShield v1.0.0 GA from crates.io
+  cli: `# 1. Install official binary from crates.io (Recommended)
 cargo install agent-shield
 
-# Or install latest release from GitHub
-cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.0 --features full --force
+# 2. Or build from GitHub with all features
+cargo install --git https://github.com/aiconnai/agentshield \\
+  --tag v1.0.0 --features full --force
 
-# Verify installation
+# 3. Verify installation
 agentshield --version`,
   vscode: `# Install via VS Code Marketplace:
 code --install-extension aiconnai.agentshield
