@@ -1,6 +1,6 @@
 [package]
 name = "agent-shield"
-version = "0.8.8"
+version = "0.9.0"
 edition = "2024"
 authors = ["Ronaldo Lima"]
 description = "Security scanner for AI agent extensions — offline-first, multi-framework, SARIF output"

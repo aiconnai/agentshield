@@ -25,7 +25,7 @@ call those tools.
 
 It runs as a CLI, GitHub Action, or library, keeps source code on your machine,
 and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML
-reports. The current release line is `0.8.8`.
+reports. The current release line is `0.9.0`.
 
 ## At a glance
 
@@ -179,7 +179,7 @@ Download from the [latest release](https://github.com/aiconnai/agentshield/relea
 For container consumers, the release image tag is:
 
 ```text
-ghcr.io/aiconnai/agentshield:0.8.8
+ghcr.io/aiconnai/agentshield:0.9.0
 ```
 
 ### Docker
@@ -187,9 +187,9 @@ ghcr.io/aiconnai/agentshield:0.8.8
 The GHCR image is built with the `full` feature set, including runtime `wrap` support and experimental runtime guard commands. The image is published for `linux/amd64` and `linux/arm64`.
 
 ```bash
-docker pull ghcr.io/aiconnai/agentshield:0.8.8
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.8.8 scan .
-docker run --rm ghcr.io/aiconnai/agentshield:0.8.8 --version
+docker pull ghcr.io/aiconnai/agentshield:0.9.0
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:0.9.0 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:0.9.0 --version
 ```
 
 If the GHCR package is private in your organization, authenticate first:
@@ -267,6 +267,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield list-rules` | List available detection rules as a table or JSON. |
 | `agentshield doctor [path]` | Print environment, config, compile-feature, and adapter diagnostics. |
 | `agentshield init` | Generate a starter `.agentshield.toml` config file. |
+| `agentshield fix [path]` | Automatically fix deterministic security issues (unsafe deserializers, unpinned dependencies); use `--dry-run` to preview unified diffs. |
 | `agentshield suppress <fingerprint>` | Add a suppression entry with a required reason and optional expiry. |
 | `agentshield list-suppressions` | Show suppressions configured in `.agentshield.toml`. |
 | `agentshield certify [path]` | Generate a DSSE attestation envelope for scan results. |

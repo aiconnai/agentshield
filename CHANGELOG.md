@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-14
+
+### Added
+
+- **Automated Remediation Engine (`agentshield fix`)**:
+  - In-place and dry-run preview (`--dry-run`) with unified diff generation.
+  - Automatic conversion of unsafe `yaml.load` to `yaml.safe_load` / `Loader=yaml.SafeLoader` and `pickle.loads` to `json.loads` (SHIELD-016).
+  - Deterministic version pinning for loose dependencies in `requirements.txt` and `package.json` (SHIELD-009).
+- **Runtime Guard MCP Stdio Proxy Hardening**:
+  - Live JSON-RPC parameter inspection for parameter aliases (`cmd`, `filepath`, `target_url`) blocking private IPs and cloud metadata SSRF endpoints.
+  - Outgoing response stream secret sanitization via `redact_text` in `mcp_proxy_stdio.rs`.
+- **Expanded Framework Adapters**:
+  - Support for OpenAI Tool and Function calling schemas in `tools.json`, `functions.json`, `tools.yaml`, `assistant.json`.
+  - TypeScript and JavaScript LangChain tool support (`@langchain/core`, `langchain`, `langgraph`).
+
 ## [0.8.8] - 2026-08-14
 
 ### Added

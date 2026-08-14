@@ -48,6 +48,19 @@ impl super::Adapter for LangChainAdapter {
             return true;
         }
 
+        // Check package.json for @langchain dependencies
+        let package_json = root.join("package.json");
+        if package_json.exists() {
+            if let Ok(content) = std::fs::read_to_string(&package_json) {
+                if content.contains("@langchain/")
+                    || content.contains("\"langchain\"")
+                    || content.contains("@langchain/core")
+                {
+                    return true;
+                }
+            }
+        }
+
         if super::mcp::has_recursive_python_import(
             root,
             &[
@@ -78,15 +91,20 @@ impl super::Adapter for LangChainAdapter {
         // Phase 0: Collect source files (reuses MCP adapter's walker)
         super::mcp::collect_source_files_with_filter(root, filter, &mut source_files)?;
 
-        // Filter to Python-only (LangChain is a Python framework)
-        source_files.retain(|sf| matches!(sf.language, Language::Python));
+        // Retain Python and TypeScript/JavaScript source files for LangChain
+        source_files.retain(|sf| {
+            matches!(
+                sf.language,
+                Language::Python | Language::TypeScript | Language::JavaScript
+            )
+        });
 
         let execution = super::pipeline::build_execution_surface(&source_files);
 
-        // Parse dependencies from pyproject.toml / requirements.txt
+        // Parse dependencies from pyproject.toml / requirements.txt / package.json
         let dependencies = super::mcp::parse_dependencies(root, filter);
 
-        // Parse provenance from pyproject.toml
+        // Parse provenance from pyproject.toml / package.json
         let provenance = super::mcp::parse_provenance(root, filter);
 
         let tools = vec![];

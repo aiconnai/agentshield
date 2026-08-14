@@ -5,6 +5,8 @@ use std::process;
 mod discover;
 #[path = "../discovery/mod.rs"]
 mod discovery;
+#[path = "cli/fix.rs"]
+mod fix;
 #[path = "cli/reporting.rs"]
 mod reporting;
 #[path = "cli/rules.rs"]
@@ -232,6 +234,21 @@ enum Commands {
         server: Vec<String>,
     },
 
+    /// Automatically fix deterministic security issues (unsafe deserializers, unpinned dependencies)
+    Fix {
+        /// Path to the extension directory or file
+        #[arg(default_value = ".")]
+        path: PathBuf,
+
+        /// Preview proposed fixes as a unified diff without writing to disk
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Limit fixes to specific rule IDs (e.g., SHIELD-016, SHIELD-009)
+        #[arg(long, value_name = "RULE")]
+        rules: Vec<String>,
+    },
+
     /// Generate a DSSE attestation envelope for scan results
     Certify {
         /// Path to the extension directory
@@ -395,6 +412,15 @@ fn main() {
             json,
             ignore_tests,
         } => cmd_doctor(path, config, json, ignore_tests),
+        Commands::Fix {
+            path,
+            dry_run,
+            rules,
+        } => fix::cmd_fix(fix::FixArgs {
+            path,
+            dry_run,
+            rules,
+        }),
         #[cfg(feature = "runtime-guard")]
         Commands::Guard {
             stdin,
