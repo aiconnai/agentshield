@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
-import { runScan } from "./scanner";
+import { runScan, runFix, runSuppress } from "./scanner";
 import { updateDiagnostics } from "./diagnostics";
+import { AgentShieldCodeActionProvider } from "./codeActions";
 
 let scanTimer: ReturnType<typeof setTimeout> | undefined;
 let isScanning = false;
@@ -17,10 +18,115 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(diagnostics, output, statusBar);
 
+  // Register Code Action Provider for all common files
+  const selector: vscode.DocumentSelector = [
+    { scheme: "file", language: "python" },
+    { scheme: "file", language: "typescript" },
+    { scheme: "file", language: "javascript" },
+    { scheme: "file", language: "json" },
+    { scheme: "file", language: "yaml" },
+    { scheme: "file", language: "toml" },
+    { scheme: "file", language: "markdown" },
+  ];
+
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+      selector,
+      new AgentShieldCodeActionProvider(),
+      {
+        providedCodeActionKinds: AgentShieldCodeActionProvider.providedCodeActionKinds,
+      }
+    )
+  );
+
   // Command: manual scan
   context.subscriptions.push(
     vscode.commands.registerCommand("agentshield.scan", () =>
       scan(diagnostics, output, statusBar)
+    )
+  );
+
+  // Command: fix workspace
+  context.subscriptions.push(
+    vscode.commands.registerCommand("agentshield.fix", async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        return;
+      }
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+      vscode.window.showInformationMessage("AgentShield: Running automated remediation...");
+      const success = await runFix(workspacePath, output);
+      if (success) {
+        vscode.window.showInformationMessage("AgentShield: Remediation completed.");
+        await scan(diagnostics, output, statusBar);
+      } else {
+        vscode.window.showErrorMessage("AgentShield: Remediation failed — check Output panel.");
+      }
+    })
+  );
+
+  // Command: fix specific finding (invoked from Code Action)
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "agentshield.fixFinding",
+      async (filePath: string, ruleId: string) => {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const workspacePath = workspaceFolders && workspaceFolders.length > 0
+          ? workspaceFolders[0].uri.fsPath
+          : filePath;
+
+        const success = await runFix(workspacePath, output, filePath, ruleId);
+        if (success) {
+          vscode.window.showInformationMessage(`AgentShield: Applied fix for ${ruleId}.`);
+          await scan(diagnostics, output, statusBar);
+        } else {
+          vscode.window.showErrorMessage(`AgentShield: Failed to apply fix for ${ruleId}.`);
+        }
+      }
+    )
+  );
+
+  // Command: suppress finding
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "agentshield.suppressFinding",
+      async (arg: vscode.Diagnostic | string, ruleId?: string) => {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+          return;
+        }
+        const workspacePath = workspaceFolders[0].uri.fsPath;
+
+        let fingerprint = "";
+        let rule = ruleId || "finding";
+
+        if (typeof arg === "string") {
+          fingerprint = arg;
+        }
+
+        if (!fingerprint) {
+          vscode.window.showErrorMessage("AgentShield: Unable to determine finding fingerprint for suppression.");
+          return;
+        }
+
+        const reason = await vscode.window.showInputBox({
+          prompt: `Reason for suppressing ${rule} (${fingerprint.slice(0, 8)})`,
+          placeHolder: "e.g., Reviewed and accepted business risk / test fixture",
+          validateInput: (val) => (val && val.trim().length > 0 ? null : "Reason is required"),
+        });
+
+        if (!reason) {
+          return;
+        }
+
+        const success = await runSuppress(workspacePath, output, fingerprint, reason.trim());
+        if (success) {
+          vscode.window.showInformationMessage(`AgentShield: Suppressed ${rule}.`);
+          await scan(diagnostics, output, statusBar);
+        } else {
+          vscode.window.showErrorMessage(`AgentShield: Failed to suppress ${rule}.`);
+        }
+      }
     )
   );
 
@@ -34,7 +140,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (scanTimer) {
         clearTimeout(scanTimer);
       }
-      scanTimer = setTimeout(() => scan(diagnostics, output, statusBar), 2000);
+      scanTimer = setTimeout(() => scan(diagnostics, output, statusBar), 1500);
     })
   );
 

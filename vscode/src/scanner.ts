@@ -32,7 +32,8 @@ export function buildScanArgs(
   ignoreTests: boolean,
   configPath = "",
   baselinePath = "",
-  failOn = ""
+  failOn = "",
+  rulesDir = ""
 ): string[] {
   const args = ["scan", workspacePath, "--format", "json"];
   if (ignoreTests) {
@@ -46,6 +47,9 @@ export function buildScanArgs(
   }
   if (failOn && failOn.trim().length > 0) {
     args.push("--fail-on", failOn.trim());
+  }
+  if (rulesDir && rulesDir.trim().length > 0) {
+    args.push("--rules-dir", rulesDir.trim());
   }
   return args;
 }
@@ -67,6 +71,7 @@ export async function runScan(
   const failOn = config.get<string>("failOn", "");
   const configPath = config.get<string>("configPath", "");
   const baselinePath = config.get<string>("baselinePath", "");
+  const rulesDir = config.get<string>("rulesDir", "");
   const timeout = config.get<number>("timeout", 30) * 1000;
 
   const args = buildScanArgs(
@@ -74,7 +79,8 @@ export async function runScan(
     ignoreTests,
     configPath,
     baselinePath,
-    failOn
+    failOn,
+    rulesDir
   );
 
   output.appendLine(`> ${binary} ${args.join(" ")}`);
@@ -112,6 +118,77 @@ export async function runScan(
   }
 }
 
+/**
+ * Run `agentshield fix [targetPath] [--rules ruleId]`.
+ */
+export async function runFix(
+  workspacePath: string,
+  output: vscode.OutputChannel,
+  targetPath?: string,
+  ruleId?: string,
+  execute: ScanExecutor = execFileAsync
+): Promise<boolean> {
+  const binary = findBinary();
+  const args = ["fix", targetPath || workspacePath];
+  if (ruleId) {
+    args.push("--rules", ruleId);
+  }
+
+  output.appendLine(`> ${binary} ${args.join(" ")}`);
+
+  try {
+    const { stdout, stderr } = await execute(binary, args, {
+      timeout: 30000,
+      maxBuffer: 10 * 1024 * 1024,
+      cwd: workspacePath,
+    });
+    if (stdout) {
+      output.appendLine(stdout);
+    }
+    if (stderr) {
+      output.appendLine(stderr);
+    }
+    return true;
+  } catch (err: unknown) {
+    output.appendLine(`Fix error: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
+}
+
+/**
+ * Run `agentshield suppress <fingerprint> --reason <reason>`.
+ */
+export async function runSuppress(
+  workspacePath: string,
+  output: vscode.OutputChannel,
+  fingerprint: string,
+  reason: string,
+  execute: ScanExecutor = execFileAsync
+): Promise<boolean> {
+  const binary = findBinary();
+  const args = ["suppress", fingerprint, "--reason", reason];
+
+  output.appendLine(`> ${binary} ${args.join(" ")}`);
+
+  try {
+    const { stdout, stderr } = await execute(binary, args, {
+      timeout: 30000,
+      maxBuffer: 10 * 1024 * 1024,
+      cwd: workspacePath,
+    });
+    if (stdout) {
+      output.appendLine(stdout);
+    }
+    if (stderr) {
+      output.appendLine(stderr);
+    }
+    return true;
+  } catch (err: unknown) {
+    output.appendLine(`Suppress error: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
+}
+
 export function parseReport(
   stdout: string,
   output: vscode.OutputChannel
@@ -146,3 +223,4 @@ export function resolveFilePath(
   }
   return path.join(workspacePath, file);
 }
+

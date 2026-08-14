@@ -40,6 +40,8 @@ function makeRange(
   return new vscode.Range(startLine, startCol, eLine, eCol);
 }
 
+export const diagnosticFindingMap = new WeakMap<vscode.Diagnostic, Finding>();
+
 /**
  * Convert a single Finding into a VS Code Diagnostic.
  */
@@ -54,6 +56,7 @@ export function findingToDiagnostic(finding: Finding): vscode.Diagnostic {
   );
 
   diag.source = "AgentShield";
+  diagnosticFindingMap.set(diag, finding);
   diag.code = {
     value: finding.rule_id,
     target: vscode.Uri.parse(RULES_URL),

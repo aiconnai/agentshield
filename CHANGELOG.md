@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-08-14
+
+### Added
+
+- **VS Code Extension v1.0 & Quick-Fix Code Actions**:
+  - Lightbulb Quick-Fix Code Action Provider (`Cmd + .` / `Alt + Enter`) for instant remediation of fixable findings (`SHIELD-016`, `SHIELD-009`).
+  - Direct finding suppression Code Action (`Suppress in .agentshield.toml`) with interactive rationale input.
+  - Workspace commands: `agentshield.fix` (auto-remediate fixable findings) and `agentshield.suppressFinding`.
+  - Added `agentshield.rulesDir` and `agentshield.enableQuickFix` extension configuration settings.
+
 ## [0.9.1] - 2026-08-14
 
 ### Added
