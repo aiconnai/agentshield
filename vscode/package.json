@@ -2,7 +2,7 @@
   "name": "agentshield",
   "displayName": "AgentShield",
   "description": "Security scanner for AI agent extensions — inline findings for MCP, LangChain, CrewAI, OpenClaw",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "publisher": "aiconnai",
   "license": "MIT",
   "repository": {

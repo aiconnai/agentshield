@@ -52,6 +52,8 @@ pub struct ScanOptions {
     pub fail_on_override: Option<rules::Severity>,
     /// Skip test files (test/, tests/, *.test.ts, *.spec.ts, etc.).
     pub ignore_tests: bool,
+    /// Optional directory containing custom declarative rules (*.yaml, *.yml, *.json).
+    pub custom_rules_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for ScanOptions {
@@ -61,6 +63,7 @@ impl Default for ScanOptions {
             format: OutputFormat::Console,
             fail_on_override: None,
             ignore_tests: false,
+            custom_rules_dir: None,
         }
     }
 }
@@ -131,8 +134,23 @@ pub fn scan_with_path_filter_overrides(
     let path_filter_summary = path_filter.summary();
     let bundles = adapter::auto_detect_analysis_with_filter(path, &path_filter)?;
 
-    // Run detectors on all targets
-    let engine = RuleEngine::new();
+    // Run detectors on all targets (built-in + custom)
+    let mut engine = RuleEngine::new();
+    if let Some(ref dir) = options.custom_rules_dir {
+        let _ = engine.load_custom_rules_from(dir);
+    } else if let Some(ref dir) = config.rules.custom_dir {
+        let abs_dir = if dir.is_absolute() {
+            dir.clone()
+        } else {
+            path.join(dir)
+        };
+        let _ = engine.load_custom_rules_from(&abs_dir);
+    } else {
+        let default_rules_dir = path.join(".agentshield").join("rules");
+        if default_rules_dir.is_dir() {
+            let _ = engine.load_custom_rules_from(&default_rules_dir);
+        }
+    }
     let mut all_findings: Vec<Finding> = Vec::new();
 
     let target_name = if let Some(first) = bundles.first() {

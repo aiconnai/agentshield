@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-14
+
+### Added
+
+- **Custom Declarative Rule Engine (`.agentshield/rules/*.yaml`)**:
+  - Declarative YAML/JSON rule schema with custom rule metadata, severity, CWE IDs, and attack categories.
+  - Source code regex pattern matchers with file glob filtering (`file_glob`).
+  - Banned dependency matchers with custom deprecation/security rationales.
+  - Prohibited tool name and description matchers (`tool_name_regex`).
+  - Auto-discovery in `.agentshield/rules/` and config-specified directories via `[rules] custom_dir`.
+  - Added `--rules-dir <PATH>` CLI option to `agentshield scan` and `agentshield list-rules`.
+
 ## [0.9.0] - 2026-08-14
 
 ### Added

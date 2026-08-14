@@ -22,6 +22,7 @@ pub(super) struct ScanArgs {
     pub(super) emit_egress_policy_path: Option<PathBuf>,
     pub(super) explain: bool,
     pub(super) experimental_risk: bool,
+    pub(super) rules_dir: Option<PathBuf>,
 }
 
 pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
@@ -39,6 +40,7 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         emit_egress_policy_path,
         explain,
         experimental_risk,
+        rules_dir,
     } = args;
     let format = OutputFormat::from_str_lenient(&format_str).unwrap_or_else(|| {
         eprintln!("Warning: unknown format '{}', using console", format_str);
@@ -65,24 +67,25 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         .clone()
         .unwrap_or_else(|| path.join(".agentshield.toml"));
     let mut cfg = Config::load(&config_path)?;
-    if !include_patterns.is_empty() {
-        cfg.scan.include.extend(include_patterns.iter().cloned());
-    }
-    if !exclude_patterns.is_empty() {
-        cfg.scan.exclude.extend(exclude_patterns.iter().cloned());
-    }
-
     let fail_on = parse_optional_severity(fail_on_str.as_deref())?;
+
     let effective_ignore_tests = ignore_tests || cfg.scan.ignore_tests;
-    let effective_path_filter =
-        ScanPathFilter::from_scan_config(&cfg.scan, effective_ignore_tests)?;
-    let path_filter_summary = effective_path_filter.summary();
+    let mut effective_scan_config = cfg.scan.clone();
+    effective_scan_config
+        .include
+        .extend(include_patterns.iter().cloned());
+    effective_scan_config
+        .exclude
+        .extend(exclude_patterns.iter().cloned());
+    let path_filter_summary =
+        ScanPathFilter::from_scan_config(&effective_scan_config, effective_ignore_tests)?.summary();
 
     let options = ScanOptions {
-        config_path: config.clone(),
+        config_path: config,
         format,
         fail_on_override: fail_on,
         ignore_tests,
+        custom_rules_dir: rules_dir,
     };
 
     let mut report = match agentshield::scan_with_path_filter_overrides(

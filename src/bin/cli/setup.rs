@@ -58,6 +58,7 @@ pub(super) fn cmd_quickstart(
         format: OutputFormat::Console,
         fail_on_override: Some(fail_on),
         ignore_tests,
+        custom_rules_dir: None,
     };
 
     match agentshield::scan(&path, &options) {

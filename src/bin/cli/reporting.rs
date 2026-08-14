@@ -43,6 +43,7 @@ pub(super) fn cmd_suppress(
         format: OutputFormat::Console,
         fail_on_override: None,
         ignore_tests: false,
+        custom_rules_dir: None,
     };
     let report = agentshield::scan(&workspace, &options)?;
     let matches = report
@@ -175,6 +176,7 @@ pub(super) fn cmd_certify(
         format: OutputFormat::Console,
         fail_on_override: None,
         ignore_tests,
+        custom_rules_dir: None,
     };
 
     let report = agentshield::scan(&path, &options)?;

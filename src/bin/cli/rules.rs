@@ -1,7 +1,15 @@
+use std::path::PathBuf;
+
 use agentshield::rules::RuleEngine;
 
-pub(super) fn cmd_list_rules(format_str: String) -> Result<i32, agentshield::error::ShieldError> {
-    let engine = RuleEngine::new();
+pub(super) fn cmd_list_rules(
+    format_str: String,
+    rules_dir: Option<PathBuf>,
+) -> Result<i32, agentshield::error::ShieldError> {
+    let mut engine = RuleEngine::new();
+    if let Some(ref dir) = rules_dir {
+        let _ = engine.load_custom_rules_from(dir);
+    }
     let rules = engine.list_scanner_rules();
 
     match format_str.as_str() {
