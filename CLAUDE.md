@@ -4,11 +4,13 @@ This file provides guidance to AI coding agents when working with this repositor
 
 ## Project Overview
 
-**AgentShield** is a Rust-based, offline-first security scanner for AI agent extensions
+**AgentShield** is a Rust-based, offline-first security scanner and runtime guard for AI agent extensions
 (MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, GPT Actions, Cursor Rules,
 and Hermes Agent projects).
+Official Website: https://aiconnai.github.io/agentshield/
+
 It produces SARIF output compatible with GitHub Code Scanning, supports DSSE attestation,
-and includes baseline diffing, suppressions, and egress policy generation.
+and includes baseline diffing, suppressions, egress policy generation, auto-remediation, and MCP runtime proxying.
 
 ## Repository Structure
 
