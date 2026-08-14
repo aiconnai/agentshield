@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentShield — Security Scanner & Runtime Guard for AI Agent Extensions</title>
+  <meta name="description" content="AgentShield is an offline-first, multi-framework security scanner and runtime guard for AI agent tools, MCP servers, OpenClaw skills, CrewAI, LangChain, and GPT Actions.">
+  <meta name="keywords" content="AI agent security, MCP security scanner, Model Context Protocol, LangChain security, CrewAI scanner, prompt injection, SSRF, tool security, SARIF, GitHub Actions">
+  <meta property="og:title" content="AgentShield — AI Agent Security Scanner & Runtime Guard">
+  <meta property="og:description" content="Find risky behavior in MCP and AI agent extensions before they ship. 100% offline, cross-function taint tracking, auto-remediation, and SARIF output.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://aiconnai.github.io/agentshield/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <div class="ambient-glow"></div>
+
+  <!-- Navigation -->
+  <header class="navbar">
+    <div class="container nav-container">
+      <a href="#" class="brand" aria-label="AgentShield Home">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+        <span>AgentShield</span>
+        <span class="badge-version">v1.0.0 GA</span>
+      </a>
+      <nav aria-label="Main Navigation">
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#playground">Interactive Explorer</a></li>
+          <li><a href="#ecosystem">Ecosystem</a></li>
+          <li><a href="#comparison">Compare</a></li>
+          <li><a href="#quickstart">Quick Start</a></li>
+          <li><a href="https://docs.rs/agent-shield" target="_blank" rel="noopener">Docs</a></li>
+        </ul>
+      </nav>
+      <div class="nav-actions">
+        <a href="https://github.com/aiconnai/agentshield" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub
+        </a>
+        <a href="#quickstart" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-tag">
+        <span>New in v1.0.0</span> Cross-Function Interprocedural Taint Tracking Engine
+      </div>
+      <h1>Static Security & Runtime Guard for AI Agent Extensions</h1>
+      <p>
+        Scan MCP servers, OpenClaw skills, CrewAI, LangChain, and GPT Actions before dangerous tools execute.
+        <strong>100% offline, zero data exfiltration, SARIF & IDE native.</strong>
+      </p>
+      <div class="hero-cta">
+        <a href="#quickstart" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 17 10 11 4 5"/>
+            <line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          Install CLI (cargo install)
+        </a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=aiconnai.agentshield" class="btn btn-secondary" target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.58 2.05L7.02 11.2l3.43 3.02 7.13-6.23v-5.94zm-11.16 9.15L2 14.54l4.42 3.34 3.43-3.02-3.43-3.66zm11.16 4.61l-7.13-6.23-3.43 3.02 10.56 9.15v-5.94z"/>
+          </svg>
+          VS Code Extension
+        </a>
+      </div>
+
+      <!-- Animated Terminal Mockup -->
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-controls">
+            <div class="terminal-dot dot-red"></div>
+            <div class="terminal-dot dot-yellow"></div>
+            <div class="terminal-dot dot-green"></div>
+          </div>
+          <div class="terminal-title">bash — agentshield scan . --explain</div>
+        </div>
+        <div class="terminal-body" id="hero-terminal">
+          <div><span class="t-prompt">$</span> <span class="t-cmd">agentshield scan ./mcp-server --fail-on high --explain</span></div>
+          <div class="t-banner">  AgentShield v1.0.0 (offline security scanner)</div>
+          <div class="t-dim">  Target: ./mcp-server [Framework: MCP (Python)]</div>
+          <div class="t-dim">  Parsed 12 files (AST + Interprocedural Call Graph) in 28ms</div>
+          <br>
+          <div><span class="t-crit">[FAIL]</span> <span class="t-target">server.py:18</span> <span class="t-crit">SHIELD-001 (Critical)</span> — Interprocedural Command Injection</div>
+          <div class="t-dim">  Flow: Tool 'run_git' param 'branch' -> helper_exec() -> subprocess.run(shell=True)</div>
+          <br>
+          <div><span class="t-warn">[WARN]</span> <span class="t-target">config.py:42</span> <span class="t-warn">SHIELD-016 (High)</span> — Insecure yaml.load() deserializer</div>
+          <div class="t-dim">  Remediation: Auto-fixable with 'agentshield fix'</div>
+          <br>
+          <div><span class="t-prompt">$</span> <span class="t-cmd">agentshield fix .</span></div>
+          <div class="t-pass">[PASS] Fixed SHIELD-016 in config.py: replaced 'yaml.load' -> 'yaml.safe_load'</div>
+          <div><span class="t-pass">✔ 1 patch applied cleanly. Repository secured.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Value Pillars / Key Features -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Why Engineers Choose AgentShield</h2>
+        <p>Built from the ground up in Rust for speed, privacy, and deep agent tool semantics.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h3>100% Offline & Local-First</h3>
+          <p>Zero telemetry, zero cloud dependencies. No source code or tool schemas ever leave your machine or CI runner. Operates in completely air-gapped environments.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1"/>
+              <path d="M18 8h4a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-4"/>
+              <circle cx="8" cy="12" r="2"/>
+            </svg>
+          </div>
+          <h3>Interprocedural Taint Engine</h3>
+          <p>Tracks tainted tool parameters through helper functions, utility wrappers, and class methods to downstream sinks (`subprocess`, `fetch`, arbitrary file access).</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+          </div>
+          <h3>Automated 1-Click Remediation</h3>
+          <p>`agentshield fix` automatically rewrites insecure deserializers (`yaml.load` &rarr; `safe_load`, `pickle` &rarr; `json`) and pins unpinned dependencies with full unified diff previews.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <h3>Runtime Guard Reverse Proxy</h3>
+          <p>Real-time MCP proxy (`agentshield guard`) for stdio and HTTP/SSE streams. Inspects `tools/call` JSON-RPC payloads, enforces policies, and redacts leaked credentials on outgoing streams.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
+          <h3>Custom Declarative Rules</h3>
+          <p>Author organization-specific rules in `.agentshield/rules/*.yaml`. Supports source code regex with file globs, banned dependency rules, and prohibited tool name matchers.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <h3>GitHub Code Scanning (SARIF)</h3>
+          <p>Native SARIF v2.1.0 output integrates seamlessly into GitHub PR annotations, Security &gt; Code Scanning alerts, and CI/CD quality gates.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Rule Explorer & Playground -->
+  <section class="section" id="playground">
+    <div class="container">
+      <div class="section-header">
+        <h2>Interactive Detection Playground</h2>
+        <p>Explore real-world vulnerability patterns and see how AgentShield's AST and dataflow engines catch them.</p>
+      </div>
+
+      <div class="playground-container">
+        <div class="playground-nav">
+          <button class="tab-btn active" data-rule="ssrf">SHIELD-003: SSRF</button>
+          <button class="tab-btn" data-rule="cmd">SHIELD-001: Command Injection</button>
+          <button class="tab-btn" data-rule="deserial">SHIELD-016: Unsafe Deserializer</button>
+          <button class="tab-btn" data-rule="toxic">SHIELD-020: Toxic Flow</button>
+        </div>
+        <div class="playground-content">
+          <div class="code-panel">
+            <div class="panel-header">
+              <span class="panel-title">Source Code (Vulnerable Tool Handler)</span>
+            </div>
+            <pre><code id="playground-code">// server.ts (MCP Server)
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+
+const server = new McpServer({ name: "api-fetcher", version: "1.0.0" });
+
+// ❌ Vulnerable: Tool accepts arbitrary URL and fetches without allowlist
+server.tool(
+  "fetch_api_docs",
+  { target_url: z.string().url() },
+  async ({ target_url }) => {
+    const res = await fetch(target_url); // Reaches 169.254.169.254 or localhost
+    return { content: [{ type: "text", text: await res.text() }] };
+  }
+);</code></pre>
+          </div>
+
+          <div class="analysis-panel">
+            <div>
+              <div class="panel-header">
+                <span class="panel-title">AgentShield Finding Analysis</span>
+                <span id="finding-pill" class="severity-pill pill-crit">CRITICAL</span>
+              </div>
+              <div class="finding-card">
+                <div class="finding-title" id="finding-title">SHIELD-003: Unvalidated URL Parameter to Network Sink</div>
+                <div class="finding-desc" id="finding-desc">Tool parameter 'target_url' flows directly into 'fetch()' without allowlist validation or metadata endpoint filtering.</div>
+              </div>
+            </div>
+
+            <div class="remediation-box">
+              <h5>Recommended Remediation</h5>
+              <p id="remediation-text">Validate 'target_url' against an explicit domain allowlist and block access to cloud metadata IP (169.254.169.254) and private networks.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Ecosystem / Works With -->
+  <section class="section" id="ecosystem">
+    <div class="container">
+      <div class="section-header">
+        <h2>Works Across the Entire AI Stack</h2>
+        <p>AgentShield provides native IR adapters for all major agent frameworks and IDE configurations.</p>
+      </div>
+
+      <div class="ecosystem-grid">
+        <div class="ecosystem-card">
+          <h4>Model Context Protocol (MCP)</h4>
+          <p>Scans TypeScript and Python MCP servers, manifests, schemas, and stdio/SSE endpoints.</p>
+        </div>
+        <div class="ecosystem-card">
+          <h4>Claude Desktop & Claude Code</h4>
+          <p>Validates MCP configurations before agents execute tools on your workstation.</p>
+        </div>
+        <div class="ecosystem-card">
+          <h4>Cursor & Cursor Rules</h4>
+          <p>Analyzes `.cursorrules` and tool guidance files for risky prompts, network egress, and command execution.</p>
+        </div>
+        <div class="ecosystem-card">
+          <h4>OpenAI Agents & GPT Actions</h4>
+          <p>Parses OpenAI function calling schemas, OpenAPI specs, and action manifests.</p>
+        </div>
+        <div class="ecosystem-card">
+          <h4>LangChain & LangGraph</h4>
+          <p>Audits Python and TypeScript tool code and dependency surfaces.</p>
+        </div>
+        <div class="ecosystem-card">
+          <h4>CrewAI & OpenClaw</h4>
+          <p>Checks CrewAI agent tools and OpenClaw `SKILL.md` skill trees for dangerous capabilities.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Table -->
+  <section class="section" id="comparison">
+    <div class="container">
+      <div class="section-header">
+        <h2>How AgentShield Compares</h2>
+        <p>Built for teams that need deep, offline, deterministic security without sending code to a cloud service.</p>
+      </div>
+
+      <div class="comparison-table-wrapper">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th class="table-highlight">AgentShield v1.0</th>
+              <th>mcp-scan</th>
+              <th>Invariant Labs</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Engine</td>
+              <td class="table-highlight">Native Rust (&lt;50ms)</td>
+              <td>Python</td>
+              <td>Cloud / Hosted</td>
+            </tr>
+            <tr>
+              <td>Offline / Air-Gapped</td>
+              <td class="table-highlight">100% Offline</td>
+              <td>Partial</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td>Framework Adapters</td>
+              <td class="table-highlight">7 Frameworks</td>
+              <td>MCP Only</td>
+              <td>MCP Only</td>
+            </tr>
+            <tr>
+              <td>Interprocedural Taint</td>
+              <td class="table-highlight">Yes (Cross-Function)</td>
+              <td>No</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td>Automated Remediation (Fix)</td>
+              <td class="table-highlight">Yes (CLI + VS Code)</td>
+              <td>No</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td>Declarative Custom Rules</td>
+              <td class="table-highlight">Yes (.yaml / .json)</td>
+              <td>No</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td>Runtime Guard Proxy</td>
+              <td class="table-highlight">Yes (stdio + SSE/HTTP)</td>
+              <td>No</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td>SARIF / GitHub Action</td>
+              <td class="table-highlight">Native Support</td>
+              <td>No</td>
+              <td>No</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quick Start & Installation -->
+  <section class="section" id="quickstart">
+    <div class="container">
+      <div class="section-header">
+        <h2>Get Started in Seconds</h2>
+        <p>Choose your preferred installation method to start securing your agent extensions today.</p>
+      </div>
+
+      <div class="install-tabs">
+        <button class="install-tab-btn active" data-install="cli">CLI (Cargo)</button>
+        <button class="install-tab-btn" data-install="vscode">VS Code Extension</button>
+        <button class="install-tab-btn" data-install="action">GitHub Action</button>
+        <button class="install-tab-btn" data-install="docker">Docker</button>
+      </div>
+
+      <div class="install-content-box">
+        <button class="copy-btn" id="copy-install-btn">Copy</button>
+        <pre><code id="install-code"># Install AgentShield v1.0.0 GA from crates.io
+cargo install agent-shield
+
+# Or install latest release from GitHub
+cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.0 --features full --force
+
+# Verify installation
+agentshield --version</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <h3>AgentShield</h3>
+          <p>Security scanner and runtime guard for AI agent extensions. Open source, offline-first, and community driven.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#playground">Rule Explorer</a></li>
+            <li><a href="#comparison">Comparison</a></li>
+            <li><a href="https://marketplace.visualstudio.com/items?itemName=aiconnai.agentshield">VS Code Extension</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Documentation</h4>
+          <ul>
+            <li><a href="https://docs.rs/agent-shield">docs.rs API</a></li>
+            <li><a href="https://github.com/aiconnai/agentshield/blob/main/docs/RULES.md">Detection Rules</a></li>
+            <li><a href="https://github.com/aiconnai/agentshield/blob/main/docs/RUNTIME_GUARD.md">Runtime Guard</a></li>
+            <li><a href="https://github.com/aiconnai/agentshield/blob/main/docs/releases/1.0.0.md">Release Notes</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Community</h4>
+          <ul>
+            <li><a href="https://github.com/aiconnai/agentshield">GitHub</a></li>
+            <li><a href="https://crates.io/crates/agent-shield">Crates.io</a></li>
+            <li><a href="https://github.com/aiconnai/agentshield/issues">Issue Tracker</a></li>
+            <li><a href="https://github.com/aiconnai/agentshield/blob/main/LICENSE">License (MIT/Apache)</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 AI Conn AI (aiconnai). Released under MIT OR Apache-2.0 License.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="site.js"></script>
+</body>
+</html>
