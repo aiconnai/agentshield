@@ -23,6 +23,8 @@ use clap::{Parser, Subcommand};
 use discover::cmd_discover;
 use reporting::{cmd_certify, cmd_list_suppressions, cmd_suppress};
 use rules::cmd_list_rules;
+#[cfg(all(feature = "runtime-guard", feature = "runtime"))]
+use runtime::cmd_guard_http_sse;
 #[cfg(feature = "runtime")]
 use runtime::cmd_wrap;
 #[cfg(feature = "runtime-guard")]
@@ -215,7 +217,7 @@ enum Commands {
         ignore_tests: bool,
     },
 
-    /// Evaluate one runtime event from stdin as JSON
+    /// Evaluate one runtime event from stdin as JSON or start an MCP proxy guard
     #[cfg(feature = "runtime-guard")]
     Guard {
         /// Read a RuntimeEvent JSON document from stdin
@@ -227,6 +229,18 @@ enum Commands {
         /// runtime policy, and emits a forward marker or a block error.
         #[arg(long)]
         mcp_proxy: bool,
+
+        /// Listen address for HTTP/SSE MCP proxy guard (e.g. 127.0.0.1:8080)
+        #[arg(long)]
+        listen: Option<String>,
+
+        /// Target URL of the upstream HTTP/SSE MCP server (e.g. http://127.0.0.1:3000)
+        #[arg(long)]
+        target: Option<String>,
+
+        /// Optional audit log path for HTTP/SSE proxy requests
+        #[arg(long)]
+        audit_log: Option<std::path::PathBuf>,
 
         /// Path to .agentshield.toml for the `[runtime.proxy]` policy
         /// (defaults to ./.agentshield.toml).
@@ -435,10 +449,25 @@ fn main() {
         Commands::Guard {
             stdin,
             mcp_proxy,
+            listen,
+            target,
+            audit_log,
             config,
             server,
         } => {
-            if mcp_proxy {
+            if let (Some(listen_addr), Some(target_url)) = (listen, target) {
+                #[cfg(feature = "runtime")]
+                {
+                    cmd_guard_http_sse(listen_addr, target_url, config, audit_log)
+                }
+                #[cfg(not(feature = "runtime"))]
+                {
+                    let _ = (listen_addr, target_url, config, audit_log);
+                    Err(agentshield::error::ShieldError::Config(
+                        "HTTP/SSE proxy requires compiling with feature 'runtime' or 'full'".into(),
+                    ))
+                }
+            } else if mcp_proxy {
                 if server.is_empty() {
                     cmd_mcp_proxy(config)
                 } else {

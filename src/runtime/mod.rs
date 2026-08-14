@@ -1,6 +1,8 @@
 pub mod event;
 pub mod guard;
 pub mod mcp_proxy;
+#[cfg(feature = "runtime")]
+pub mod mcp_proxy_http;
 pub mod mcp_proxy_stdio;
 pub mod redaction;
 pub mod schema;

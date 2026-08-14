@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-08-14
+
+### Added
+
+- **Runtime Guard MCP SSE / HTTP Proxy Integration**:
+  - Implemented async HTTP/SSE proxy engine in `src/runtime/mcp_proxy_http.rs` (`agentshield guard --listen <ADDR> --target <URL>`).
+  - Real-time JSON-RPC request inspection (`tools/call`, `resources/read`) with policy enforcement and audit event logging.
+  - Live outgoing Server-Sent Events (SSE) stream secret redaction via `redact_text`.
+  - Built-in `/health` and `/metrics` telemetry endpoints.
+
 ## [0.9.2] - 2026-08-14
 
 ### Added
