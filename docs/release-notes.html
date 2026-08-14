@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Release Notes — AgentShield</title>
+  <meta name="description" content="Release notes and version history for AgentShield security scanner.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="site.css">
+  <style>
+    .rel-hero { padding: 60px 0 40px; text-align: center; }
+    .rel-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 32px; margin-bottom: 30px; }
+    .rel-card h2 { font-size: 1.6rem; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+    .rel-card ul { margin-left: 20px; color: var(--text-secondary); margin-bottom: 16px; }
+    .rel-card li { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+
+  <!-- Navigation -->
+  <header class="navbar">
+    <div class="container nav-container">
+      <a href="index.html" class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+        <span>AgentShield</span>
+        <span class="badge-version">v1.0.0 GA</span>
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="index.html#features">Features</a></li>
+          <li><a href="rules.html">Rules</a></li>
+          <li><a href="runtime-guard.html">Runtime Guard</a></li>
+          <li><a href="release-notes.html" style="color: var(--text-primary);">Releases</a></li>
+        </ul>
+      </nav>
+      <div class="nav-actions">
+        <a href="https://github.com/aiconnai/agentshield" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">GitHub</a>
+        <a href="index.html#quickstart" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="rel-hero">
+      <h1>Release Notes & Roadmap</h1>
+      <p style="color: var(--text-secondary);">Track stable releases and major architecture milestones.</p>
+    </div>
+
+    <div class="rel-card">
+      <h2>
+        v1.0.0 — General Availability (GA)
+        <span class="badge-version">Latest</span>
+      </h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Released August 2026</p>
+      <ul>
+        <li><strong>Interprocedural Call-Graph Taint Engine</strong>: Cross-function and cross-method taint propagation tracking tool parameters through helper functions into execution sinks in Python and TypeScript.</li>
+        <li><strong>Declarative Custom Rules Engine</strong>: Author organization-specific rules in <code>.agentshield/rules/*.yaml</code> with regex, globs, banned dependencies, and tool matchers.</li>
+        <li><strong>Automated Remediation (<code>agentshield fix</code>)</strong>: 1-click and IDE lightbulb fixes for unsafe deserializers and unpinned dependencies.</li>
+        <li><strong>MCP Runtime Guard Reverse Proxy</strong>: Real-time stdio and HTTP/SSE reverse proxy with live JSON-RPC inspection and stream secret sanitization.</li>
+        <li><strong>VS Code Extension v1.0.0</strong>: Inline findings, lightbulb code actions, and interactive suppressions.</li>
+      </ul>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-bottom">
+      <p>&copy; 2026 AI Conn AI (aiconnai). Open source under MIT OR Apache-2.0 License. <a href="index.html" style="color: var(--color-emerald);">Back to Home</a></p>
+    </div>
+  </footer>
+</body>
+</html>
