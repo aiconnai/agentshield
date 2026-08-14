@@ -1,6 +1,6 @@
 name: 'AgentShield Security Scanner'
 description: 'Scan supported AI agent extension frameworks for security vulnerabilities'
-author: 'Ronaldo Lima'
+author: 'AgentShield Contributors'
 
 branding:
   icon: 'shield'

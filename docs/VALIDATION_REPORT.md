@@ -294,7 +294,7 @@ The signal-to-noise ratio improved from 0.53 to 0.99 — nearly every finding is
 
 ### PR Inline Annotations (IBVI-488) — Verified
 
-[PR #1](https://github.com/limaronaldo/agentshield-test/pull/1) on `limaronaldo/agentshield-test` confirmed that SARIF findings appear as inline annotations in the PR Files changed tab. Added `src/tools.py` with 7 intentional vulnerabilities — all 7 appeared as Code Scanning annotations on the changed lines.
+[PR #1](https://github.com/aiconnai/agentshield-test/pull/1) on `aiconnai/agentshield-test` confirmed that SARIF findings appear as inline annotations in the PR Files changed tab. Added `src/tools.py` with 7 intentional vulnerabilities — all 7 appeared as Code Scanning annotations on the changed lines.
 
 ### v0.2.3 Release
 
