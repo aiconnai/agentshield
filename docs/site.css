@@ -676,32 +676,51 @@ body {
   background: #0d1117;
   border: 1px solid var(--border-active);
   border-radius: var(--radius-md);
-  padding: 24px;
+  padding: 28px 32px;
   font-family: var(--font-mono);
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   position: relative;
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
+  overflow: hidden;
+  box-shadow: var(--shadow-subtle);
+}
+
+.install-content-box pre {
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding-right: 70px;
+}
+
+.install-content-box code {
+  font-family: var(--font-mono);
+  line-height: 1.7;
+  color: #e6edf3;
 }
 
 .copy-btn {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 18px;
+  right: 18px;
   background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-active);
   color: var(--text-secondary);
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: var(--radius-sm);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
   cursor: pointer;
   font-family: var(--font-sans);
   transition: all 0.2s;
+  z-index: 2;
 }
 
 .copy-btn:hover {
   color: var(--text-primary);
-  border-color: var(--border-active);
+  background: var(--bg-surface-hover);
+  border-color: var(--color-emerald);
 }
 
 /* Footer */

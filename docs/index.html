@@ -466,13 +466,14 @@ server.tool(
 
       <div class="install-content-box">
         <button class="copy-btn" id="copy-install-btn">Copy</button>
-        <pre><code id="install-code"># Install AgentShield v1.0.0 GA from crates.io
+        <pre><code id="install-code"># 1. Install official binary from crates.io (Recommended)
 cargo install agent-shield
 
-# Or install latest release from GitHub
-cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.0 --features full --force
+# 2. Or build from GitHub with all features
+cargo install --git https://github.com/aiconnai/agentshield \
+  --tag v1.0.0 --features full --force
 
-# Verify installation
+# 3. Verify installation
 agentshield --version</code></pre>
       </div>
     </div>
