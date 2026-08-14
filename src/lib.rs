@@ -22,6 +22,7 @@ pub mod config;
 pub mod doctor;
 pub mod egress;
 pub mod error;
+pub mod fix;
 pub mod ir;
 pub mod output;
 pub mod parser;

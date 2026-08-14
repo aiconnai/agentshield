@@ -184,9 +184,10 @@ where
             match reader.read_line(&mut line) {
                 Ok(0) => break,
                 Ok(_) => {
+                    let redacted = crate::runtime::redaction::redact_text(&line).redacted_text;
                     let stdout = std::io::stdout();
                     let mut out = stdout.lock();
-                    if out.write_all(line.as_bytes()).is_err() || out.flush().is_err() {
+                    if out.write_all(redacted.as_bytes()).is_err() || out.flush().is_err() {
                         break;
                     }
                 }

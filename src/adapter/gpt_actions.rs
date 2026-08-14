@@ -28,13 +28,22 @@ const OPENAPI_FILENAMES: &[&str] = &[
 /// Legacy ChatGPT plugin manifest filenames.
 const PLUGIN_MANIFEST_FILENAMES: &[&str] = &["ai-plugin.json", "actions.json"];
 
-/// GPT Actions adapter.
+/// OpenAI function and tool definition filenames.
+const OPENAI_TOOL_FILENAMES: &[&str] = &[
+    "tools.json",
+    "functions.json",
+    "assistant.json",
+    "tools.yaml",
+    "tools.yml",
+];
+
+/// GPT Actions and OpenAI Tools adapter.
 ///
-/// Detects OpenAPI specs for ChatGPT custom actions by looking for:
+/// Detects OpenAPI specs and OpenAI tool/function schemas by looking for:
 /// - `ai-plugin.json` (legacy ChatGPT plugin manifest)
 /// - `.well-known/ai-plugin.json`
 /// - `openapi.json` / `openapi.yaml` / `swagger.json` / `swagger.yaml`
-///   with `x-openai-*` extensions or alongside an `ai-plugin.json`
+/// - `tools.json` / `functions.json` / `assistant.json`
 /// - `actions.json`
 pub struct GptActionsAdapter;
 
@@ -73,6 +82,21 @@ impl super::Adapter for GptActionsAdapter {
             }
         }
 
+        // OpenAI tools/functions definitions
+        for filename in OPENAI_TOOL_FILENAMES {
+            let path = root.join(filename);
+            if path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if content.contains("\"function\"")
+                        || content.contains("\"parameters\"")
+                        || content.contains("parameters:")
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
         false
     }
 
@@ -100,6 +124,20 @@ impl super::Adapter for GptActionsAdapter {
 
                 // Extract paths as tool surfaces
                 extract_path_tools(&spec, &spec_path, &mut tools);
+            }
+        }
+
+        // Extract OpenAI function/tool definitions
+        for filename in OPENAI_TOOL_FILENAMES {
+            let tool_path = root.join(filename);
+            if tool_path.exists() && filter.allows_path(root, &tool_path) {
+                if let Ok(content) = std::fs::read_to_string(&tool_path) {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                        extract_openai_tools_json(&val, &tool_path, &mut tools);
+                    } else if let Ok(val) = serde_yaml::from_str::<serde_json::Value>(&content) {
+                        extract_openai_tools_json(&val, &tool_path, &mut tools);
+                    }
+                }
             }
         }
 
@@ -375,12 +413,95 @@ fn parse_openapi_spec(spec_path: &Path) -> Result<serde_json::Value> {
     })
 }
 
+fn extract_openai_tools_json(
+    value: &serde_json::Value,
+    file_path: &Path,
+    tools: &mut Vec<ToolSurface>,
+) {
+    let items = if let Some(arr) = value.as_array() {
+        arr.as_slice()
+    } else if let Some(arr) = value.get("tools").and_then(|t| t.as_array()) {
+        arr.as_slice()
+    } else if let Some(arr) = value.get("functions").and_then(|f| f.as_array()) {
+        arr.as_slice()
+    } else {
+        return;
+    };
+
+    for item in items {
+        let func = if let Some(f) = item.get("function") {
+            f
+        } else {
+            item
+        };
+
+        let Some(name) = func.get("name").and_then(|n| n.as_str()) else {
+            continue;
+        };
+
+        let description = func
+            .get("description")
+            .and_then(|d| d.as_str())
+            .map(str::to_string);
+        let input_schema = func.get("parameters").cloned();
+
+        tools.push(ToolSurface {
+            name: name.to_string(),
+            description,
+            input_schema,
+            output_schema: None,
+            declared_permissions: Vec::new(),
+            defined_at: Some(SourceLocation {
+                file: file_path.to_path_buf(),
+                line: 1,
+                column: 0,
+                end_line: None,
+                end_column: None,
+            }),
+            declared_capabilities: Default::default(),
+            capability_declarations: Vec::new(),
+            observed_capabilities: Default::default(),
+            capability_observation_complete: false,
+            capability_evidence: Vec::new(),
+        });
+    }
+}
+
 use sha2::Digest;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::adapter::Adapter;
+
+    #[test]
+    fn test_extract_openai_tools_json() {
+        let schema_json = serde_json::json!([
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_database",
+                    "description": "Query the database for records",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": { "type": "string" }
+                        }
+                    }
+                }
+            }
+        ]);
+
+        let mut tools = Vec::new();
+        extract_openai_tools_json(&schema_json, Path::new("tools.json"), &mut tools);
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "search_database");
+        assert_eq!(
+            tools[0].description.as_deref(),
+            Some("Query the database for records")
+        );
+        assert!(tools[0].input_schema.is_some());
+    }
 
     fn fixture_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/gpt_actions")

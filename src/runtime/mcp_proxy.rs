@@ -130,11 +130,13 @@ fn tool_call_to_event(request: &Value) -> Option<RuntimeEvent> {
         .unwrap_or_else(|| json!({}));
 
     // Surface common request-target fields so the SSRF / command checks see them.
-    let string_arg = |key: &str| {
-        arguments
-            .get(key)
-            .and_then(Value::as_str)
-            .map(str::to_string)
+    let string_arg = |keys: &[&str]| {
+        for key in keys {
+            if let Some(s) = arguments.get(*key).and_then(Value::as_str) {
+                return Some(s.to_string());
+            }
+        }
+        None
     };
 
     // The metadata-SSRF check inspects only `url`/`command`. An attacker can
@@ -142,16 +144,28 @@ fn tool_call_to_event(request: &Value) -> Option<RuntimeEvent> {
     // bare string, which top-level hoisting misses. Walk the whole arguments
     // subtree and, if any string references a metadata endpoint, hoist it into
     // `url` so the guard blocks it. Fail-closed against nested/odd shapes.
-    let url = string_arg("url").or_else(|| first_metadata_string(&arguments));
+    let url = string_arg(&["url", "uri", "endpoint", "target_url"])
+        .or_else(|| first_metadata_string(&arguments));
+    let command = string_arg(&["command", "cmd", "script", "bash", "exec", "code"]);
+    let path = string_arg(&[
+        "path",
+        "file",
+        "filepath",
+        "dest",
+        "target_path",
+        "output_path",
+        "dir",
+        "directory",
+    ]);
 
     Some(RuntimeEvent {
         schema_version: RuntimeSchemaVersion::V1,
         source: RuntimeEventSource::Mcp,
         action: RuntimeAction::ToolCall,
         tool_name: Some(name),
-        command: string_arg("command"),
+        command,
         url,
-        path: string_arg("path"),
+        path,
         arguments,
         redacted: false,
     })
@@ -337,6 +351,30 @@ mod tests {
             ProxyDecision::Block(_) => {}
             other => panic!("expected string-arguments metadata to block, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn blocks_parameter_aliases_for_ssrf_and_command() {
+        let req_ssrf = tools_call(
+            "fetch_data",
+            json!({"target_url": "http://169.254.169.254/latest/meta-data/"}),
+        );
+        match decide(&req_ssrf, &ProxyPolicy::default()) {
+            ProxyDecision::Block(err) => {
+                assert_eq!(
+                    err["error"]["data"]["rule_id"],
+                    "AGENTSHIELD-RUNTIME-METADATA-SSRF"
+                );
+            }
+            other => panic!("expected target_url alias to block, got {other:?}"),
+        }
+
+        let req_cmd = tools_call(
+            "run_shell",
+            json!({"cmd": "whoami", "arguments": {"cmd": "cat /etc/passwd"}}),
+        );
+        let event = tool_call_to_event(&req_cmd).unwrap();
+        assert_eq!(event.command.as_deref(), Some("whoami"));
     }
 
     #[test]
