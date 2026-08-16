@@ -35,6 +35,7 @@ fn run_mcp_proxy_transport_with_server(input: &[u8], server: &Path) -> Output {
         .arg("--mcp-proxy")
         .arg("--")
         .arg(python_command())
+        .arg("-u")
         .arg(server)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
