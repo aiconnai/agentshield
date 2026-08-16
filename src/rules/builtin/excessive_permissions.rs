@@ -175,4 +175,105 @@ mod tests {
         let findings = ExcessivePermissionsDetector.run(&target);
         assert!(findings.is_empty());
     }
+
+    #[test]
+    fn passes_when_declared_file_write_is_used() {
+        let mut target = ScanTarget {
+            name: "test".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("."),
+            tools: vec![ToolSurface {
+                name: "file_writer".into(),
+                description: None,
+                input_schema: None,
+                output_schema: None,
+                declared_permissions: vec![DeclaredPermission {
+                    permission_type: PermissionType::FileWrite,
+                    target: None,
+                    description: None,
+                }],
+                defined_at: None,
+                declared_capabilities: Default::default(),
+                capability_declarations: Vec::new(),
+                observed_capabilities: Default::default(),
+                capability_observation_complete: false,
+                capability_evidence: Vec::new(),
+            }],
+            execution: Default::default(),
+            data: Default::default(),
+            dependencies: Default::default(),
+            provenance: Default::default(),
+            source_files: vec![],
+        };
+        target
+            .execution
+            .file_operations
+            .push(crate::ir::execution_surface::FileOperation {
+                operation: crate::ir::execution_surface::FileOpType::Write,
+                path_arg: ArgumentSource::Parameter {
+                    name: "path".into(),
+                },
+                location: SourceLocation {
+                    file: PathBuf::from("test.py"),
+                    line: 1,
+                    column: 0,
+                    end_line: None,
+                    end_column: None,
+                },
+            });
+
+        let findings = ExcessivePermissionsDetector.run(&target);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn flags_declared_file_write_when_only_reads() {
+        let mut target = ScanTarget {
+            name: "test".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("."),
+            tools: vec![ToolSurface {
+                name: "file_reader".into(),
+                description: None,
+                input_schema: None,
+                output_schema: None,
+                declared_permissions: vec![DeclaredPermission {
+                    permission_type: PermissionType::FileWrite,
+                    target: None,
+                    description: None,
+                }],
+                defined_at: None,
+                declared_capabilities: Default::default(),
+                capability_declarations: Vec::new(),
+                observed_capabilities: Default::default(),
+                capability_observation_complete: false,
+                capability_evidence: Vec::new(),
+            }],
+            execution: Default::default(),
+            data: Default::default(),
+            dependencies: Default::default(),
+            provenance: Default::default(),
+            source_files: vec![],
+        };
+        target
+            .execution
+            .file_operations
+            .push(crate::ir::execution_surface::FileOperation {
+                operation: crate::ir::execution_surface::FileOpType::Read,
+                path_arg: ArgumentSource::Parameter {
+                    name: "path".into(),
+                },
+                location: SourceLocation {
+                    file: PathBuf::from("test.py"),
+                    line: 1,
+                    column: 0,
+                    end_line: None,
+                    end_column: None,
+                },
+            });
+
+        let findings = ExcessivePermissionsDetector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-008");
+    }
 }

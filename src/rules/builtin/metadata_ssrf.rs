@@ -1,6 +1,5 @@
 use crate::ir::data_surface::{TaintSinkType, TaintSourceType};
-use crate::ir::execution_surface::NetworkOperation;
-use crate::ir::{ArgumentSource, ScanTarget, SourceLocation};
+use crate::ir::{ArgumentSource, ScanTarget};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
@@ -93,15 +92,21 @@ impl Detector for MetadataSsrfDetector {
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
+        let mut sink_urls = std::collections::HashMap::new();
+        for op in &target.execution.network_operations {
+            if let ArgumentSource::Literal(url) = &op.url_arg {
+                sink_urls.insert(&op.location, url.as_str());
+            }
+        }
+
         // Phase 1: Check taint paths from ToolArgument -> HttpRequest
         for path in &target.data.taint_paths {
             if matches!(path.source.source_type, TaintSourceType::ToolArgument)
                 && matches!(path.sink.sink_type, TaintSinkType::HttpRequest)
             {
-                let target_type = metadata_target_from_sink_location(
-                    &path.sink.location,
-                    &target.execution.network_operations,
-                );
+                let target_type = sink_urls
+                    .get(&path.sink.location)
+                    .and_then(|url| is_metadata_or_private(url));
                 if has_finding_at_location(&findings, &path.sink.location) {
                     continue;
                 }
@@ -188,19 +193,6 @@ impl Detector for MetadataSsrfDetector {
 
         findings
     }
-}
-
-fn metadata_target_from_sink_location(
-    sink_loc: &SourceLocation,
-    network_operations: &[NetworkOperation],
-) -> Option<&'static str> {
-    network_operations
-        .iter()
-        .find(|op| op.location == *sink_loc)
-        .and_then(|op| match &op.url_arg {
-            ArgumentSource::Literal(url) => is_metadata_or_private(url),
-            _ => None,
-        })
 }
 
 fn has_finding_at_location(findings: &[Finding], location: &crate::ir::SourceLocation) -> bool {

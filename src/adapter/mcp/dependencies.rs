@@ -534,3 +534,68 @@ pub(crate) fn is_exact_pinned_version(version: &str) -> bool {
 
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn npm_lock_skips_root_package() {
+        let content = r#"{
+            "packages": {
+                "": {"name": "root"},
+                "node_modules/foo": {"version": "1.0.0", "integrity": "sha512-abc"}
+            }
+        }"#;
+        assert_eq!(detect_npm_lock_confidence(content), (true, true));
+    }
+
+    #[test]
+    fn npm_lock_detects_unpinned() {
+        let content = r#"{
+            "packages": {
+                "node_modules/foo": {"version": "1.0.0"}
+            }
+        }"#;
+        assert_eq!(detect_npm_lock_confidence(content), (true, false));
+    }
+
+    #[test]
+    fn uv_lock_requires_all_wheels_hashed() {
+        let content = r#"
+        [[package]]
+        name = "foo"
+        version = "1.0.0"
+        wheels = [
+            {url = "https://...", hash = "sha256:abc"},
+            {url = "https://..."}
+        ]
+        "#;
+        assert_eq!(detect_uv_lock_confidence(content), (true, false));
+    }
+
+    #[test]
+    fn uv_lock_detects_sdist_hash() {
+        let content = r#"
+        [[package]]
+        name = "foo"
+        version = "1.0.0"
+        [package.sdist]
+        hash = "sha256:abc"
+        "#;
+        assert_eq!(detect_uv_lock_confidence(content), (true, true));
+    }
+
+    #[test]
+    fn uv_lock_fully_pinned_and_hashed() {
+        let content = r#"
+        [[package]]
+        name = "foo"
+        version = "1.0.0"
+        wheels = [
+            {url = "https://...", hash = "sha256:abc"}
+        ]
+        "#;
+        assert_eq!(detect_uv_lock_confidence(content), (true, true));
+    }
+}

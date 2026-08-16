@@ -120,7 +120,7 @@ impl Language {
 }
 
 /// Location in source code.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SourceLocation {
     pub file: PathBuf,
     pub line: usize,

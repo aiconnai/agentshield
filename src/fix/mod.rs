@@ -225,6 +225,57 @@ pub fn generate_unified_diff(file_path: &Path, original: &str, modified: &str) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
+
+    #[test]
+    fn test_write_to_disk_atomic() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("test_atomic.txt");
+
+        std::fs::write(&file_path, "original").unwrap();
+
+        let patch = FilePatch {
+            file_path: file_path.clone(),
+            original_content: "original".into(),
+            modified_content: "modified".into(),
+            applied_fixes: vec![],
+        };
+
+        patch.write_to_disk().unwrap();
+
+        let mut content = String::new();
+        std::fs::File::open(&file_path)
+            .unwrap()
+            .read_to_string(&mut content)
+            .unwrap();
+        assert_eq!(content, "modified");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_to_disk_preserves_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("test_perms.txt");
+
+        std::fs::write(&file_path, "original").unwrap();
+        let mut perms = std::fs::metadata(&file_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&file_path, perms).unwrap();
+
+        let patch = FilePatch {
+            file_path: file_path.clone(),
+            original_content: "original".into(),
+            modified_content: "modified".into(),
+            applied_fixes: vec![],
+        };
+
+        patch.write_to_disk().unwrap();
+
+        let new_perms = std::fs::metadata(&file_path).unwrap().permissions();
+        assert_eq!(new_perms.mode() & 0o777, 0o755);
+    }
 
     #[test]
     fn test_generate_unified_diff() {

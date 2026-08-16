@@ -166,4 +166,30 @@ mod tests {
         let findings = CommandInjectionDetector.run(&target);
         assert_eq!(findings.len(), 1);
     }
+
+    #[test]
+    fn passes_sanitized_for_command_sink() {
+        let target = make_target(vec![CommandInvocation {
+            function: "subprocess.run".into(),
+            command_arg: ArgumentSource::Sanitized {
+                sanitizer: "crossfile:command:validate_command".into(),
+            },
+            location: loc(),
+        }]);
+        let findings = CommandInjectionDetector.run(&target);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn flags_sanitized_wrong_category() {
+        let target = make_target(vec![CommandInvocation {
+            function: "subprocess.run".into(),
+            command_arg: ArgumentSource::Sanitized {
+                sanitizer: "validate_path".into(),
+            },
+            location: loc(),
+        }]);
+        let findings = CommandInjectionDetector.run(&target);
+        assert_eq!(findings.len(), 1);
+    }
 }
