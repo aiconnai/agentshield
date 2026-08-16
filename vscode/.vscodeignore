@@ -3,3 +3,5 @@ tsconfig.json
 .gitignore
 node_modules/**
 dist/test/**
+publish.sh
+*.vsix

@@ -19,7 +19,7 @@ echo "✅ Package created: agentshield-1.0.0.vsix"
 if [ -n "$VSCE_PAT" ]; then
   echo "🚀 Publishing to Visual Studio Marketplace..."
   npx vsce publish -p "$VSCE_PAT"
-  echo "✅ Published to Visual Studio Marketplace: https://marketplace.visualstudio.com/items?itemName=aiconnai.agentshield"
+  echo "✅ Published to Visual Studio Marketplace: https://marketplace.visualstudio.com/items?itemName=aiconnai-vs.agentshield"
 else
   echo "ℹ️  VSCE_PAT not provided. Skipping Visual Studio Marketplace publish."
   echo "   To publish, set: export VSCE_PAT='<Azure DevOps PAT>'"
