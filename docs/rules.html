@@ -236,6 +236,20 @@ def execute(safe_target: str):
           Flags MCP servers and agent transports that bind to wildcard interfaces (<code>host="0.0.0.0"</code>, <code>app.listen(port, "0.0.0.0")</code>) without explicit authentication, preventing unauthorized network exposure and DNS rebinding attacks.
         </p>
       </article>
+
+      <!-- SHIELD-025 -->
+      <article class="rule-card" data-search="shield-025 insecure temporary file creation tmp mktemp race condition symlink cwe-377 cwe-378">
+        <div class="rule-meta">
+          <span class="rule-id">SHIELD-025</span>
+          <span class="rule-name">Insecure Temporary File Creation</span>
+          <span class="severity-pill pill-info">MEDIUM</span>
+          <span class="rule-meta-tag">CWE-377</span>
+          <span class="rule-meta-tag">MCP02</span>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          Detects temporary file creation using predictable paths in shared directories (<code>/tmp/...</code>, <code>/var/tmp/...</code>) or deprecated functions like <code>tempfile.mktemp()</code> subject to race conditions and symlink attacks.
+        </p>
+      </article>
     </div>
   </main>
 

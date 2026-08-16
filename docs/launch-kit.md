@@ -30,7 +30,7 @@ Existing SAST tools (Semgrep, SonarQube) analyze traditional web apps, but miss 
 1. Interprocedural Call-Graph Taint Engine: Builds an AST + interprocedural call-graph in native Rust to track tainted parameters from tool declarations all the way into deep execution sinks across files.
 2. 100% Offline & Private: Zero telemetry, zero cloud calls, executes in <50ms.
 3. 7 Framework Adapters: Native support for Model Context Protocol (MCP), Hermes Agent (.hermes.md / SKILL.md), OpenAI Codex / GPT Actions (OpenAPI), Cursor Rules (.cursorrules), CrewAI, LangChain/LangGraph, and OpenClaw.
-4. 23 Built-in Security Rules: Comprehensive coverage for OWASP MCP Top 10 and CWEs.
+4. 25 Built-in Security Rules: Comprehensive coverage for OWASP MCP Top 10 and CWEs.
 5. 1-Click Auto-Remediation: Safely patches vulnerable code (e.g. `yaml.load` -> `yaml.safe_load`, pinning unpinned dependencies).
 6. Native IDE & CI Integration: Official VS Code Extension (Marketplace & Open VSX) with lightbulb code actions, and GitHub Action for automated SARIF Code Scanning.
 
