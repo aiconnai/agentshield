@@ -16,7 +16,7 @@ impl DomainPolicy {
     ///
     /// Deny rules take precedence over allow rules. If the allow list is
     /// empty, all domains not explicitly denied are allowed.
-    pub(crate) fn is_domain_allowed(&self, domain: &str) -> bool {
+    pub(super) fn is_domain_allowed(&self, domain: &str) -> bool {
         // Deny takes precedence
         if self
             .deny
@@ -39,7 +39,7 @@ impl DomainPolicy {
 ///
 /// Supports `*.example.com` (matches `sub.example.com` and `example.com`)
 /// and exact matches like `api.github.com`.
-pub(crate) fn domain_matches(domain: &str, pattern: &str) -> bool {
+pub(super) fn domain_matches(domain: &str, pattern: &str) -> bool {
     if let Some(suffix) = pattern.strip_prefix('*') {
         // "*.example.com" matches "sub.example.com" and "example.com"
         domain.ends_with(suffix) || domain == &suffix[1..]
@@ -53,7 +53,7 @@ pub(crate) fn domain_matches(domain: &str, pattern: &str) -> bool {
 /// Handles `http://`, `https://` URLs (strips scheme, path, port) and bare
 /// domain names (e.g., `"api.example.com"`). Returns `None` for strings that
 /// cannot be mapped to a useful hostname (e.g., paths, IP-like without dot).
-pub(crate) fn extract_domain(url_or_domain: &str) -> Option<String> {
+pub(super) fn extract_domain(url_or_domain: &str) -> Option<String> {
     // Try stripping http:// or https://
     let rest = if let Some(r) = url_or_domain.strip_prefix("https://") {
         r

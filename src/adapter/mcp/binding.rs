@@ -4,7 +4,9 @@ use crate::ir::SourceLocation;
 use crate::ir::execution_surface::ExecutionSurface;
 use crate::parser;
 
-use super::tools::{McpToolDeclaration, McpToolHandler};
+use super::tools::McpToolDeclaration;
+#[cfg(feature = "typescript")]
+use super::tools::McpToolHandler;
 
 #[derive(Debug, Clone)]
 pub(crate) struct McpToolOperationBinding {

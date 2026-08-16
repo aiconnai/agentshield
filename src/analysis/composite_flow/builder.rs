@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use tree_sitter::{Node, Parser, Tree};
+#[cfg(feature = "typescript")]
+use tree_sitter::Parser;
+use tree_sitter::{Node, Tree};
 
 use crate::ir::SourceLocation;
 
@@ -124,6 +126,7 @@ pub(crate) fn build(
     candidates
 }
 
+#[cfg(feature = "typescript")]
 pub(crate) fn parse_units<'a>(sources: &[SourceUnit<'a>]) -> Vec<ParsedUnit<'a>> {
     sources
         .iter()
@@ -148,6 +151,11 @@ pub(crate) fn parse_units<'a>(sources: &[SourceUnit<'a>]) -> Vec<ParsedUnit<'a>>
             })
         })
         .collect()
+}
+
+#[cfg(not(feature = "typescript"))]
+pub(crate) fn parse_units<'a>(_sources: &[SourceUnit<'a>]) -> Vec<ParsedUnit<'a>> {
+    Vec::new()
 }
 
 pub(crate) fn collect_imports(root: Node<'_>, source: &str) -> Imports {

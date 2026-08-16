@@ -41,7 +41,10 @@ agentshield/
 │   │   ├── langchain.rs          # LangChain adapter (@tool, BaseTool, langgraph)
 │   │   ├── gpt_actions.rs        # GPT Actions adapter (OpenAPI specs)
 │   │   ├── cursor_rules.rs       # Cursor Rules adapter (.cursorrules files)
-│   │   └── hermes.rs             # Hermes Agent config, context, and skills adapter
+│   │   └── hermes/               # Hermes Agent config, context, and skills adapter
+│   │       ├── mod.rs            # Adapter trait impl, lifecycle, test helpers
+│   │       ├── config.rs         # YAML config parsing & MCP server extraction
+│   │       └── discovery.rs      # Skill tree, catalog & profile discovery
 │   ├── parser/                   # Language parsers
 │   │   ├── mod.rs                # Parser trait, ParsedFile, FunctionDef, CallSite
 │   │   ├── python/               # Python parser (modularized)

@@ -33,7 +33,7 @@ impl RateLimitPolicy {
     /// Get rate limit for a domain (requests per minute).
     ///
     /// Returns the per-domain override if one exists, otherwise the global default.
-    pub(crate) fn rate_limit_for(&self, domain: &str) -> u32 {
+    pub(super) fn rate_limit_for(&self, domain: &str) -> u32 {
         self.per_domain
             .get(domain)
             .copied()
@@ -80,7 +80,7 @@ impl Default for AuditPolicy {
 /// - `rate_limits.max_requests_per_minute` = min(self, override)
 /// - `rate_limits.per_domain`: min rate per domain; missing entries inherit the global min
 /// - `audit`: operator override wins (operator controls where logs go)
-pub(crate) fn merge_override(base: &EgressPolicy, operator: &EgressPolicy) -> EgressPolicy {
+pub(super) fn merge_override(base: &EgressPolicy, operator: &EgressPolicy) -> EgressPolicy {
     // Allow list: intersection when both are non-empty; operator restricts further
     let allow = if operator.domains.allow.is_empty() {
         // Empty override allow = "no additional restriction on allow"
