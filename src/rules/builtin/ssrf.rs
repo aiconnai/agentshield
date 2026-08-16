@@ -18,7 +18,7 @@ impl Detector for SsrfDetector {
             default_severity: Severity::High,
             attack_category: AttackCategory::Ssrf,
             cwe_id: Some("CWE-918".into()),
-            owasp_mcp: Some(OwaspMcp::CommandExecution),
+            owasp_mcp: Some(OwaspMcp::InsecureCommunication),
         }
     }
 

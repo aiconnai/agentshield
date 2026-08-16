@@ -238,6 +238,7 @@ impl CallGraph {
                 let start_line = line_num;
                 let mut end_line = start_line;
                 let mut brace_count: i32 = 0;
+                let mut seen_open_brace = false;
                 for (sub_idx, next_line) in
                     lines.iter().enumerate().skip(start_line.saturating_sub(1))
                 {
@@ -245,10 +246,14 @@ impl CallGraph {
                     if next_trimmed.is_empty() || next_trimmed.starts_with("//") {
                         continue;
                     }
-                    brace_count += next_line.chars().filter(|&c| c == '{').count() as i32;
-                    brace_count -= next_line.chars().filter(|&c| c == '}').count() as i32;
+                    let opens = next_line.chars().filter(|&c| c == '{').count() as i32;
+                    let closes = next_line.chars().filter(|&c| c == '}').count() as i32;
+                    if opens > 0 {
+                        seen_open_brace = true;
+                    }
+                    brace_count += opens - closes;
                     end_line = sub_idx + 1;
-                    if brace_count <= 0 && sub_idx + 1 >= start_line {
+                    if seen_open_brace && brace_count <= 0 && sub_idx + 1 >= start_line {
                         break;
                     }
                 }
@@ -381,7 +386,7 @@ struct TraversalContext<'a> {
     source: &'a TaintSource,
     trace: Vec<SourceLocation>,
     visited_functions: HashSet<String>,
-    visited_paths: &'a mut HashSet<(String, usize, usize)>,
+    visited_paths: &'a mut HashSet<(std::path::PathBuf, usize, std::path::PathBuf, usize)>,
     new_paths: &'a mut Vec<TaintPath>,
     depth: usize,
 }
@@ -400,8 +405,9 @@ impl<'a> TraversalContext<'a> {
                 // Check if this callee contains execution sinks
                 for sink in &node.sinks {
                     let path_key = (
-                        self.source.description.clone(),
+                        self.source.location.file.clone(),
                         self.source.location.line,
+                        sink.location.file.clone(),
                         sink.location.line,
                     );
                     if !self.visited_paths.contains(&path_key) {
@@ -442,7 +448,9 @@ pub(crate) fn analyze_and_enrich_targets(bundles: &mut [AnalysisBundle]) {
 
         for path in interprocedural_paths {
             if !bundle.target.data.taint_paths.iter().any(|p| {
-                p.source.location.line == path.source.location.line
+                p.source.location.file == path.source.location.file
+                    && p.source.location.line == path.source.location.line
+                    && p.sink.location.file == path.sink.location.file
                     && p.sink.location.line == path.sink.location.line
             }) {
                 bundle.target.data.taint_paths.push(path);
@@ -627,5 +635,128 @@ export async function handleApiRequest(urlInput: string) {
         assert_eq!(paths[0].source.source_type, TaintSourceType::ToolArgument);
         assert_eq!(paths[0].sink.sink_type, TaintSinkType::HttpRequest);
         assert!(!paths[0].through.is_empty());
+    }
+
+    #[test]
+    fn test_allman_style_typescript_function_brace() {
+        let ts_code =
+            "function executeCommand(cmd: string)\n{\n    return child_process.execSync(cmd);\n}\n";
+        let file_path = PathBuf::from("exec.ts");
+
+        let target = ScanTarget {
+            name: "test-allman-ts".into(),
+            framework: crate::ir::Framework::Mcp,
+            root_path: PathBuf::from("/test-allman"),
+            source_files: vec![crate::ir::SourceFile {
+                path: file_path.clone(),
+                language: Language::TypeScript,
+                content: ts_code.into(),
+                size_bytes: ts_code.len() as u64,
+                content_hash: "hash-allman".into(),
+            }],
+            dependencies: DependencySurface::default(),
+            data: DataSurface {
+                sources: vec![TaintSource {
+                    source_type: TaintSourceType::ToolArgument,
+                    description: "Tool parameter 'cmd'".into(),
+                    location: SourceLocation {
+                        file: file_path.clone(),
+                        line: 1,
+                        column: 0,
+                        end_line: None,
+                        end_column: None,
+                    },
+                }],
+                sinks: vec![TaintSink {
+                    sink_type: TaintSinkType::ProcessExec,
+                    description: "ExecSync command".into(),
+                    location: SourceLocation {
+                        file: file_path.clone(),
+                        line: 3,
+                        column: 4,
+                        end_line: None,
+                        end_column: None,
+                    },
+                }],
+                taint_paths: vec![],
+            },
+            tools: vec![],
+            execution: ExecutionSurface::default(),
+            provenance: ProvenanceSurface::default(),
+        };
+
+        let graph = CallGraph::build(&target);
+        assert!(graph.functions.contains_key("executeCommand"));
+        let node = &graph.functions["executeCommand"][0];
+        assert_eq!(
+            node.sinks.len(),
+            1,
+            "Sink on line 3 must be captured inside Allman brace function boundary"
+        );
+    }
+
+    #[test]
+    fn test_multi_file_line_collision_preserves_distinct_sinks() {
+        let py_code_a = "def run_task(q):\n    return helper(q)\n";
+        let py_code_b = "def helper(q):\n    subprocess.run(q, shell=True)\n";
+        let file_a = PathBuf::from("pkg/a.py");
+        let file_b = PathBuf::from("pkg/b.py");
+
+        let target = ScanTarget {
+            name: "test-multi-file-collision".into(),
+            framework: crate::ir::Framework::Mcp,
+            root_path: PathBuf::from("/test-multi"),
+            source_files: vec![
+                crate::ir::SourceFile {
+                    path: file_a.clone(),
+                    language: Language::Python,
+                    content: py_code_a.into(),
+                    size_bytes: py_code_a.len() as u64,
+                    content_hash: "hash-a".into(),
+                },
+                crate::ir::SourceFile {
+                    path: file_b.clone(),
+                    language: Language::Python,
+                    content: py_code_b.into(),
+                    size_bytes: py_code_b.len() as u64,
+                    content_hash: "hash-b".into(),
+                },
+            ],
+            dependencies: DependencySurface::default(),
+            data: DataSurface {
+                sources: vec![TaintSource {
+                    source_type: TaintSourceType::ToolArgument,
+                    description: "Param 'q'".into(),
+                    location: SourceLocation {
+                        file: file_a.clone(),
+                        line: 1,
+                        column: 0,
+                        end_line: None,
+                        end_column: None,
+                    },
+                }],
+                sinks: vec![TaintSink {
+                    sink_type: TaintSinkType::ProcessExec,
+                    description: "Subprocess sink".into(),
+                    location: SourceLocation {
+                        file: file_b.clone(),
+                        line: 2,
+                        column: 4,
+                        end_line: None,
+                        end_column: None,
+                    },
+                }],
+                taint_paths: vec![],
+            },
+            tools: vec![],
+            execution: ExecutionSurface::default(),
+            provenance: ProvenanceSurface::default(),
+        };
+
+        let graph = CallGraph::build(&target);
+        let paths = propagate_interprocedural_taint(&target, &graph);
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].source.location.file, file_a);
+        assert_eq!(paths[0].sink.location.file, file_b);
     }
 }

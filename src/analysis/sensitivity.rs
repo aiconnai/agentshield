@@ -26,7 +26,11 @@ pub(crate) fn looks_sensitive_name(name: &str) -> bool {
         || matches_pattern("TOKEN")
         || matches_pattern("PASSWORD")
         || matches_pattern("CREDENTIAL")
-        || matches_pattern("AUTH")
+        || matches_pattern("AUTHORIZATION")
+        || matches_pattern("AUTHENTICAT")
+        || starts_with_ci("AUTH_")
+        || ends_with_ci("_AUTH")
+        || name.eq_ignore_ascii_case("AUTH")
         || matches_pattern("PRIVATE_KEY")
         || matches_pattern("API_KEY")
         || ends_with_ci("_KEY")
@@ -58,7 +62,17 @@ mod tests {
 
     #[test]
     fn does_not_flag_benign_names() {
-        for name in ["USERNAME", "HOST", "PORT", "MODEL", "TIMEOUT"] {
+        for name in [
+            "USERNAME",
+            "HOST",
+            "PORT",
+            "MODEL",
+            "TIMEOUT",
+            "AUTHOR",
+            "AUTHORS",
+            "AUTHOR_EMAIL",
+            "AUTHORITY",
+        ] {
             assert!(
                 !looks_sensitive_name(name),
                 "{name} should not be sensitive"

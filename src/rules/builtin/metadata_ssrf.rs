@@ -50,7 +50,23 @@ fn is_metadata_or_private(url: &str) -> Option<&'static str> {
     if METADATA_ENDPOINTS.iter().any(|ep| url_lower.contains(ep)) {
         return Some("cloud metadata endpoint");
     }
-    if PRIVATE_PATTERNS.iter().any(|pat| url_lower.contains(pat)) {
+
+    // Extract authority/host before checking private IP prefixes
+    let after_scheme = url_lower.split("://").nth(1).unwrap_or(&url_lower);
+    let host = if after_scheme.starts_with('[') {
+        if let Some(bracket_end) = after_scheme.find(']') {
+            &after_scheme[..=bracket_end]
+        } else {
+            after_scheme.split('/').next().unwrap_or("")
+        }
+    } else {
+        after_scheme
+            .split(['/', ':', '?', '#'])
+            .next()
+            .unwrap_or("")
+    };
+
+    if host == "localhost" || PRIVATE_PATTERNS.iter().any(|pat| host.starts_with(pat)) {
         return Some("private network");
     }
     None

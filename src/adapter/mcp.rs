@@ -720,10 +720,14 @@ fn find_next_mcp_tool_call(content: &str) -> Option<usize> {
             cursor = next;
             continue;
         }
-        if content[cursor..].starts_with(".tool(")
-            || content[cursor..].starts_with(".registerTool(")
-        {
-            return Some(cursor);
+        if let Some(rest) = content.get(cursor..) {
+            if rest.starts_with(".tool(") || rest.starts_with(".registerTool(") {
+                return Some(cursor);
+            }
+            if let Some(ch) = rest.chars().next() {
+                cursor += ch.len_utf8();
+                continue;
+            }
         }
         cursor += 1;
     }
@@ -1599,7 +1603,12 @@ fn detect_uv_lock_confidence(content: &str) -> (bool, bool) {
         let has_hash = pkg_obj.get("hash").is_some()
             || pkg_obj
                 .get("hashes")
-                .is_some_and(|v| !v.as_array().is_none_or(|arr| arr.is_empty()));
+                .is_some_and(|v| !v.as_array().is_none_or(|arr| arr.is_empty()))
+            || pkg_obj.get("sdist").and_then(|s| s.get("hash")).is_some()
+            || pkg_obj
+                .get("wheels")
+                .and_then(|w| w.as_array())
+                .is_some_and(|arr| arr.iter().any(|wheel| wheel.get("hash").is_some()));
         if !has_hash {
             all_hashed = false;
         }
@@ -1622,7 +1631,10 @@ fn detect_npm_lock_confidence(content: &str) -> (bool, bool) {
     let mut packages_seen = 0usize;
 
     if let Some(packages) = value.get("packages").and_then(|v| v.as_object()) {
-        for (_, pkg_value) in packages {
+        for (pkg_path, pkg_value) in packages {
+            if pkg_path.is_empty() {
+                continue;
+            }
             if let Some(pkg_obj) = pkg_value.as_object() {
                 packages_seen += 1;
 

@@ -41,9 +41,18 @@ impl Detector for ExcessivePermissionsDetector {
 
         // Determine actually used capabilities from execution surface
         let mut used = HashSet::new();
-        if !target.execution.file_operations.is_empty() {
-            used.insert(PermissionType::FileRead);
-            used.insert(PermissionType::FileWrite);
+        for op in &target.execution.file_operations {
+            match op.operation {
+                crate::ir::execution_surface::FileOpType::Read
+                | crate::ir::execution_surface::FileOpType::List => {
+                    used.insert(PermissionType::FileRead);
+                }
+                crate::ir::execution_surface::FileOpType::Write
+                | crate::ir::execution_surface::FileOpType::Delete
+                | crate::ir::execution_surface::FileOpType::Chmod => {
+                    used.insert(PermissionType::FileWrite);
+                }
+            }
         }
         if !target.execution.network_operations.is_empty() {
             used.insert(PermissionType::NetworkAccess);

@@ -216,7 +216,7 @@ pub(super) fn cmd_wrap(
         Ok::<i32, agentshield::error::ShieldError>(status.code().unwrap_or(1))
     })?;
 
-    std::process::exit(exit_code);
+    Ok(exit_code)
 }
 
 #[cfg(feature = "runtime-guard")]
