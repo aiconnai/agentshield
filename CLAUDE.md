@@ -44,13 +44,23 @@ agentshield/
 │   │   └── hermes.rs             # Hermes Agent config, context, and skills adapter
 │   ├── parser/                   # Language parsers
 │   │   ├── mod.rs                # Parser trait, ParsedFile, FunctionDef, CallSite
-│   │   ├── python.rs             # tree-sitter Python + regex patterns
-│   │   ├── typescript.rs         # tree-sitter TypeScript/TSX + regex fallback
+│   │   ├── python/               # Python parser (modularized)
+│   │   │   ├── mod.rs            # PythonParser struct, LanguageParser impl
+│   │   │   ├── patterns.rs       # Static patterns and Lazy<Regex> definitions
+│   │   │   └── classify.rs       # Argument classification and sanitizer helpers
+│   │   ├── typescript/           # TypeScript/TSX parser (modularized)
+│   │   │   ├── mod.rs            # TypeScriptParser struct, LanguageParser impl
+│   │   │   ├── ast.rs            # Tree-sitter AST traversal (cfg feature)
+│   │   │   ├── classify.rs       # Argument and sanitizer resolution
+│   │   │   └── patterns.rs       # Static sink/source pattern arrays
 │   │   ├── shell.rs              # Regex-based shell parser
 │   │   └── json_schema.rs        # JSON Schema → ToolSurface
 │   ├── analysis/                 # Static analysis
 │   │   ├── mod.rs                # Module exports
-│   │   ├── cross_file.rs         # Cross-file sanitizer-aware validation (v0.2.2)
+│   │   ├── cross_file/           # Cross-file sanitizer-aware validation (modularized)
+│   │   │   ├── mod.rs            # apply_cross_file_sanitization, CrossFileResult
+│   │   │   ├── sanitizer.rs      # SanitizerCategory, pattern tables, categorization
+│   │   │   └── sink_policy.rs    # Sink safety logic, sanitizer_allows_sink
 │   │   └── sensitivity.rs        # Sensitive-name heuristics (pub(crate))
 │   ├── rules/                    # Detection engine
 │   │   ├── mod.rs                # RuleEngine, Detector trait

@@ -1,114 +1,19 @@
 use std::path::{Path, PathBuf};
 
-use once_cell::sync::Lazy;
-use regex::Regex;
-
 use super::{CallSite, FunctionDef, FunctionParam, LanguageParser, ParsedFile};
-use crate::analysis::cross_file::{SanitizerCategory, sanitizer_category, sanitizer_label};
-use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::error::Result;
 use crate::ir::execution_surface::*;
-use crate::ir::{ArgumentSource, Language, SourceLocation};
+use crate::ir::{ArgumentSource, Language};
 
 pub struct PythonParser;
 
-// Dangerous subprocess/exec functions
-static SUBPROCESS_PATTERNS: Lazy<Vec<&str>> = Lazy::new(|| {
-    vec![
-        "subprocess.run",
-        "subprocess.call",
-        "subprocess.check_call",
-        "subprocess.check_output",
-        "subprocess.Popen",
-        "os.system",
-        "os.popen",
-        "os.exec",
-        "os.execv",
-        "os.execve",
-        "os.execvp",
-    ]
-});
+pub mod classify;
+pub mod patterns;
 
-// GitPython's `repo.git.*` methods are dynamic dispatchers that execute
-// `git <method> ...` as shell commands. We match the `.git.` segment.
-static GITPYTHON_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?m)(\w+)\.git\.(\w+)\s*\(([^)]*)\)").expect("static regex pattern is valid")
-});
-
-static NETWORK_PATTERNS: Lazy<Vec<&str>> = Lazy::new(|| {
-    vec![
-        "requests.get",
-        "requests.post",
-        "requests.put",
-        "requests.patch",
-        "requests.delete",
-        "requests.head",
-        "requests.request",
-        "urllib.request.urlopen",
-        "httpx.get",
-        "httpx.post",
-        "httpx.put",
-        // httpx.AsyncClient and aiohttp.ClientSession are tracked via
-        // HTTP_CLIENT_CTX_RE + HTTP_CLIENT_METHODS instead, so their actual
-        // method calls (client.get, session.post) are detected as network ops.
-    ]
-});
-
-// HTTP method names used on client variables (e.g. `client.get(url)` where
-// `client` was bound from `httpx.AsyncClient()` or `aiohttp.ClientSession()`).
-// Checked separately from NETWORK_PATTERNS because the caller object is a
-// variable, not a known module.
-static HTTP_CLIENT_METHODS: Lazy<Vec<&str>> = Lazy::new(|| {
-    vec![
-        "get", "post", "put", "patch", "delete", "head", "options", "request", "fetch", "send",
-    ]
-});
-
-// Regex to detect async context managers that produce HTTP clients.
-// Matches: `async with httpx.AsyncClient(...) as <name>:`
-//          `async with aiohttp.ClientSession(...) as <name>:`
-static HTTP_CLIENT_CTX_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"(?m)async\s+with\s+(?:\w+\.)*(?:AsyncClient|ClientSession)\s*\([^)]*\)\s+as\s+(\w+)",
-    )
-    .expect("static regex pattern is valid")
-});
-
-static DYNAMIC_EXEC_PATTERNS: Lazy<Vec<&str>> =
-    Lazy::new(|| vec!["eval", "exec", "compile", "__import__"]);
-
-static FILE_READ_PATTERNS: Lazy<Vec<&str>> = Lazy::new(|| vec!["open", "pathlib.Path"]);
-
-// Regex to find function calls with arguments: func_name(args)
-static CALL_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?m)(\w+(?:\.\w+)*)\s*\(([^)]*)\)").expect("static regex pattern is valid")
-});
-
-// Regex to find the start of a multi-line call: func_name( with no closing )
-// Captures the function name so we can match it against patterns, then look
-// ahead to the next line(s) for the first argument.
-static PARTIAL_CALL_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(\w+(?:\.\w+)*)\s*\(\s*$").expect("static regex pattern is valid"));
-
-// Regex to find os.environ / os.getenv patterns
-static ENV_ACCESS_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r#"(?m)os\.(?:environ\s*(?:\[\s*["']([^"']+)["']\s*\]|\.get\s*\(\s*["']([^"']+)["'])|getenv\s*\(\s*["']([^"']+)["']\s*\))"#,
-    )
-    .expect("static regex pattern is valid")
-});
-
-// Regex to find function definitions and their parameters
-static FUNC_DEF_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?m)^\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)")
-        .expect("static regex pattern is valid")
-});
-
-// Sanitizer assignment: valid_path = validate_path(x) or valid_path = await validate_path(x)
-static SANITIZER_ASSIGN_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(\w+)\s*=\s*(?:await\s+)?(\w+(?:\.\w+)*)\s*\(")
-        .expect("static regex pattern is valid")
-});
+use crate::analysis::cross_file::{SanitizerCategory, sanitizer_category, sanitizer_label};
+use crate::analysis::sensitivity::looks_sensitive_name;
+use classify::*;
+use patterns::*;
 
 impl LanguageParser for PythonParser {
     fn language(&self) -> Language {
@@ -497,114 +402,6 @@ impl LanguageParser for PythonParser {
         }
 
         Ok(parsed)
-    }
-}
-
-/// Classify a call argument string to determine its source.
-fn classify_argument(
-    args_str: &str,
-    param_names: &std::collections::HashSet<String>,
-    sanitized_vars: &std::collections::HashSet<String>,
-) -> ArgumentSource {
-    let first_arg = args_str.split(',').next().unwrap_or("").trim();
-
-    if first_arg.is_empty() {
-        return ArgumentSource::Unknown;
-    }
-
-    // Check if this is a sanitized variable first
-    let ident = first_arg.split('.').next().unwrap_or(first_arg);
-    let ident = ident.split('[').next().unwrap_or(ident);
-    if let Some(sanitizer) = sanitized_label_for_var(ident, sanitized_vars) {
-        return ArgumentSource::Sanitized { sanitizer };
-    }
-
-    // String literal. Single quote tokens can appear when a regex-level parse
-    // sees an incomplete multiline literal; keep those conservative.
-    if let Some(val) = strip_python_string_literal(first_arg) {
-        return ArgumentSource::Literal(val.to_string());
-    }
-
-    // f-string or format
-    if first_arg.starts_with("f\"") || first_arg.starts_with("f'") || first_arg.contains(".format(")
-    {
-        return ArgumentSource::Interpolated;
-    }
-
-    // os.environ / env var
-    if first_arg.contains("os.environ") || first_arg.contains("os.getenv") {
-        return ArgumentSource::EnvVar {
-            name: first_arg.to_string(),
-        };
-    }
-
-    // Known function parameter
-    if param_names.contains(ident) {
-        return ArgumentSource::Parameter {
-            name: ident.to_string(),
-        };
-    }
-
-    ArgumentSource::Unknown
-}
-
-fn strip_python_string_literal(arg: &str) -> Option<&str> {
-    arg.strip_prefix('"')
-        .and_then(|inner| inner.strip_suffix('"'))
-        .or_else(|| {
-            arg.strip_prefix('\'')
-                .and_then(|inner| inner.strip_suffix('\''))
-        })
-}
-
-fn sanitized_var_marker(var_name: &str, sanitizer_label: &str) -> String {
-    format!("{var_name}::{sanitizer_label}")
-}
-
-fn sanitized_label_for_var(
-    ident: &str,
-    sanitized_vars: &std::collections::HashSet<String>,
-) -> Option<String> {
-    for category in [
-        SanitizerCategory::Path,
-        SanitizerCategory::Network,
-        SanitizerCategory::TypeCoercion,
-    ] {
-        let prefix = format!("{}:", category.as_str());
-        if let Some(marker) = sanitized_vars
-            .iter()
-            .find(|value| value.starts_with(&format!("{ident}::{prefix}")))
-        {
-            return marker.split_once("::").map(|(_, label)| label.to_string());
-        }
-    }
-
-    sanitized_vars.contains(ident).then(|| ident.to_string())
-}
-
-fn loc(file: &Path, line: usize) -> SourceLocation {
-    SourceLocation {
-        file: file.to_path_buf(),
-        line,
-        column: 0,
-        end_line: Some(line),
-        end_column: Some(0),
-    }
-}
-
-fn loc_from_range(
-    file: &Path,
-    line: usize,
-    source_line: &str,
-    start_byte: usize,
-    end_byte: usize,
-) -> SourceLocation {
-    SourceLocation {
-        file: file.to_path_buf(),
-        line,
-        column: source_line[..start_byte].chars().count(),
-        end_line: Some(line),
-        end_column: Some(source_line[..end_byte].chars().count()),
     }
 }
 
