@@ -110,7 +110,7 @@ mcp_servers:
     args: ["python -m db_bridge"]
     env:
       # ❌ Hardcoded credential in Hermes profile
-      PROD_DB_SECRET: "db_live_sk_948194812"
+      DATABASE_PASSWORD: "demo_test_secret_placeholder"
 
 # Scans .hermes.md context files and custom skill trees
 context_files:
