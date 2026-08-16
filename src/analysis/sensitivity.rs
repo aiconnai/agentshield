@@ -31,6 +31,7 @@ pub(crate) fn looks_sensitive_name(name: &str) -> bool {
         || starts_with_ci("AUTH_")
         || ends_with_ci("_AUTH")
         || name.eq_ignore_ascii_case("AUTH")
+        || matches_pattern("_AUTH_")
         || matches_pattern("PRIVATE_KEY")
         || matches_pattern("API_KEY")
         || ends_with_ci("_KEY")
@@ -55,6 +56,8 @@ mod tests {
             "AUTHORIZATION",
             "CREDENTIAL",
             "CREDENTIALS",
+            "PROXY_AUTH_HEADER",
+            "CLIENT_AUTH_B64",
         ] {
             assert!(looks_sensitive_name(name), "{name} should be sensitive");
         }

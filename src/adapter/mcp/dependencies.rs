@@ -284,7 +284,9 @@ pub(crate) fn detect_uv_lock_confidence(content: &str) -> (bool, bool) {
             || pkg_obj
                 .get("wheels")
                 .and_then(|w| w.as_array())
-                .is_some_and(|arr| arr.iter().any(|wheel| wheel.get("hash").is_some()));
+                .is_some_and(|arr| {
+                    !arr.is_empty() && arr.iter().all(|wheel| wheel.get("hash").is_some())
+                });
         if !has_hash {
             all_hashed = false;
         }
