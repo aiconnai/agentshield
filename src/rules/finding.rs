@@ -99,6 +99,7 @@ pub enum AttackCategory {
     ExcessivePermissions,
     DataExfiltration,
     CapabilityMismatch,
+    SqlInjection,
 }
 
 impl std::fmt::Display for AttackCategory {
@@ -115,6 +116,7 @@ impl std::fmt::Display for AttackCategory {
             Self::ExcessivePermissions => write!(f, "Excessive Permissions"),
             Self::DataExfiltration => write!(f, "Data Exfiltration"),
             Self::CapabilityMismatch => write!(f, "Capability Mismatch"),
+            Self::SqlInjection => write!(f, "SQL Injection"),
         }
     }
 }
