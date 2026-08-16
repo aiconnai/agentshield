@@ -3,15 +3,23 @@
 //! Parses `agentshield.egress.toml` files that define which domains,
 //! IPs, and rate limits are enforced by the `wrap` command proxy.
 
+pub mod domain;
+pub mod merge;
+pub mod network;
+
+pub use domain::DomainPolicy;
+pub use merge::{AuditPolicy, RateLimitPolicy};
+pub use network::NetworkPolicy;
+
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::error::ShieldError;
+use crate::ir::ArgumentSource;
+use crate::ir::ScanTarget;
 use crate::ir::tool_surface::PermissionType;
-use crate::ir::{ArgumentSource, ScanTarget};
 
-const CURRENT_SCHEMA_VERSION: u32 = 1;
+pub(crate) const CURRENT_SCHEMA_VERSION: u32 = 1;
 
 /// Top-level egress policy loaded from `agentshield.egress.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,101 +37,6 @@ pub struct EgressPolicy {
     /// Audit logging configuration.
     #[serde(default)]
     pub audit: AuditPolicy,
-}
-
-/// Domain-level allow/deny policy using glob-style patterns.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DomainPolicy {
-    /// Allowed domain patterns (glob-style: `"*.example.com"`, `"api.github.com"`).
-    #[serde(default)]
-    pub allow: Vec<String>,
-    /// Explicitly denied domain patterns (takes precedence over allow).
-    #[serde(default)]
-    pub deny: Vec<String>,
-}
-
-/// Network-level IP range blocking policy.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkPolicy {
-    /// Block private IP ranges (10.x, 172.16-31.x, 192.168.x). Default: true.
-    #[serde(default = "default_true")]
-    pub block_private: bool,
-    /// Block link-local addresses (169.254.x). Default: true.
-    #[serde(default = "default_true")]
-    pub block_link_local: bool,
-    /// Block localhost (127.x, ::1). Default: true.
-    #[serde(default = "default_true")]
-    pub block_localhost: bool,
-    /// Block cloud metadata endpoints (169.254.169.254, etc.). Default: true.
-    #[serde(default = "default_true")]
-    pub block_metadata: bool,
-}
-
-fn default_true() -> bool {
-    true
-}
-
-impl Default for NetworkPolicy {
-    fn default() -> Self {
-        Self {
-            block_private: true,
-            block_link_local: true,
-            block_localhost: true,
-            block_metadata: true,
-        }
-    }
-}
-
-/// Rate limiting configuration for outbound requests.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RateLimitPolicy {
-    /// Maximum requests per minute per domain. 0 = unlimited.
-    #[serde(default = "default_rate_limit")]
-    pub max_requests_per_minute: u32,
-    /// Per-domain overrides (domain string -> requests per minute).
-    #[serde(default)]
-    pub per_domain: HashMap<String, u32>,
-}
-
-fn default_rate_limit() -> u32 {
-    60
-}
-
-impl Default for RateLimitPolicy {
-    fn default() -> Self {
-        Self {
-            max_requests_per_minute: default_rate_limit(),
-            per_domain: HashMap::new(),
-        }
-    }
-}
-
-/// Audit logging configuration for egress events.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuditPolicy {
-    /// Path to write audit log.
-    #[serde(default)]
-    pub log_path: Option<PathBuf>,
-    /// Log format: `"json"` or `"text"`.
-    #[serde(default = "default_log_format")]
-    pub log_format: String,
-    /// Log allowed requests too (not just blocked). Default: false.
-    #[serde(default)]
-    pub log_allowed: bool,
-}
-
-fn default_log_format() -> String {
-    "json".to_string()
-}
-
-impl Default for AuditPolicy {
-    fn default() -> Self {
-        Self {
-            log_path: None,
-            log_format: default_log_format(),
-            log_allowed: false,
-        }
-    }
 }
 
 impl EgressPolicy {
@@ -152,52 +65,19 @@ impl EgressPolicy {
     /// Deny rules take precedence over allow rules. If the allow list is
     /// empty, all domains not explicitly denied are allowed.
     pub fn is_domain_allowed(&self, domain: &str) -> bool {
-        // Deny takes precedence
-        if self
-            .domains
-            .deny
-            .iter()
-            .any(|pattern| domain_matches(domain, pattern))
-        {
-            return false;
-        }
-        // If allow list is empty, allow all (that aren't denied)
-        if self.domains.allow.is_empty() {
-            return true;
-        }
-        // Must match at least one allow pattern
-        self.domains
-            .allow
-            .iter()
-            .any(|pattern| domain_matches(domain, pattern))
+        self.domains.is_domain_allowed(domain)
     }
 
     /// Check if an IP address is blocked by network policy.
     pub fn is_ip_blocked(&self, ip: &str) -> bool {
-        if self.networks.block_localhost && is_localhost(ip) {
-            return true;
-        }
-        if self.networks.block_private && is_private_ip(ip) {
-            return true;
-        }
-        if self.networks.block_link_local && is_link_local(ip) {
-            return true;
-        }
-        if self.networks.block_metadata && is_metadata_ip(ip) {
-            return true;
-        }
-        false
+        self.networks.is_ip_blocked(ip)
     }
 
     /// Get rate limit for a domain (requests per minute).
     ///
     /// Returns the per-domain override if one exists, otherwise the global default.
     pub fn rate_limit_for(&self, domain: &str) -> u32 {
-        self.rate_limits
-            .per_domain
-            .get(domain)
-            .copied()
-            .unwrap_or(self.rate_limits.max_requests_per_minute)
+        self.rate_limits.rate_limit_for(domain)
     }
 
     /// Build a starter egress policy by analyzing all `ScanTarget`s.
@@ -215,7 +95,7 @@ impl EgressPolicy {
             // Extract domains from network operations with literal URLs
             for net_op in &target.execution.network_operations {
                 if let ArgumentSource::Literal(ref url) = net_op.url_arg {
-                    if let Some(domain) = extract_domain(url) {
+                    if let Some(domain) = domain::extract_domain(url) {
                         domains.insert(domain);
                     }
                 }
@@ -226,7 +106,7 @@ impl EgressPolicy {
                 for perm in &tool.declared_permissions {
                     if matches!(perm.permission_type, PermissionType::NetworkAccess) {
                         if let Some(ref scope) = perm.target {
-                            if let Some(domain) = extract_domain(scope) {
+                            if let Some(domain) = domain::extract_domain(scope) {
                                 domains.insert(domain);
                             }
                         }
@@ -262,67 +142,7 @@ impl EgressPolicy {
     /// - `rate_limits.per_domain`: min rate per domain; missing entries inherit the global min
     /// - `audit`: operator override wins (operator controls where logs go)
     pub fn merge_override(&self, operator: &EgressPolicy) -> EgressPolicy {
-        // Allow list: intersection when both are non-empty; operator restricts further
-        let allow = if operator.domains.allow.is_empty() {
-            // Empty override allow = "no additional restriction on allow"
-            self.domains.allow.clone()
-        } else if self.domains.allow.is_empty() {
-            // Self allows all; operator restricts to its list
-            operator.domains.allow.clone()
-        } else {
-            // Both have allow lists: intersection (only domains in BOTH lists)
-            self.domains
-                .allow
-                .iter()
-                .filter(|d| {
-                    operator
-                        .domains
-                        .allow
-                        .iter()
-                        .any(|o| domain_matches(d, o) || domain_matches(o, d))
-                })
-                .cloned()
-                .collect()
-        };
-
-        // Deny list: union (operator can only add more denials)
-        let mut deny = self.domains.deny.clone();
-        for d in &operator.domains.deny {
-            if !deny.contains(d) {
-                deny.push(d.clone());
-            }
-        }
-
-        // Rate limits: take the minimum (more restrictive wins)
-        let global_min = self
-            .rate_limits
-            .max_requests_per_minute
-            .min(operator.rate_limits.max_requests_per_minute);
-
-        let mut per_domain = self.rate_limits.per_domain.clone();
-        for (domain, &op_rate) in &operator.rate_limits.per_domain {
-            let entry = per_domain
-                .entry(domain.clone())
-                .or_insert(self.rate_limits.max_requests_per_minute);
-            *entry = (*entry).min(op_rate);
-        }
-
-        EgressPolicy {
-            schema_version: self.schema_version,
-            domains: DomainPolicy { allow, deny },
-            networks: NetworkPolicy {
-                block_private: self.networks.block_private || operator.networks.block_private,
-                block_link_local: self.networks.block_link_local
-                    || operator.networks.block_link_local,
-                block_localhost: self.networks.block_localhost || operator.networks.block_localhost,
-                block_metadata: self.networks.block_metadata || operator.networks.block_metadata,
-            },
-            rate_limits: RateLimitPolicy {
-                max_requests_per_minute: global_min,
-                per_domain,
-            },
-            audit: operator.audit.clone(),
-        }
+        merge::merge_override(self, operator)
     }
 
     /// Generate a starter policy TOML string for `agentshield init --egress`.
@@ -355,86 +175,12 @@ log_allowed = false
     }
 }
 
-/// Extract the hostname from a URL string or bare domain.
-///
-/// Handles `http://`, `https://` URLs (strips scheme, path, port) and bare
-/// domain names (e.g., `"api.example.com"`). Returns `None` for strings that
-/// cannot be mapped to a useful hostname (e.g., paths, IP-like without dot).
-pub fn extract_domain(url_or_domain: &str) -> Option<String> {
-    // Try stripping http:// or https://
-    let rest = if let Some(r) = url_or_domain.strip_prefix("https://") {
-        r
-    } else if let Some(r) = url_or_domain.strip_prefix("http://") {
-        r
-    } else {
-        // Bare domain: must contain a dot and no slashes
-        if url_or_domain.contains('.') && !url_or_domain.contains('/') {
-            return Some(url_or_domain.to_string());
-        }
-        return None;
-    };
-
-    // Take the host portion (before first '/')
-    let host = rest.split('/').next()?;
-    // Strip port if present
-    let host = host.split(':').next()?;
-
-    if host.is_empty() {
-        return None;
-    }
-    Some(host.to_string())
-}
-
-/// Simple glob matching for domain patterns.
-///
-/// Supports `*.example.com` (matches `sub.example.com` and `example.com`)
-/// and exact matches like `api.github.com`.
-fn domain_matches(domain: &str, pattern: &str) -> bool {
-    if let Some(suffix) = pattern.strip_prefix('*') {
-        // "*.example.com" matches "sub.example.com" and "example.com"
-        domain.ends_with(suffix) || domain == &suffix[1..]
-    } else {
-        domain == pattern
-    }
-}
-
-fn is_localhost(ip: &str) -> bool {
-    ip.starts_with("127.") || ip == "::1" || ip == "localhost"
-}
-
-fn is_private_ip(ip: &str) -> bool {
-    ip.starts_with("10.")
-        || (ip.starts_with("172.") && is_172_private(ip))
-        || ip.starts_with("192.168.")
-        || ip.starts_with("fd") // IPv6 ULA
-}
-
-fn is_172_private(ip: &str) -> bool {
-    if let Some(second_octet) = ip
-        .strip_prefix("172.")
-        .and_then(|rest| rest.split('.').next())
-    {
-        if let Ok(n) = second_octet.parse::<u8>() {
-            return (16..=31).contains(&n);
-        }
-    }
-    false
-}
-
-fn is_link_local(ip: &str) -> bool {
-    ip.starts_with("169.254.") || ip.starts_with("fe80:")
-}
-
-fn is_metadata_ip(ip: &str) -> bool {
-    ip == "169.254.169.254"
-        || ip.contains("metadata.google.internal")
-        || ip == "100.100.100.200" // Alibaba Cloud
-        || ip == "169.254.170.2" // AWS ECS
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::egress::policy::domain::extract_domain;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
     use tempfile::TempDir;
 
     fn sample_policy() -> EgressPolicy {
