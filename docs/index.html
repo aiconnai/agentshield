@@ -498,7 +498,8 @@ server.tool(
       </div>
 
       <div class="install-tabs">
-        <button class="install-tab-btn active" data-install="cli">CLI (Cargo)</button>
+        <button class="install-tab-btn active" data-install="curl">curl (Linux / macOS)</button>
+        <button class="install-tab-btn" data-install="cli">Cargo (Rust)</button>
         <button class="install-tab-btn" data-install="vscode">VS Code Extension</button>
         <button class="install-tab-btn" data-install="action">GitHub Action</button>
         <button class="install-tab-btn" data-install="docker">Docker</button>
@@ -506,14 +507,10 @@ server.tool(
 
       <div class="install-content-box">
         <button class="copy-btn" id="copy-install-btn">Copy</button>
-        <pre><code id="install-code"># 1. Install official binary from crates.io (Recommended)
-cargo install agent-shield
+        <pre><code id="install-code"># ⚡ Fast 1-line installation for macOS & Linux (Apple Silicon, Intel, ARM64, x86_64)
+curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
 
-# 2. Or build from GitHub with all features
-cargo install --git https://github.com/aiconnai/agentshield \
-  --tag v1.0.0 --features full --force
-
-# 3. Verify installation
+# Verify installation:
 agentshield --version</code></pre>
       </div>
     </div>

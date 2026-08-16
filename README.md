@@ -144,7 +144,10 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 ### CLI
 
 ```bash
-# Install the v1.0.0 GA release with the full feature set
+# ⚡ 1-Line Universal Installer (macOS & Linux: Apple Silicon, Intel, ARM64, x86_64)
+curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
+
+# Or install from crates.io / source with Cargo
 cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.0 --features full --force
 
 # First-run setup: config + explained first scan
