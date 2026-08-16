@@ -8,6 +8,7 @@ mod download_exec;
 mod dynamic_exec;
 mod excessive_permissions;
 mod insecure_bind;
+mod insecure_temp_file;
 pub(crate) mod metadata_ssrf;
 mod no_lockfile;
 mod overbroad_fs;
@@ -26,7 +27,7 @@ mod webhook_file_exfil;
 
 use super::{ContextDetector, Detector};
 
-/// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..024).
+/// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..025).
 pub fn all_detectors() -> Vec<Box<dyn Detector>> {
     vec![
         Box::new(command_injection::CommandInjectionDetector),
@@ -52,6 +53,7 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(webhook_file_exfil::WebhookFileExfilDetector),
         Box::new(system_prompt_tampering::SystemPromptTamperingDetector),
         Box::new(insecure_bind::InsecureBindDetector),
+        Box::new(insecure_temp_file::InsecureTempFileDetector),
     ]
 }
 
