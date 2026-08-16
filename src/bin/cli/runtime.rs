@@ -213,7 +213,16 @@ pub(super) fn cmd_wrap(
 
         proxy_handle.abort();
 
-        Ok::<i32, agentshield::error::ShieldError>(status.code().unwrap_or(1))
+        #[cfg(unix)]
+        let exit_code = {
+            use std::os::unix::process::ExitStatusExt;
+            status
+                .code()
+                .unwrap_or_else(|| status.signal().map_or(1, |sig| 128 + sig))
+        };
+        #[cfg(not(unix))]
+        let exit_code = status.code().unwrap_or(1);
+        Ok::<i32, agentshield::error::ShieldError>(exit_code)
     })?;
 
     Ok(exit_code)

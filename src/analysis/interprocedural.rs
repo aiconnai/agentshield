@@ -253,6 +253,18 @@ impl CallGraph {
                     }
                     brace_count += opens - closes;
                     end_line = sub_idx + 1;
+                    // Braceless arrow function: expression terminates at semicolon
+                    if !seen_open_brace && next_trimmed.ends_with(';') {
+                        break;
+                    }
+                    // Another function definition starts; this function's scope ended
+                    if !seen_open_brace
+                        && sub_idx + 1 > start_line
+                        && TS_FUNC_DEF_RE.is_match(next_line)
+                    {
+                        end_line = end_line.saturating_sub(1).max(start_line);
+                        break;
+                    }
                     if seen_open_brace && brace_count <= 0 && sub_idx + 1 >= start_line {
                         break;
                     }
@@ -386,7 +398,13 @@ struct TraversalContext<'a> {
     source: &'a TaintSource,
     trace: Vec<SourceLocation>,
     visited_functions: HashSet<String>,
-    visited_paths: &'a mut HashSet<(std::path::PathBuf, usize, std::path::PathBuf, usize)>,
+    visited_paths: &'a mut HashSet<(
+        std::path::PathBuf,
+        usize,
+        std::path::PathBuf,
+        usize,
+        crate::ir::data_surface::TaintSinkType,
+    )>,
     new_paths: &'a mut Vec<TaintPath>,
     depth: usize,
 }
@@ -409,6 +427,7 @@ impl<'a> TraversalContext<'a> {
                         self.source.location.line,
                         sink.location.file.clone(),
                         sink.location.line,
+                        sink.sink_type,
                     );
                     if !self.visited_paths.contains(&path_key) {
                         self.visited_paths.insert(path_key);

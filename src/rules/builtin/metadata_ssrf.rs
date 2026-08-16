@@ -51,19 +51,22 @@ fn is_metadata_or_private(url: &str) -> Option<&'static str> {
         return Some("cloud metadata endpoint");
     }
 
-    // Extract authority/host before checking private IP prefixes
+    // Extract authority/host before checking private IP prefixes.
+    // Strip userinfo (user:pass@) to prevent bypass via basic auth URLs.
     let after_scheme = url_lower.split("://").nth(1).unwrap_or(&url_lower);
-    let host = if after_scheme.starts_with('[') {
-        if let Some(bracket_end) = after_scheme.find(']') {
-            &after_scheme[..=bracket_end]
+    let authority = after_scheme.split('/').next().unwrap_or("");
+    let after_userinfo = authority
+        .rsplit_once('@')
+        .map(|(_, host)| host)
+        .unwrap_or(authority);
+    let host = if after_userinfo.starts_with('[') {
+        if let Some(bracket_end) = after_userinfo.find(']') {
+            &after_userinfo[..=bracket_end]
         } else {
-            after_scheme.split('/').next().unwrap_or("")
+            after_userinfo
         }
     } else {
-        after_scheme
-            .split(['/', ':', '?', '#'])
-            .next()
-            .unwrap_or("")
+        after_userinfo.split([':', '?', '#']).next().unwrap_or("")
     };
 
     if host == "localhost" || PRIVATE_PATTERNS.iter().any(|pat| host.starts_with(pat)) {
@@ -83,7 +86,7 @@ impl Detector for MetadataSsrfDetector {
             default_severity: Severity::Critical,
             attack_category: AttackCategory::Ssrf,
             cwe_id: Some("CWE-918".into()),
-            owasp_mcp: Some(OwaspMcp::CommandExecution),
+            owasp_mcp: Some(OwaspMcp::InsecureCommunication),
         }
     }
 

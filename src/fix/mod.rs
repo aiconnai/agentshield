@@ -38,7 +38,7 @@ impl FilePatch {
         temp_file.flush()?;
 
         if let Ok(metadata) = std::fs::metadata(&self.file_path) {
-            let _ = std::fs::set_permissions(temp_file.path(), metadata.permissions());
+            let _ = temp_file.as_file().set_permissions(metadata.permissions());
         }
 
         temp_file.persist(&self.file_path).map_err(|e| e.error)?;
