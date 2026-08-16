@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore simulated demo keys in documentation and test fixtures"
+paths = [
+    '''docs/.*''',
+    '''tests/fixtures/.*''',
+]

@@ -26,6 +26,8 @@ jobs:
             zricethezav/gitleaks:v8.23.3 \
             detect \
               --source /src \
+              --config /src/.gitleaks.toml \
+              --gitleaks-ignore-path /src/.gitleaksignore \
               --verbose \
               --redact \
               --report-format sarif \
