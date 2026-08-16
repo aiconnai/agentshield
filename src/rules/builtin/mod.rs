@@ -14,15 +14,17 @@ mod prompt_injection;
 mod runtime_install;
 mod secret_leakage;
 mod self_modification;
+mod sql_injection;
 mod ssrf;
 mod typosquat;
 mod unpinned_deps;
 mod unsafe_deser;
 mod unsafe_deser_patterns;
+mod webhook_file_exfil;
 
 use super::{ContextDetector, Detector};
 
-/// Returns all built-in target-only detectors (SHIELD-001..019).
+/// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..022).
 pub fn all_detectors() -> Vec<Box<dyn Detector>> {
     vec![
         Box::new(command_injection::CommandInjectionDetector),
@@ -44,6 +46,8 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(archive_traversal::ArchiveTraversalDetector),
         Box::new(secret_leakage::SecretLeakageDetector),
         Box::new(capability_mismatch::CapabilityMismatchDetector),
+        Box::new(sql_injection::SqlInjectionDetector),
+        Box::new(webhook_file_exfil::WebhookFileExfilDetector),
     ]
 }
 

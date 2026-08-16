@@ -179,6 +179,34 @@ def execute(safe_target: str):
           Analyzes composite value-flow graphs where a local file or environment variable is read, transformed, and subsequently placed into an outbound HTTP network request body.
         </p>
       </article>
+
+      <!-- SHIELD-021 -->
+      <article class="rule-card" data-search="shield-021 sql injection database query unparameterized cwe-89 mcp database">
+        <div class="rule-meta">
+          <span class="rule-id">SHIELD-021</span>
+          <span class="rule-name">SQL Injection in Database Tools</span>
+          <span class="severity-pill pill-crit">CRITICAL</span>
+          <span class="rule-meta-tag">CWE-89</span>
+          <span class="rule-meta-tag">MCP05</span>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          Detects unparameterized or dynamically interpolated SQL queries (<code>cursor.execute(f"...")</code>, <code>pool.query(`...`)</code>, <code>$queryRawUnsafe</code>) in AI agent tools and MCP database servers.
+        </p>
+      </article>
+
+      <!-- SHIELD-022 -->
+      <article class="rule-card" data-search="shield-022 file exfiltration webhook multipart upload cwe-200 mcp data exfil">
+        <div class="rule-meta">
+          <span class="rule-id">SHIELD-022</span>
+          <span class="rule-name">Local File Exfiltration via Webhook</span>
+          <span class="severity-pill pill-crit">CRITICAL</span>
+          <span class="rule-meta-tag">CWE-200</span>
+          <span class="rule-meta-tag">MCP06</span>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          Flags patterns where local file system contents (<code>open().read()</code>, <code>fs.readFileSync()</code>) are read and transmitted directly to external HTTP webhooks, POST endpoints, or multipart uploads.
+        </p>
+      </article>
     </div>
   </main>
 
