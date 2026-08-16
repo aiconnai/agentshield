@@ -29,7 +29,7 @@ AgentShield runs as a CLI, GitHub Action, VS Code extension, or Rust library. It
 |------|------------------------|
 | Scanner surface | Normalizes seven framework/client families into one IR: MCP, OpenClaw, Hermes Agent, CrewAI, LangChain/LangGraph, GPT Actions, and Cursor Rules. |
 | Interprocedural Taint | Deep cross-function & cross-method call-graph analysis tracking untrusted inputs through utility wrappers to execution sinks in Python and TypeScript. |
-| Detection | 23 built-in contextual rules plus a declarative YAML custom rule engine (`.agentshield/rules/*.yaml`). |
+| Detection | 24 built-in contextual rules plus a declarative YAML custom rule engine (`.agentshield/rules/*.yaml`). |
 | Automated Remediation | Instant auto-fixing (`agentshield fix`) and VS Code lightbulb code actions (`Cmd + .`) for unsafe deserializers and unpinned dependencies. |
 | Runtime Guard | Reverse proxy for MCP stdio and HTTP/SSE streams inspecting tool calls in real time and redacting leaked secrets. |
 | Workflow fit | Works locally, in CI, in VS Code, and in GitHub Code Scanning without sending source code to a hosted service. |
@@ -323,7 +323,7 @@ process exit status. SARIF, HTML, and DSSE remain unchanged.
 
 ## Detection Rules
 
-AgentShield ships 23 built-in contextual rules covering command execution, SQL injection in database tools, system prompt injection surfaces, credential exfiltration, composite toxic flows, local file exfiltration via webhooks, SSRF, arbitrary file access, runtime package installation, prompt injection surfaces, excessive capabilities, dependency hygiene, dynamic code execution, metadata service access, unsafe deserialization, and secret leakage.
+AgentShield ships 24 built-in contextual rules covering command execution, SQL injection in database tools, system prompt injection surfaces, insecure network binds (0.0.0.0 exposure), credential exfiltration, composite toxic flows, local file exfiltration via webhooks, SSRF, arbitrary file access, runtime package installation, prompt injection surfaces, excessive capabilities, dependency hygiene, dynamic code execution, metadata service access, unsafe deserialization, and secret leakage.
 
 Use the CLI for the authoritative rule list in your installed version:
 

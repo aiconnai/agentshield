@@ -52,7 +52,7 @@ agentshield/
 │   │   ├── finding.rs            # Finding, Severity, Evidence structs
 │   │   ├── registry.rs           # Rule metadata registry
 │   │   ├── policy.rs             # Policy evaluation (.agentshield.toml)
-│   │   └── builtin/              # 23 built-in detectors (SHIELD-001..023)
+│   │   └── builtin/              # 24 built-in detectors (SHIELD-001..024)
 │   ├── output/                   # Report formatters
 │   │   ├── mod.rs                # OutputFormat enum, render()
 │   │   ├── console.rs            # Plain text
