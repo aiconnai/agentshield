@@ -143,7 +143,7 @@ cargo install --git https://github.com/aiconnai/agentshield \\
 # 3. Verify installation
 agentshield --version`,
   vscode: `# Install via VS Code Marketplace:
-code --install-extension aiconnai.agentshield
+code --install-extension aiconnai-vs.agentshield
 
 # Instant features:
 # - Real-time inline security diagnostics
