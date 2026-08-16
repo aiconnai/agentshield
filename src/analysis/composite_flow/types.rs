@@ -3,31 +3,31 @@ use std::path::{Path, PathBuf};
 use crate::ir::SourceLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct ScopeId {
+pub struct ScopeId {
     pub relative_file: PathBuf,
     pub lexical_owner: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct ByteSpan {
+pub struct ByteSpan {
     pub start: usize,
     pub end: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct DefinitionId {
+pub struct DefinitionId {
     pub scope: ScopeId,
     pub definition_span: ByteSpan,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct ValueId {
+pub struct ValueId {
     pub definition: DefinitionId,
     pub version: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum FlowEdgeKind {
+pub enum FlowEdgeKind {
     ControlsFilePath,
     ProducesFileContent,
     Propagates,
@@ -35,7 +35,7 @@ pub(crate) enum FlowEdgeKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct FlowEdge {
+pub struct FlowEdge {
     pub kind: FlowEdgeKind,
     pub input: ValueId,
     pub output: ValueId,
@@ -43,7 +43,7 @@ pub(crate) struct FlowEdge {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SemanticAnchor {
+pub struct SemanticAnchor {
     pub relative_file: PathBuf,
     pub lexical_owner: String,
     pub operation_kind: &'static str,
@@ -53,7 +53,7 @@ pub(crate) struct SemanticAnchor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CompositeFlowCandidate {
+pub struct CompositeFlowCandidate {
     pub tool_name: String,
     pub source_location: SourceLocation,
     pub sink_location: SourceLocation,
@@ -64,13 +64,13 @@ pub(crate) struct CompositeFlowCandidate {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct SourceUnit<'a> {
+pub struct SourceUnit<'a> {
     pub path: &'a Path,
     pub content: &'a str,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ToolFlowInput {
+pub struct ToolFlowInput {
     pub tool_name: String,
     pub handler: SourceLocation,
 }
