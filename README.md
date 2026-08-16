@@ -28,7 +28,7 @@ AgentShield runs as a CLI, GitHub Action, VS Code extension, or Rust library. It
 |------|------------------------|
 | Scanner surface | Normalizes seven framework/client families into one IR: MCP, OpenClaw, Hermes Agent, CrewAI, LangChain/LangGraph, GPT Actions, and Cursor Rules. |
 | Interprocedural Taint | Deep cross-function & cross-method call-graph analysis tracking untrusted inputs through utility wrappers to execution sinks in Python and TypeScript. |
-| Detection | 22 built-in contextual rules plus a declarative YAML custom rule engine (`.agentshield/rules/*.yaml`). |
+| Detection | 23 built-in contextual rules plus a declarative YAML custom rule engine (`.agentshield/rules/*.yaml`). |
 | Automated Remediation | Instant auto-fixing (`agentshield fix`) and VS Code lightbulb code actions (`Cmd + .`) for unsafe deserializers and unpinned dependencies. |
 | Runtime Guard | Reverse proxy for MCP stdio and HTTP/SSE streams inspecting tool calls in real time and redacting leaked secrets. |
 | Workflow fit | Works locally, in CI, in VS Code, and in GitHub Code Scanning without sending source code to a hosted service. |
@@ -147,7 +147,10 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 # ⚡ 1-Line Universal Installer (macOS & Linux: Apple Silicon, Intel, ARM64, x86_64)
 curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
 
-# Or install from crates.io / source with Cargo
+# 🍺 Or install via Homebrew (macOS & Linux)
+brew tap aiconnai/tap && brew install agentshield
+
+# 🦀 Or install from source with Cargo
 cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.0 --features full --force
 
 # First-run setup: config + explained first scan
@@ -319,7 +322,7 @@ process exit status. SARIF, HTML, and DSSE remain unchanged.
 
 ## Detection Rules
 
-AgentShield ships 22 built-in contextual rules covering command execution, SQL injection in database tools, credential exfiltration, composite toxic flows, local file exfiltration via webhooks, SSRF, arbitrary file access, runtime package installation, prompt injection surfaces, excessive capabilities, dependency hygiene, dynamic code execution, metadata service access, unsafe deserialization, and secret leakage.
+AgentShield ships 23 built-in contextual rules covering command execution, SQL injection in database tools, system prompt injection surfaces, credential exfiltration, composite toxic flows, local file exfiltration via webhooks, SSRF, arbitrary file access, runtime package installation, prompt injection surfaces, excessive capabilities, dependency hygiene, dynamic code execution, metadata service access, unsafe deserialization, and secret leakage.
 
 Use the CLI for the authoritative rule list in your installed version:
 

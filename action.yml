@@ -47,6 +47,14 @@ inputs:
     description: 'Path to an existing AgentShield binary; skips release download when set'
     required: false
     default: ''
+  comment-pr:
+    description: 'Post an automated security summary comment on Pull Requests (requires GITHUB_TOKEN)'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'GitHub token for PR commenting and API authentication'
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   finding-count:
@@ -238,6 +246,81 @@ runs:
       with:
         sarif_file: ${{ steps.scan.outputs.sarif-file }}
         category: agentshield
+      continue-on-error: true
+
+    - name: Post PR security summary comment
+      if: inputs.comment-pr == 'true' && github.event_name == 'pull_request' && inputs.github-token != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        SARIF_FILE: ${{ steps.scan.outputs.sarif-file }}
+        FINDING_COUNT: ${{ steps.scan.outputs.finding-count }}
+        EXIT_CODE: ${{ steps.scan.outputs.exit-code }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO_NAME: ${{ github.repository }}
+      run: |
+        python3 - <<'PY'
+        import json
+        import os
+        import subprocess
+        import sys
+
+        sarif_path = os.environ.get("SARIF_FILE", "")
+        finding_count = int(os.environ.get("FINDING_COUNT", "0"))
+        pr_number = os.environ.get("PR_NUMBER", "")
+        repo_name = os.environ.get("REPO_NAME", "")
+        gh_token = os.environ.get("GH_TOKEN", "")
+
+        if not pr_number or not gh_token or not repo_name:
+            print("Missing PR context or GitHub token; skipping PR comment.")
+            sys.exit(0)
+
+        header = "### 🛡️ AgentShield Security Report\n\n"
+        if finding_count == 0:
+            body = (
+                f"{header}"
+                "✅ **No security vulnerabilities detected.** All agent tools, MCP endpoints, and execution flows passed security gates.\n\n"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.0</sub>"
+            )
+        else:
+            findings_table = "| Rule | Severity | Location | Message |\n|---|---|---|---|\n"
+            if sarif_path and os.path.exists(sarif_path):
+                try:
+                    with open(sarif_path, encoding="utf-8") as f:
+                        data = json.load(f)
+                    for run in data.get("runs", []):
+                        for r in run.get("results", [])[:15]:
+                            rule_id = r.get("ruleId", "SHIELD")
+                            level = r.get("level", "error").upper()
+                            sev_icon = "🔴" if level == "ERROR" else "🟡"
+                            loc = r.get("locations", [{}])[0].get("physicalLocation", {})
+                            file_uri = loc.get("artifactLocation", {}).get("uri", "")
+                            line = loc.get("region", {}).get("startLine", 1)
+                            msg = r.get("message", {}).get("text", "").replace("|", "\\|")
+                            findings_table += f"| `{rule_id}` | {sev_icon} {level} | `{file_uri}:{line}` | {msg} |\n"
+                except Exception as e:
+                    findings_table += f"| Parsing error | - | - | {e} |\n"
+
+            body = (
+                f"{header}"
+                f"⚠️ **{finding_count} security finding(s) detected in this PR.**\n\n"
+                f"{findings_table}\n"
+                "#### 💡 Quick Fix\n"
+                "Run `agentshield fix .` locally to automatically remediate unpinned dependencies and unsafe deserializers.\n\n"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.0</sub>"
+            )
+
+        comment_file = "/tmp/agentshield_pr_comment.md"
+        with open(comment_file, "w", encoding="utf-8") as f:
+            f.write(body)
+
+        cmd = ["gh", "pr", "comment", pr_number, "--repo", repo_name, "--body-file", comment_file]
+        try:
+            subprocess.run(cmd, check=True)
+            print("Successfully posted AgentShield PR comment.")
+        except Exception as err:
+            print(f"Notice: Could not post PR comment ({err}); continuing.")
+        PY
       continue-on-error: true
 
     - name: Check result

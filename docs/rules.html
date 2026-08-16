@@ -208,6 +208,20 @@ def execute(safe_target: str):
           Flags patterns where local file system contents (<code>open().read()</code>, <code>fs.readFileSync()</code>) are read and transmitted directly to external HTTP webhooks, POST endpoints, or multipart uploads.
         </p>
       </article>
+
+      <!-- SHIELD-023 -->
+      <article class="rule-card" data-search="shield-023 system prompt injection tampering jailbreak template cwe-74 mcp prompt injection">
+        <div class="rule-meta">
+          <span class="rule-id">SHIELD-023</span>
+          <span class="rule-name">System Prompt Injection Surface</span>
+          <span class="severity-pill pill-warn">HIGH</span>
+          <span class="rule-meta-tag">CWE-74</span>
+          <span class="rule-meta-tag">MCP04</span>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          Detects unsanitized parameters, tool inputs, or user variables interpolated directly into LLM system instructions (<code>system_prompt = f"..."</code>, <code>systemPrompt: `...`</code>) without structural delimiters.
+        </p>
+      </article>
     </div>
   </main>
 
