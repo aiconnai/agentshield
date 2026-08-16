@@ -127,6 +127,12 @@ curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
 
 # Verify installation:
 agentshield --version`,
+  brew: `# Install via official Homebrew Tap (macOS & Linux):
+brew tap aiconnai/tap
+brew install agentshield
+
+# Verify installation:
+agentshield --version`,
   cli: `# 1. Install official binary from crates.io
 cargo install agent-shield
 
