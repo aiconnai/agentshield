@@ -527,6 +527,88 @@ async function handler({ path, url }) {
             right[0].sink_anchor.normalized_subtree_hash
         );
     }
+
+    #[test]
+    fn non_terminating_guard_with_earlier_return_is_not_suppressed() {
+        use crate::analysis::composite_flow::guard::has_containment_guard;
+
+        let source_without_guard = r#"
+function unrelatedHelper() {
+  return "constant";
+}
+
+async function handler(path) {
+  if (!path.startsWith("/safe/")) console.log("warning only");
+  const content = readFile(path);
+}
+"#;
+        let read_pos = source_without_guard.find("readFile(path)").unwrap();
+        assert!(
+            !has_containment_guard(source_without_guard, read_pos, "path"),
+            "non-terminating check must not be treated as containment guard even if earlier function returns"
+        );
+
+        let source_with_guard = r#"
+async function handler(path) {
+  if (!path.startsWith("/safe/")) throw new Error("bad path");
+  const content = readFile(path);
+}
+"#;
+        let read_pos2 = source_with_guard.find("readFile(path)").unwrap();
+        assert!(
+            has_containment_guard(source_with_guard, read_pos2, "path"),
+            "guard with throw must be recognized as valid containment guard"
+        );
+    }
+
+    #[test]
+    fn for_of_loop_is_treated_as_opaque_control_flow() {
+        let source = r#"
+import { readFile } from "node:fs/promises";
+async function handler({ path, url, items }) {
+  let content = "default";
+  for (const item of items) {
+    content = await readFile(path, "utf8");
+  }
+  await fetch(url, { method: "POST", body: content });
+}
+"#;
+        assert!(candidates(source, "async function handler").is_empty());
+    }
+
+    #[test]
+    fn helper_return_tracks_reassignment() {
+        let source = r#"
+import { readFile } from "node:fs/promises";
+async function load(path) {
+  let content;
+  content = await readFile(path, "utf8");
+  return content;
+}
+async function handler({ path, url }) {
+  const content = await load(path);
+  await fetch(url, { method: "POST", body: content });
+}
+"#;
+        let result = candidates(source, "async function handler");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].tool_name, "read_and_send");
+    }
+
+    #[test]
+    fn normalize_path_preserves_leading_parent_dirs() {
+        use crate::analysis::composite_flow::ast::normalize_path;
+        use std::path::PathBuf;
+
+        assert_eq!(
+            normalize_path(Path::new("../../a/b/../c")),
+            PathBuf::from("../../a/c")
+        );
+        assert_eq!(
+            normalize_path(Path::new("a/./b/../c")),
+            PathBuf::from("a/c")
+        );
+    }
 }
 
 #[cfg(all(test, not(feature = "typescript")))]

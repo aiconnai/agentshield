@@ -687,96 +687,124 @@ pub(crate) fn analyze_helper_return(
     };
     let mut versions = BTreeMap::new();
     for event in events {
-        if event.kind() == "variable_declarator" {
-            let name = event
-                .child_by_field_name("name")
-                .and_then(|node| simple_binding_name(node, unit.content));
-            let value = event.child_by_field_name("value");
-            if let (Some(name), Some(value)) = (name, value) {
-                let next = if unwrap_expression(value).kind() == "identifier" {
-                    variables
-                        .get(text(unwrap_expression(value), unit.content))
-                        .cloned()
-                } else if resolved_file_read_api(unit, unwrap_expression(value)).is_some() {
-                    let path = call_arguments(unwrap_expression(value))
-                        .into_iter()
-                        .next()
-                        .and_then(|node| resolve_lineage(node, unit.content, &variables));
-                    path.map(|path| {
-                        let output = ValueId {
-                            definition: DefinitionId {
-                                scope: helper_scope.clone(),
-                                definition_span: span(value),
-                            },
-                            version: 0,
-                        };
-                        let loc = location(unit.path, value);
-                        let mut edges = path.edges;
-                        edges.push(FlowEdge {
-                            kind: FlowEdgeKind::ControlsFilePath,
-                            input: path.tool_argument.clone(),
-                            output: path.value.clone(),
-                            location: loc.clone(),
-                        });
-                        edges.push(FlowEdge {
-                            kind: FlowEdgeKind::ProducesFileContent,
-                            input: path.value,
-                            output: output.clone(),
-                            location: loc,
-                        });
-                        Lineage {
-                            value: output,
-                            tool_argument: path.tool_argument,
-                            source_location: path.source_location,
-                            edges,
-                            is_file_content: true,
-                            source_anchor: Some(AnchorSeed {
-                                key: AnchorKey {
-                                    file: unit.path.to_path_buf(),
-                                    owner: helper_scope.lexical_owner.clone(),
-                                    operation: "file_read",
-                                    api: "fs.read",
-                                    hash: normalized_subtree_hash(value, unit.content),
-                                },
-                                occurrence: span(value),
-                            }),
-                        }
-                    })
-                } else {
-                    None
-                };
-                assign(
-                    &mut variables,
-                    &mut versions,
-                    name,
-                    next,
-                    event,
-                    &helper_scope,
-                    unit.path,
-                );
+        match event.kind() {
+            "variable_declarator" => {
+                let name = event
+                    .child_by_field_name("name")
+                    .and_then(|node| simple_binding_name(node, unit.content));
+                let value = event.child_by_field_name("value");
+                if let (Some(name), Some(value)) = (name, value) {
+                    let next = evaluate_helper_expression(unit, value, &variables, &helper_scope);
+                    assign(
+                        &mut variables,
+                        &mut versions,
+                        name,
+                        next,
+                        event,
+                        &helper_scope,
+                        unit.path,
+                    );
+                }
             }
-        }
-        if event.kind() == "return_statement" {
-            let returned = named_children(event).into_iter().next()?;
-            let mut lineage = resolve_lineage(returned, unit.content, &variables)?;
-            let returned_value = ValueId {
-                definition: DefinitionId {
-                    scope: caller_scope.clone(),
-                    definition_span: span(event),
-                },
-                version: 0,
-            };
-            lineage.edges.push(FlowEdge {
-                kind: FlowEdgeKind::Propagates,
-                input: lineage.value,
-                output: returned_value.clone(),
-                location: location(unit.path, event),
-            });
-            lineage.value = returned_value;
-            return Some(lineage);
+            "assignment_expression" | "augmented_assignment_expression" => {
+                let left = event.child_by_field_name("left");
+                let right = event.child_by_field_name("right");
+                let name = left.and_then(|node| simple_binding_name(node, unit.content));
+                if let (Some(name), Some(value)) = (name, right) {
+                    let next = evaluate_helper_expression(unit, value, &variables, &helper_scope);
+                    assign(
+                        &mut variables,
+                        &mut versions,
+                        name,
+                        next,
+                        event,
+                        &helper_scope,
+                        unit.path,
+                    );
+                }
+            }
+            "return_statement" => {
+                let returned = named_children(event).into_iter().next()?;
+                let mut lineage = resolve_lineage(returned, unit.content, &variables)?;
+                let returned_value = ValueId {
+                    definition: DefinitionId {
+                        scope: caller_scope.clone(),
+                        definition_span: span(event),
+                    },
+                    version: 0,
+                };
+                lineage.edges.push(FlowEdge {
+                    kind: FlowEdgeKind::Propagates,
+                    input: lineage.value,
+                    output: returned_value.clone(),
+                    location: location(unit.path, event),
+                });
+                lineage.value = returned_value;
+                return Some(lineage);
+            }
+            _ => {}
         }
     }
     None
+}
+
+fn evaluate_helper_expression(
+    unit: &ParsedUnit<'_>,
+    value: Node<'_>,
+    variables: &BTreeMap<String, Lineage>,
+    helper_scope: &ScopeId,
+) -> Option<Lineage> {
+    let unwrapped = unwrap_expression(value);
+    if unwrapped.kind() == "identifier" {
+        variables.get(text(unwrapped, unit.content)).cloned()
+    } else if resolved_file_read_api(unit, unwrapped).is_some() {
+        let path = call_arguments(unwrapped)
+            .into_iter()
+            .next()
+            .and_then(|node| resolve_lineage(node, unit.content, variables));
+        path.map(|path| {
+            let output = ValueId {
+                definition: DefinitionId {
+                    scope: helper_scope.clone(),
+                    definition_span: span(value),
+                },
+                version: 0,
+            };
+            let loc = location(unit.path, value);
+            let mut edges = path.edges;
+            edges.push(FlowEdge {
+                kind: FlowEdgeKind::ControlsFilePath,
+                input: path.tool_argument.clone(),
+                output: path.value.clone(),
+                location: loc.clone(),
+            });
+            edges.push(FlowEdge {
+                kind: FlowEdgeKind::ProducesFileContent,
+                input: path.value,
+                output: output.clone(),
+                location: loc,
+            });
+            Lineage {
+                value: output,
+                tool_argument: path.tool_argument,
+                source_location: path.source_location,
+                edges,
+                is_file_content: true,
+                source_anchor: Some(AnchorSeed {
+                    key: AnchorKey {
+                        file: unit.path.to_path_buf(),
+                        owner: helper_scope.lexical_owner.clone(),
+                        operation: "file_read",
+                        api: "fs.read",
+                        hash: normalized_subtree_hash(value, unit.content),
+                    },
+                    occurrence: span(value),
+                }),
+            }
+        })
+    } else {
+        None
+    }
 }
 
 pub(crate) fn find_node_for_location<'tree>(
