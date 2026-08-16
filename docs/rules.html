@@ -222,6 +222,20 @@ def execute(safe_target: str):
           Detects unsanitized parameters, tool inputs, or user variables interpolated directly into LLM system instructions (<code>system_prompt = f"..."</code>, <code>systemPrompt: `...`</code>) without structural delimiters.
         </p>
       </article>
+
+      <!-- SHIELD-024 -->
+      <article class="rule-card" data-search="shield-024 insecure network bind 0.0.0.0 open host port unauthenticated mcp cwe-1327 cwe-306">
+        <div class="rule-meta">
+          <span class="rule-id">SHIELD-024</span>
+          <span class="rule-name">Insecure Network Bind</span>
+          <span class="severity-pill pill-warn">HIGH</span>
+          <span class="rule-meta-tag">CWE-1327</span>
+          <span class="rule-meta-tag">MCP08</span>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">
+          Flags MCP servers and agent transports that bind to wildcard interfaces (<code>host="0.0.0.0"</code>, <code>app.listen(port, "0.0.0.0")</code>) without explicit authentication, preventing unauthorized network exposure and DNS rebinding attacks.
+        </p>
+      </article>
     </div>
   </main>
 
