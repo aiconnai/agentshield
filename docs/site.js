@@ -122,7 +122,12 @@ context_files:
 };
 
 const INSTALL_COMMANDS = {
-  cli: `# 1. Install official binary from crates.io (Recommended)
+  curl: `# ⚡ Fast 1-line installation for macOS & Linux (Apple Silicon, Intel, ARM64, x86_64)
+curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
+
+# Verify installation:
+agentshield --version`,
+  cli: `# 1. Install official binary from crates.io
 cargo install agent-shield
 
 # 2. Or build from GitHub with all features
