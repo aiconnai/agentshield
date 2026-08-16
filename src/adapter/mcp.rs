@@ -193,16 +193,16 @@ fn load_mcp_target(
     }
 
     // Phase 3: Merge parsed results into execution surface.
-    for (_, parsed) in &parsed_files {
-        execution.commands.extend(parsed.commands.clone());
+    for (_, mut parsed) in parsed_files {
+        execution.commands.append(&mut parsed.commands);
         execution
             .file_operations
-            .extend(parsed.file_operations.clone());
+            .append(&mut parsed.file_operations);
         execution
             .network_operations
-            .extend(parsed.network_operations.clone());
-        execution.env_accesses.extend(parsed.env_accesses.clone());
-        execution.dynamic_exec.extend(parsed.dynamic_exec.clone());
+            .append(&mut parsed.network_operations);
+        execution.env_accesses.append(&mut parsed.env_accesses);
+        execution.dynamic_exec.append(&mut parsed.dynamic_exec);
     }
 
     // Parse tool definitions from JSON if available
@@ -329,6 +329,12 @@ pub(crate) fn has_recursive_python_import(root: &Path, needles: &[&str]) -> bool
         let path = entry.path();
         if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("py") {
             continue;
+        }
+
+        if let Ok(metadata) = std::fs::metadata(path) {
+            if metadata.len() > 1_048_576 {
+                continue;
+            }
         }
 
         if let Ok(content) = std::fs::read_to_string(path) {

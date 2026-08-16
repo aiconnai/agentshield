@@ -159,16 +159,20 @@ fn read_json_line<R: BufRead>(
         return Ok(ReadLine::Eof);
     }
     let over_limit = n > max_line_bytes;
+    if over_limit {
+        // If line limit was exceeded before reading newline, drain remainder to prevent stream desynchronization
+        if !raw.ends_with(b"\n") {
+            let mut discard = Vec::new();
+            let _ = reader.read_until(b'\n', &mut discard);
+        }
+        return Ok(ReadLine::Parsed(Err(())));
+    }
     let line = String::from_utf8_lossy(raw);
     let line = line.trim_end_matches(['\n', '\r']);
-    if !over_limit && line.trim().is_empty() {
+    if line.trim().is_empty() {
         return Ok(ReadLine::Empty);
     }
-    let parsed = if over_limit {
-        Err(())
-    } else {
-        serde_json::from_str::<Value>(line).map_err(|_| ())
-    };
+    let parsed = serde_json::from_str::<Value>(line).map_err(|_| ());
     Ok(ReadLine::Parsed(parsed))
 }
 

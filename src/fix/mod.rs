@@ -28,9 +28,23 @@ impl FilePatch {
         self.original_content != self.modified_content
     }
 
-    /// Write modified content to disk.
+    /// Write modified content to disk atomically.
     pub fn write_to_disk(&self) -> std::io::Result<()> {
-        std::fs::write(&self.file_path, &self.modified_content)
+        let parent = self.file_path.parent().unwrap_or_else(|| Path::new("."));
+        let temp_path = parent.join(format!(
+            ".tmp_patch_{}_{}",
+            std::process::id(),
+            self.file_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("file")
+        ));
+        std::fs::write(&temp_path, &self.modified_content)?;
+        if let Err(e) = std::fs::rename(&temp_path, &self.file_path) {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(e);
+        }
+        Ok(())
     }
 
     /// Generate a unified diff representation of the patch.
