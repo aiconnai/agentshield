@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 use tree_sitter::Node;
 
-use crate::ir::SourceLocation;
 use super::types::ByteSpan;
+use crate::ir::SourceLocation;
 
 pub(crate) fn normalized_subtree_hash(node: Node<'_>, source: &str) -> String {
     fn append(node: Node<'_>, source: &str, output: &mut String) {
@@ -172,7 +172,12 @@ pub(crate) fn simple_binding_name(node: Node<'_>, source: &str) -> Option<String
     (node.kind() == "identifier").then(|| text(node, source).to_string())
 }
 
-pub(crate) fn collect_bindings(node: Node<'_>, root: Node<'_>, source: &str, output: &mut Vec<String>) {
+pub(crate) fn collect_bindings(
+    node: Node<'_>,
+    root: Node<'_>,
+    source: &str,
+    output: &mut Vec<String>,
+) {
     if node != root && is_function(node) {
         return;
     }
@@ -186,7 +191,11 @@ pub(crate) fn collect_bindings(node: Node<'_>, root: Node<'_>, source: &str, out
     }
 }
 
-pub(crate) fn collect_events<'tree>(node: Node<'tree>, root: Node<'tree>, output: &mut Vec<Node<'tree>>) {
+pub(crate) fn collect_events<'tree>(
+    node: Node<'tree>,
+    root: Node<'tree>,
+    output: &mut Vec<Node<'tree>>,
+) {
     if node != root && is_function(node) {
         return;
     }
