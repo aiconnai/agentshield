@@ -310,16 +310,23 @@ runs:
                 "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.0</sub>"
             )
 
-        comment_file = "/tmp/agentshield_pr_comment.md"
-        with open(comment_file, "w", encoding="utf-8") as f:
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             f.write(body)
+            comment_file = f.name
 
         cmd = ["gh", "pr", "comment", pr_number, "--repo", repo_name, "--body-file", comment_file]
         try:
             subprocess.run(cmd, check=True)
             print("Successfully posted AgentShield PR comment.")
         except Exception as err:
-            print(f"Notice: Could not post PR comment ({err}); continuing.")
+            print(f"Notice: Could not post PR comment (e.g. fork without write permissions or missing pull-requests: write permission: {err}); continuing.")
+        finally:
+            if os.path.exists(comment_file):
+                try:
+                    os.remove(comment_file)
+                except OSError:
+                    pass
         PY
       continue-on-error: true
 
