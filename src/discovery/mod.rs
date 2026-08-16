@@ -1,6 +1,7 @@
 //! Binary-private registry, filesystem boundary, and structural parsers for
 //! local client discovery.
 
+#[path = "filesystem/mod.rs"]
 mod filesystem;
 
 use serde::Serialize;

@@ -5,247 +5,21 @@
 //! tainted to `Sanitized`. This eliminates false positives from internal
 //! helper functions that receive already-validated input from their callers.
 
+mod sanitizer;
+mod sink_policy;
+
+#[allow(unused_imports)]
+pub(crate) use sanitizer::{
+    SanitizerCategory, is_redaction_sanitizer, is_sanitizer, sanitizer_category, sanitizer_label,
+};
+pub use sink_policy::sanitizer_allows_sink;
+
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use crate::ir::ArgumentSource;
+use crate::ir::{ArgumentSource, SinkClass};
 use crate::parser::ParsedFile;
-
-/// Sanitizer category. A sanitizer is only safe for matching sink types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SanitizerCategory {
-    Path,
-    Network,
-    Redaction,
-    TypeCoercion,
-}
-
-impl SanitizerCategory {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Path => "path",
-            Self::Network => "network",
-            Self::Redaction => "redaction",
-            Self::TypeCoercion => "type",
-        }
-    }
-}
-
-use crate::ir::SinkClass;
-
-/// Path/file sanitizers. These are safe for file/path sinks only.
-static PATH_SANITIZER_NAMES: &[&str] = &[
-    "validatePath",
-    "sanitizePath",
-    "normalizePath",
-    "resolvePath",
-    "canonicalizePath",
-    "realpath",
-    "path.resolve",
-    "path.normalize",
-    "resolve",
-    "normalize",
-    "os.path.realpath",
-    "os.path.abspath",
-    "os.path.normpath",
-    "abspath",
-    "normpath",
-];
-
-/// Network/url validators. Parse-only helpers such as URL.parse/urlparse are
-/// intentionally excluded: parsing is not allowlist validation.
-static NETWORK_SANITIZER_NAMES: &[&str] = &[
-    "validateUrl",
-    "validateURL",
-    "validateUri",
-    "validateURI",
-    "validateAllowedUrl",
-    "validateAllowedURL",
-    "validateAllowedUri",
-    "validateAllowedURI",
-    "allowlistUrl",
-    "allowlistURL",
-    "allowlistUri",
-    "allowlistURI",
-    "ensureAllowedUrl",
-    "ensureAllowedURL",
-    "ensureAllowedUri",
-    "ensureAllowedURI",
-    "assertAllowedUrl",
-    "assertAllowedURL",
-    "assertAllowedUri",
-    "assertAllowedURI",
-];
-
-/// Type coercion helpers. These are not path or network validators.
-static TYPE_COERCION_SANITIZER_NAMES: &[&str] =
-    &["parseInt", "parseFloat", "Number", "int", "float", "str"];
-
-/// Credential/log redaction helpers. These are safe only for credential/log
-/// leakage analysis and must not sanitize file, network, command, or eval sinks.
-static REDACTION_SANITIZER_NAMES: &[&str] = &[
-    "redactSecret",
-    "redactSecrets",
-    "redactToken",
-    "redactCredentials",
-    "maskSecret",
-    "maskToken",
-    "maskCredentials",
-    "scrubSecret",
-    "scrubToken",
-    "scrubCredentials",
-];
-
-fn exact_or_method_match(name: &str, names: &[&str]) -> bool {
-    if names.contains(&name) {
-        return true;
-    }
-
-    name.rsplit('.')
-        .next()
-        .is_some_and(|method| names.contains(&method))
-}
-
-fn compact_lower(name: &str) -> String {
-    name.chars()
-        .filter(|ch| *ch != '_' && *ch != '-')
-        .flat_map(char::to_lowercase)
-        .collect()
-}
-
-/// Categorize a sanitizer helper by the sink family it protects.
-pub fn sanitizer_category(name: &str) -> Option<SanitizerCategory> {
-    if let Some((prefix, _)) = name.split_once(':') {
-        return match prefix {
-            "path" => Some(SanitizerCategory::Path),
-            "network" => Some(SanitizerCategory::Network),
-            "redaction" => Some(SanitizerCategory::Redaction),
-            "type" => Some(SanitizerCategory::TypeCoercion),
-            _ => None,
-        };
-    }
-
-    if exact_or_method_match(name, REDACTION_SANITIZER_NAMES) {
-        return Some(SanitizerCategory::Redaction);
-    }
-
-    if exact_or_method_match(name, PATH_SANITIZER_NAMES) {
-        return Some(SanitizerCategory::Path);
-    }
-
-    if exact_or_method_match(name, NETWORK_SANITIZER_NAMES) {
-        return Some(SanitizerCategory::Network);
-    }
-
-    if exact_or_method_match(name, TYPE_COERCION_SANITIZER_NAMES) {
-        return Some(SanitizerCategory::TypeCoercion);
-    }
-
-    let lower = compact_lower(name);
-
-    if (lower.starts_with("validate") || lower.starts_with("sanitize")) && lower.contains("path") {
-        return Some(SanitizerCategory::Path);
-    }
-
-    if (lower.starts_with("validate")
-        || lower.starts_with("allowlist")
-        || lower.starts_with("ensureallowed")
-        || lower.starts_with("assertallowed"))
-        && (lower.contains("url")
-            || lower.contains("uri")
-            || lower.contains("host")
-            || lower.contains("domain"))
-    {
-        return Some(SanitizerCategory::Network);
-    }
-
-    None
-}
-
-/// Check if a function name is a non-redaction input sanitizer. Kept for parser
-/// compatibility; redaction helpers are intentionally excluded from this global
-/// taint downgrade path.
-pub fn is_sanitizer(name: &str) -> bool {
-    matches!(
-        sanitizer_category(name),
-        Some(
-            SanitizerCategory::Path | SanitizerCategory::Network | SanitizerCategory::TypeCoercion
-        )
-    )
-}
-
-pub fn is_redaction_sanitizer(name: &str) -> bool {
-    matches!(sanitizer_category(name), Some(SanitizerCategory::Redaction))
-}
-
-pub fn sanitizer_label(name: &str) -> Option<String> {
-    sanitizer_category(name).map(|category| format!("{}:{name}", category.as_str()))
-}
-
-/// Whether `sanitizer` neutralizes taint for `sink`.
-///
-/// Each sanitizer category protects only its own sink family. Type coercion
-/// (`str()`/`Number()`) is identity on a string and is NOT accepted for any
-/// injection sink — it neither escapes shell metacharacters nor constrains a
-/// path or URL. Redaction sanitizers protect no input sink (only credential/log
-/// leakage analysis), so they are absent here.
-pub(crate) fn sanitizer_allows_sink(sanitizer: &str, sink: SinkClass) -> bool {
-    // A cross-file downgrade is proven safe for exactly one sink.
-    if let Some(downgraded_sink) = cross_file_sink(sanitizer) {
-        return downgraded_sink == sink;
-    }
-
-    matches!(
-        (sanitizer_category(sanitizer), sink),
-        (Some(SanitizerCategory::Path), SinkClass::FilePath)
-            | (Some(SanitizerCategory::Network), SinkClass::NetworkUrl)
-    )
-}
-
-fn arg_safe_for_sink(arg: &ArgumentSource, sink: SinkClass) -> bool {
-    !arg.is_tainted_for_sink(sink)
-}
-
-/// Prefix marking a cross-file downgrade label, followed by the exact sink it
-/// was proven safe for. Unlike a named sanitizer (which protects a whole
-/// category), a cross-file downgrade is proven safe for precisely one sink, so
-/// the sink is encoded directly and matched back in [`sanitizer_allows_sink`].
-const CROSS_FILE_SANITIZER_PREFIX: &str = "crossfile";
-
-fn cross_file_sanitizer_label(sink: SinkClass, func_name: &str) -> String {
-    let sink_tag = match sink {
-        SinkClass::Command => "command",
-        SinkClass::FilePath => "filepath",
-        SinkClass::NetworkUrl => "networkurl",
-        SinkClass::DynamicExec => "dynamicexec",
-    };
-    format!("{CROSS_FILE_SANITIZER_PREFIX}:{sink_tag}:caller passes sanitized value to {func_name}")
-}
-
-fn cross_file_sink(sanitizer: &str) -> Option<SinkClass> {
-    let rest = sanitizer
-        .strip_prefix(CROSS_FILE_SANITIZER_PREFIX)?
-        .strip_prefix(':')?;
-    let tag = rest.split(':').next()?;
-    match tag {
-        "command" => Some(SinkClass::Command),
-        "filepath" => Some(SinkClass::FilePath),
-        "networkurl" => Some(SinkClass::NetworkUrl),
-        "dynamicexec" => Some(SinkClass::DynamicExec),
-        _ => None,
-    }
-}
-
-fn all_call_sites_safe_for_sink(
-    sites: &[Vec<ArgumentSource>],
-    param_idx: usize,
-    sink: SinkClass,
-) -> bool {
-    sites.iter().all(|args| {
-        args.get(param_idx)
-            .is_some_and(|arg| arg_safe_for_sink(arg, sink))
-    })
-}
+use sink_policy::{all_call_sites_safe_for_sink, cross_file_sanitizer_label};
 
 /// Result of cross-file sanitization analysis.
 #[derive(Debug)]
@@ -462,6 +236,7 @@ pub fn apply_cross_file_sanitization(
 mod tests {
     use super::*;
     use crate::adapter::auto_detect_and_load;
+    use crate::analysis::cross_file::sanitizer::{is_redaction_sanitizer, is_sanitizer};
     use crate::ir::SourceLocation;
     use crate::ir::execution_surface::{FileOpType, FileOperation};
     use crate::parser::{CallSite, FunctionDef};
@@ -740,11 +515,11 @@ mod tests {
             sanitizer: "type:str".into(),
         };
         assert!(
-            !arg_safe_for_sink(&coerced, SinkClass::Command),
+            !sink_policy::arg_safe_for_sink(&coerced, SinkClass::Command),
             "type coercion must not sanitize a command sink"
         );
         assert!(
-            !arg_safe_for_sink(&coerced, SinkClass::DynamicExec),
+            !sink_policy::arg_safe_for_sink(&coerced, SinkClass::DynamicExec),
             "type coercion must not sanitize a dynamic-exec sink"
         );
     }
