@@ -259,7 +259,15 @@ pub(crate) fn normalize_path(path: &Path) -> PathBuf {
         match component {
             Component::CurDir => {}
             Component::ParentDir => {
-                normalized.pop();
+                if let Some(last) = normalized.components().next_back() {
+                    if matches!(last, Component::Normal(_)) {
+                        normalized.pop();
+                    } else {
+                        normalized.push("..");
+                    }
+                } else {
+                    normalized.push("..");
+                }
             }
             other => normalized.push(other.as_os_str()),
         }

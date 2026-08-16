@@ -16,7 +16,8 @@ pub(crate) fn has_containment_guard(source: &str, before: usize, path_expression
     };
     let guard_tail = &prefix[guard_start + guard.len()..];
     let literal_root = guard_tail.trim_start().starts_with(['\'', '"']);
-    literal_root && (prefix.contains("throw ") || prefix.contains("return "))
+    let guard_body = &prefix[guard_start..];
+    literal_root && (guard_body.contains("throw ") || guard_body.contains("return "))
 }
 
 pub(crate) fn contains_opaque_control_flow(node: Node<'_>, reject_return: bool) -> bool {
@@ -26,9 +27,12 @@ pub(crate) fn contains_opaque_control_flow(node: Node<'_>, reject_return: bool) 
             | "switch_statement"
             | "for_statement"
             | "for_in_statement"
+            | "for_of_statement"
             | "while_statement"
             | "do_statement"
             | "try_statement"
+            | "with_statement"
+            | "labeled_statement"
             | "ternary_expression"
             | "binary_expression"
     ) || (reject_return && node.kind() == "return_statement")
