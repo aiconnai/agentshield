@@ -30,7 +30,12 @@ agentshield/
 │   │   └── provenance_surface.rs # Author, repo, license
 │   ├── adapter/                  # Framework → IR (3-phase pipeline)
 │   │   ├── mod.rs                # Adapter trait, auto_detect_and_load(root, ignore_tests)
-│   │   ├── mcp.rs                # MCP server adapter + is_test_file() + shared helpers
+│   │   ├── mcp/                   # MCP server adapter (modularized)
+│   │   │   ├── mod.rs             # Adapter trait impl, lifecycle, test helpers
+│   │   │   ├── tools.rs           # Tool extraction (TS .tool(), Python @mcp.tool)
+│   │   │   ├── binding.rs         # Handler resolution and scope binding
+│   │   │   ├── dependencies.rs    # Lockfile parsing (npm, uv, poetry, pip)
+│   │   │   └── provenance.rs      # Author, license, repository metadata
 │   │   ├── openclaw.rs           # OpenClaw SKILL.md adapter
 │   │   ├── crewai.rs             # CrewAI adapter (BaseTool, @tool)
 │   │   ├── langchain.rs          # LangChain adapter (@tool, BaseTool, langgraph)
@@ -242,7 +247,7 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 3. Register in `src/adapter/mod.rs` → `all_adapters()`
 4. `detect()` checks for framework-specific files
 5. `load()` uses the 3-phase pipeline (parse → cross-file analysis → merge)
-6. Reuse shared helpers from `mcp.rs`: `collect_source_files()`, `parse_dependencies()`, `parse_provenance()`
+6. Reuse shared helpers from the `mcp` module submodules: `collect_source_files()`, `parse_dependencies()`, `parse_provenance()`
 
 **Existing adapters:** MCP (`mcp.rs`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), GPT Actions (`gpt_actions.rs`), Cursor Rules (`cursor_rules.rs`), Hermes Agent (`hermes.rs`)
 

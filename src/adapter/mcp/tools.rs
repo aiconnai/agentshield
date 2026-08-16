@@ -645,3 +645,46 @@ pub(crate) fn source_loc_span(
         end_column: Some(end_column),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn parse_python_mcp_tool_decorator() {
+        let content = r#"
+@mcp.tool("my_tool", "my description")
+def my_tool():
+    pass
+        "#;
+        let tools = extract_mcp_python_decorators(Path::new("test.py"), content);
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "my_tool");
+        assert_eq!(tools[0].description.as_deref(), Some("my description"));
+    }
+
+    #[test]
+    fn parse_python_fastmcp_decorator() {
+        let content = r#"
+@mcp.tool
+def simple_tool():
+    pass
+        "#;
+        let tools = extract_mcp_python_decorators(Path::new("test.py"), content);
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "simple_tool");
+        assert_eq!(tools[0].description, None);
+    }
+
+    #[test]
+    fn ignores_non_tool_decorators() {
+        let content = r#"
+@mcp.resource("my_resource")
+def my_resource():
+    pass
+        "#;
+        let tools = extract_mcp_python_decorators(Path::new("test.py"), content);
+        assert!(tools.is_empty());
+    }
+}
