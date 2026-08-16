@@ -357,19 +357,16 @@ pub fn propagate_interprocedural_taint(target: &ScanTarget, graph: &CallGraph) -
         // Find calls originating from this function passing a tainted variable
         for call in &graph.call_sites {
             if call.file_path == source.location.file && call.caller_name == caller_name {
-                let mut trace = vec![call.location.clone()];
-                let mut visited_functions = HashSet::new();
-                visited_functions.insert(caller_name.clone());
-
-                trace_callee(
-                    &call.callee_name,
-                    source,
-                    &mut trace,
-                    &mut visited_functions,
+                let mut ctx = TraversalContext {
                     graph,
-                    &mut new_paths,
-                    &mut visited_paths,
-                );
+                    source,
+                    trace: vec![call.location.clone()],
+                    visited_functions: HashSet::from([caller_name.clone()]),
+                    visited_paths: &mut visited_paths,
+                    new_paths: &mut new_paths,
+                    depth: 0,
+                };
+                ctx.trace_callee(&call.callee_name);
             }
         }
     }
@@ -377,64 +374,64 @@ pub fn propagate_interprocedural_taint(target: &ScanTarget, graph: &CallGraph) -
     new_paths
 }
 
-fn trace_callee(
-    callee_name: &str,
-    source: &TaintSource,
-    trace: &mut Vec<SourceLocation>,
-    visited_functions: &mut HashSet<String>,
-    graph: &CallGraph,
-    new_paths: &mut Vec<TaintPath>,
-    visited_paths: &mut HashSet<(String, usize, usize)>,
-) {
-    if visited_functions.contains(callee_name) {
-        return;
-    }
-    visited_functions.insert(callee_name.to_string());
+const MAX_PROPAGATION_DEPTH: usize = 16;
 
-    if let Some(nodes) = graph.functions.get(callee_name) {
-        for node in nodes {
-            trace.push(node.location.clone());
+struct TraversalContext<'a> {
+    graph: &'a CallGraph,
+    source: &'a TaintSource,
+    trace: Vec<SourceLocation>,
+    visited_functions: HashSet<String>,
+    visited_paths: &'a mut HashSet<(String, usize, usize)>,
+    new_paths: &'a mut Vec<TaintPath>,
+    depth: usize,
+}
 
-            // Check if this callee contains execution sinks
-            for sink in &node.sinks {
-                let path_key = (
-                    source.description.clone(),
-                    source.location.line,
-                    sink.location.line,
-                );
-                if !visited_paths.contains(&path_key) {
-                    visited_paths.insert(path_key);
-                    new_paths.push(TaintPath {
-                        source: source.clone(),
-                        sink: sink.clone(),
-                        through: trace.clone(),
-                        confidence: 0.9,
-                    });
-                }
-            }
-
-            // Recurse into calls made by this callee
-            for next_call in &graph.call_sites {
-                if next_call.file_path == node.file_path && next_call.caller_name == node.name {
-                    trace.push(next_call.location.clone());
-                    trace_callee(
-                        &next_call.callee_name,
-                        source,
-                        trace,
-                        visited_functions,
-                        graph,
-                        new_paths,
-                        visited_paths,
-                    );
-                    trace.pop();
-                }
-            }
-
-            trace.pop();
+impl<'a> TraversalContext<'a> {
+    fn trace_callee(&mut self, callee_name: &str) {
+        if self.depth > MAX_PROPAGATION_DEPTH || self.visited_functions.contains(callee_name) {
+            return;
         }
-    }
+        self.visited_functions.insert(callee_name.to_string());
 
-    visited_functions.remove(callee_name);
+        if let Some(nodes) = self.graph.functions.get(callee_name) {
+            for node in nodes {
+                self.trace.push(node.location.clone());
+
+                // Check if this callee contains execution sinks
+                for sink in &node.sinks {
+                    let path_key = (
+                        self.source.description.clone(),
+                        self.source.location.line,
+                        sink.location.line,
+                    );
+                    if !self.visited_paths.contains(&path_key) {
+                        self.visited_paths.insert(path_key);
+                        self.new_paths.push(TaintPath {
+                            source: self.source.clone(),
+                            sink: sink.clone(),
+                            through: self.trace.clone(),
+                            confidence: 0.9,
+                        });
+                    }
+                }
+
+                // Recurse into calls made by this callee
+                for next_call in &self.graph.call_sites {
+                    if next_call.file_path == node.file_path && next_call.caller_name == node.name {
+                        self.trace.push(next_call.location.clone());
+                        self.depth += 1;
+                        self.trace_callee(&next_call.callee_name);
+                        self.depth -= 1;
+                        self.trace.pop();
+                    }
+                }
+
+                self.trace.pop();
+            }
+        }
+
+        self.visited_functions.remove(callee_name);
+    }
 }
 
 /// Analyze analysis bundles and enrich target DataSurface with interprocedural taint paths.

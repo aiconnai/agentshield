@@ -1,22 +1,13 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-static INSTALL_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
-    vec![
-        Regex::new(r"pip\s+install").expect("static regex pattern is valid"),
-        Regex::new(r"pip3\s+install").expect("static regex pattern is valid"),
-        Regex::new(r"npm\s+install").expect("static regex pattern is valid"),
-        Regex::new(r"npm\s+i\b").expect("static regex pattern is valid"),
-        Regex::new(r"uv\s+pip\s+install").expect("static regex pattern is valid"),
-        Regex::new(r"yarn\s+add").expect("static regex pattern is valid"),
-        Regex::new(r"pnpm\s+add").expect("static regex pattern is valid"),
-    ]
+static INSTALL_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?:pip3?|uv\s+pip)\s+install|npm\s+(?:install|i\b)|(?:yarn|pnpm)\s+add")
+        .expect("static regex pattern is valid")
 });
 
 pub(crate) fn is_runtime_install_command(command: &str) -> bool {
-    INSTALL_PATTERNS
-        .iter()
-        .any(|pattern| pattern.is_match(command))
+    INSTALL_PATTERN.is_match(command)
 }
 
 #[cfg(test)]

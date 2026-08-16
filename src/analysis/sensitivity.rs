@@ -6,18 +6,33 @@
 
 /// Heuristic: does this variable/header name look like it holds a credential?
 pub(crate) fn looks_sensitive_name(name: &str) -> bool {
-    let upper = name.to_uppercase();
-    upper.contains("SECRET")
-        || upper.contains("TOKEN")
-        || upper.contains("PASSWORD")
-        || upper.contains("CREDENTIAL")
-        || upper.contains("AUTH")
-        || upper.contains("PRIVATE_KEY")
-        || upper.contains("API_KEY")
-        || upper.ends_with("_KEY")
-        || upper.starts_with("AWS_")
-        || upper.starts_with("GH_")
-        || upper.starts_with("GITHUB_")
+    let matches_pattern = |needle: &str| -> bool {
+        name.as_bytes()
+            .windows(needle.len())
+            .any(|w| w.eq_ignore_ascii_case(needle.as_bytes()))
+    };
+
+    let starts_with_ci = |prefix: &str| -> bool {
+        name.len() >= prefix.len()
+            && name.as_bytes()[..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes())
+    };
+
+    let ends_with_ci = |suffix: &str| -> bool {
+        name.len() >= suffix.len()
+            && name.as_bytes()[name.len() - suffix.len()..].eq_ignore_ascii_case(suffix.as_bytes())
+    };
+
+    matches_pattern("SECRET")
+        || matches_pattern("TOKEN")
+        || matches_pattern("PASSWORD")
+        || matches_pattern("CREDENTIAL")
+        || matches_pattern("AUTH")
+        || matches_pattern("PRIVATE_KEY")
+        || matches_pattern("API_KEY")
+        || ends_with_ci("_KEY")
+        || starts_with_ci("AWS_")
+        || starts_with_ci("GH_")
+        || starts_with_ci("GITHUB_")
 }
 
 #[cfg(test)]

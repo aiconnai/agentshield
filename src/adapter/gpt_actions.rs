@@ -360,6 +360,9 @@ fn collect_spec_source_files(root: &Path, filter: &ScanPathFilter) -> Vec<Source
         let Ok(metadata) = std::fs::metadata(&path) else {
             continue;
         };
+        if metadata.len() > 1_048_576 {
+            continue;
+        }
         let Ok(content) = std::fs::read_to_string(&path) else {
             continue;
         };

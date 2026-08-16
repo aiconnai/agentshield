@@ -289,8 +289,13 @@ impl EgressProxy {
         };
 
         if let Ok(line) = serde_json::to_string(&entry) {
-            let mut file = writer.lock();
-            let _ = writeln!(file, "{}", line);
+            let writer = Arc::clone(writer);
+            tokio::task::spawn_blocking(move || {
+                let mut file = writer.lock();
+                if let Err(e) = writeln!(file, "{}", line) {
+                    eprintln!("agentshield egress audit log write failed: {e}");
+                }
+            });
         }
     }
 }
