@@ -31,19 +31,17 @@ impl FilePatch {
     /// Write modified content to disk atomically.
     pub fn write_to_disk(&self) -> std::io::Result<()> {
         let parent = self.file_path.parent().unwrap_or_else(|| Path::new("."));
-        let temp_path = parent.join(format!(
-            ".tmp_patch_{}_{}",
-            std::process::id(),
-            self.file_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("file")
-        ));
-        std::fs::write(&temp_path, &self.modified_content)?;
-        if let Err(e) = std::fs::rename(&temp_path, &self.file_path) {
-            let _ = std::fs::remove_file(&temp_path);
-            return Err(e);
+        let mut temp_file = tempfile::NamedTempFile::new_in(parent)?;
+
+        use std::io::Write;
+        temp_file.write_all(self.modified_content.as_bytes())?;
+        temp_file.flush()?;
+
+        if let Ok(metadata) = std::fs::metadata(&self.file_path) {
+            let _ = std::fs::set_permissions(temp_file.path(), metadata.permissions());
         }
+
+        temp_file.persist(&self.file_path).map_err(|e| e.error)?;
         Ok(())
     }
 

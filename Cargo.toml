@@ -89,6 +89,9 @@ levenshtein = "1.0"
 # URL parsing
 url = "2.5"
 
+# Temporary files
+tempfile = "3.9"
+
 # Async runtime for egress proxy (feature-gated)
 tokio = { version = "1", features = ["full"], optional = true }
 parking_lot = { version = "0.12", optional = true }

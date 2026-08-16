@@ -58,7 +58,9 @@ impl Detector for CommandInjectionDetector {
                         format!("literal with shell expansion: '{val}'")
                     }
                     ArgumentSource::Unknown => "unknown source".into(),
-                    ArgumentSource::Sanitized { .. } => unreachable!(),
+                    ArgumentSource::Sanitized { sanitizer } => {
+                        format!("sanitized value via wrong-category sanitizer '{sanitizer}'")
+                    }
                 };
 
                 findings.push(Finding {
