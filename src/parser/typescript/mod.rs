@@ -22,6 +22,8 @@ use crate::ir::execution_surface::*;
 use crate::parser::{CallSite, FunctionDef, FunctionParam};
 #[cfg(feature = "typescript")]
 use ast::{collect_params, walk_node};
+#[cfg(not(feature = "typescript"))]
+use classify::classify_argument_with_sanitizers;
 use classify::detect_sanitizer_assignments;
 #[cfg(not(feature = "typescript"))]
 use patterns::{

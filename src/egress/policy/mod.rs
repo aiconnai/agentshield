@@ -3,9 +3,9 @@
 //! Parses `agentshield.egress.toml` files that define which domains,
 //! IPs, and rate limits are enforced by the `wrap` command proxy.
 
-pub mod domain;
-pub mod merge;
-pub mod network;
+mod domain;
+mod merge;
+mod network;
 
 pub use domain::DomainPolicy;
 pub use merge::{AuditPolicy, RateLimitPolicy};
@@ -177,8 +177,8 @@ log_allowed = false
 
 #[cfg(test)]
 mod tests {
+    use super::domain::extract_domain;
     use super::*;
-    use crate::egress::policy::domain::extract_domain;
     use std::collections::HashMap;
     use std::path::PathBuf;
     use tempfile::TempDir;

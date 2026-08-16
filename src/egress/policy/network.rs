@@ -34,7 +34,7 @@ impl Default for NetworkPolicy {
 
 impl NetworkPolicy {
     /// Check if an IP address is blocked by network policy.
-    pub(crate) fn is_ip_blocked(&self, ip: &str) -> bool {
+    pub(super) fn is_ip_blocked(&self, ip: &str) -> bool {
         if self.block_localhost && is_localhost(ip) {
             return true;
         }
@@ -51,18 +51,18 @@ impl NetworkPolicy {
     }
 }
 
-pub(crate) fn is_localhost(ip: &str) -> bool {
+pub(super) fn is_localhost(ip: &str) -> bool {
     ip.starts_with("127.") || ip == "::1" || ip == "localhost"
 }
 
-pub(crate) fn is_private_ip(ip: &str) -> bool {
+pub(super) fn is_private_ip(ip: &str) -> bool {
     ip.starts_with("10.")
         || (ip.starts_with("172.") && is_172_private(ip))
         || ip.starts_with("192.168.")
         || ip.starts_with("fd") // IPv6 ULA
 }
 
-pub(crate) fn is_172_private(ip: &str) -> bool {
+pub(super) fn is_172_private(ip: &str) -> bool {
     if let Some(second_octet) = ip
         .strip_prefix("172.")
         .and_then(|rest| rest.split('.').next())
@@ -74,11 +74,11 @@ pub(crate) fn is_172_private(ip: &str) -> bool {
     false
 }
 
-pub(crate) fn is_link_local(ip: &str) -> bool {
+pub(super) fn is_link_local(ip: &str) -> bool {
     ip.starts_with("169.254.") || ip.starts_with("fe80:")
 }
 
-pub(crate) fn is_metadata_ip(ip: &str) -> bool {
+pub(super) fn is_metadata_ip(ip: &str) -> bool {
     ip == "169.254.169.254"
         || ip.contains("metadata.google.internal")
         || ip == "100.100.100.200" // Alibaba Cloud
