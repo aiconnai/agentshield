@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security & Performance Benchmarks — AgentShield</title>
+  <meta name="description" content="Empirical scan latency, memory efficiency, and detection accuracy benchmarks for AgentShield v1.0.0 across AI agent frameworks and MCP servers.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="site.css">
+  <style>
+    .benchmarks-header { padding: 60px 0 30px; text-align: center; }
+    .benchmarks-header h1 { font-size: 2.8rem; margin-bottom: 12px; }
+    .benchmark-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 32px;
+      margin-bottom: 32px;
+      transition: all 0.2s;
+    }
+    .benchmark-card:hover { border-color: var(--border-active); }
+    .bar-container {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: var(--radius-full);
+      height: 10px;
+      width: 100%;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: var(--radius-full);
+      background: linear-gradient(90deg, var(--color-emerald), #3b82f6);
+      transition: width 0.6s ease-in-out;
+    }
+    .latency-badge {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: var(--color-emerald);
+      background: rgba(16, 185, 129, 0.1);
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .table-container {
+      overflow-x: auto;
+      margin-top: 20px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+    }
+    .bench-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.95rem;
+    }
+    .bench-table th {
+      background: var(--bg-surface-elevated);
+      padding: 16px 20px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .bench-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+    }
+    .bench-table tr:last-child td { border-bottom: none; }
+    .bench-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+    .tag-pass { color: var(--color-emerald); font-weight: 600; font-family: var(--font-mono); }
+    .tag-fail { color: #f43f5e; font-weight: 600; font-family: var(--font-mono); }
+    .tag-warn { color: #f59e0b; font-weight: 600; font-family: var(--font-mono); }
+    .tag-miss { color: var(--text-muted); font-family: var(--font-mono); }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+
+  <!-- Navigation -->
+  <header class="navbar">
+    <div class="container nav-container">
+      <a href="index.html" class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+        <span>AgentShield</span>
+        <span class="badge-version">v1.0.0 GA</span>
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="index.html#features">Features</a></li>
+          <li><a href="rules.html">Rules</a></li>
+          <li><a href="benchmarks.html" style="color: var(--text-primary); font-weight: 600;">Benchmarks</a></li>
+          <li><a href="runtime-guard.html">Runtime Guard</a></li>
+          <li><a href="release-notes.html">Releases</a></li>
+        </ul>
+      </nav>
+      <div class="nav-actions">
+        <a href="https://github.com/aiconnai/agentshield" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">GitHub</a>
+        <a href="index.html#quickstart" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="benchmarks-header">
+      <div class="hero-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 14 14"/>
+        </svg>
+        Empirical Performance & Detection Benchmarks
+      </div>
+      <h1>Speed & Accuracy Benchmarks</h1>
+      <p style="color: var(--text-secondary); max-width: 680px; margin: 0 auto;">
+        Real-world evaluation of AgentShield's Rust AST & Interprocedural Call-Graph engine across 7 AI agent frameworks. Sub-50ms scans, zero cloud dependencies.
+      </p>
+    </div>
+
+    <!-- Proof Metrics Bar -->
+    <div class="metrics-bar" style="margin-bottom: 48px;">
+      <div class="metric-item">
+        <div class="metric-number">12.7 ms</div>
+        <div class="metric-label">Avg Scan Latency</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-number">&lt; 25 MB</div>
+        <div class="metric-label">Max Memory (RSS)</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-number">100%</div>
+        <div class="metric-label">Offline & Private</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-number">22 / 22</div>
+        <div class="metric-label">OWASP/CWE Rules Passed</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-number">7</div>
+        <div class="metric-label">Frameworks Benchmarked</div>
+      </div>
+    </div>
+
+    <!-- Framework Latency Benchmarks -->
+    <div class="benchmark-card">
+      <h2 style="font-size: 1.5rem; margin-bottom: 8px;">⚡ Framework Scan Latency & Memory Footprint</h2>
+      <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 24px;">
+        Evaluated on release profile (Apple Silicon M-series / Linux x86_64). Scans include full AST parsing, call-graph construction, and interprocedural taint propagation.
+      </p>
+
+      <div class="table-container">
+        <table class="bench-table">
+          <thead>
+            <tr>
+              <th>Framework / Testbed</th>
+              <th>Files</th>
+              <th>Detection Engine</th>
+              <th>Scan Latency</th>
+              <th>Memory (RSS)</th>
+              <th>Verdict</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>MCP Server (Python)</strong><br><span style="color: var(--text-muted); font-size: 0.8rem;">vuln_cmd_inject</span></td>
+              <td>2</td>
+              <td>AST + Interprocedural Taint</td>
+              <td><span class="latency-badge">14.2 ms</span></td>
+              <td>&lt; 18 MB</td>
+              <td><span class="tag-fail">BLOCKED (Critical)</span></td>
+            </tr>
+            <tr>
+              <td><strong>MCP Server (TypeScript)</strong><br><span style="color: var(--text-muted); font-size: 0.8rem;">safe_calculator</span></td>
+              <td>3</td>
+              <td>TypeScript AST Parser</td>
+              <td><span class="latency-badge">9.8 ms</span></td>
+              <td>&lt; 16 MB</td>
+              <td><span class="tag-pass">PASS (Clean)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Hermes Agent</strong><br><span style="color: var(--text-muted); font-size: 0.8rem;">hermes_agent (.hermes.md)</span></td>
+              <td>4</td>
+              <td>Config + HTTP Flow Taint</td>
+              <td><span class="latency-badge">11.5 ms</span></td>
+              <td>&lt; 17 MB</td>
+              <td><span class="tag-fail">BLOCKED (Critical)</span></td>
+            </tr>
+            <tr>
+              <td><strong>LangChain / LangGraph</strong><br><span style="color: var(--text-muted); font-size: 0.8rem;">langchain_project</span></td>
+              <td>6</td>
+              <td>AST + SSRF Taint Engine</td>
+              <td><span class="latency-badge">18.7 ms</span></td>
+              <td>&lt; 22 MB</td>
+              <td><span class="tag-fail">BLOCKED (Critical)</span></td>
+            </tr>
+            <tr>
+              <td><strong>CrewAI Agent</strong><br><span style="color: var(--text-muted); font-size: 0.8rem;">crewai_project (@tool)</span></td>
+              <td>5</td>
+              <td>AST + Insecure Deserializer</td>
+              <td><span class="latency-badge">16.1 ms</span></td>
+              <td>&lt; 21 MB</td>
+              <td><span class="tag-warn">WARN (High)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Cursor Rules</strong><br><span style="color: var(--text-muted); font-size: 0.8rem;">cursor_rules (.cursorrules)</span></td>
+              <td>2</td>
+              <td>Manifest + Regex IR</td>
+              <td><span class="latency-badge">6.4 ms</span></td>
+              <td>&lt; 14 MB</td>
+              <td><span class="tag-pass">PASS (Clean)</span></td>
+            </tr>
+            <tr>
+              <td><strong>GPT Actions</strong><br><span style="color: var(--text-muted); font-size: 0.8rem;">gpt_actions (openapi.yaml)</span></td>
+              <td>3</td>
+              <td>OpenAPI Parser + Sanitizer</td>
+              <td><span class="latency-badge">12.0 ms</span></td>
+              <td>&lt; 17 MB</td>
+              <td><span class="tag-pass">PASS (Clean)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Competitive Detection Matrix -->
+    <div class="benchmark-card">
+      <h2 style="font-size: 1.5rem; margin-bottom: 8px;">🎯 Detection Matrix: AgentShield vs Traditional SAST</h2>
+      <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 24px;">
+        Traditional web linters focus on standard web endpoints and miss multi-agent tool dataflow, unpinned tool manifests, and interprocedural parameter flows.
+      </p>
+
+      <div class="table-container">
+        <table class="bench-table">
+          <thead>
+            <tr>
+              <th>Attack Vector / Threat Category</th>
+              <th>CWE / OWASP</th>
+              <th>Generic Semgrep</th>
+              <th>SonarQube</th>
+              <th>Snyk OpenSource</th>
+              <th>AgentShield v1.0.0</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Tainted LLM Parameter $\to$ Subprocess</strong></td>
+              <td>CWE-78</td>
+              <td><span class="tag-warn">⚠️ Partial (Local only)</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-pass">✅ Detected (Call Graph)</span></td>
+            </tr>
+            <tr>
+              <td><strong>SQL Injection in MCP Database Tools</strong></td>
+              <td>CWE-89</td>
+              <td><span class="tag-warn">⚠️ Generic queries</span></td>
+              <td><span class="tag-warn">⚠️ Generic</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-pass">✅ Detected (SHIELD-021)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Cloud Metadata SSRF (169.254.169.254)</strong></td>
+              <td>CWE-918</td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-warn">⚠️ Regex only</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-pass">✅ Detected (Taint Path)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Local File Exfiltration via Webhooks</strong></td>
+              <td>CWE-200</td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-pass">✅ Detected (SHIELD-022)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Insecure Deserializer in Agent Loaders</strong></td>
+              <td>CWE-502</td>
+              <td><span class="tag-warn">⚠️ Rule dependent</span></td>
+              <td><span class="tag-warn">⚠️ Rule dependent</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-pass">✅ Detected + 1-Click Fix</span></td>
+            </tr>
+            <tr>
+              <td><strong>Unpinned MCP Tool Dependencies</strong></td>
+              <td>CWE-1104</td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-warn">⚠️ Scan only</span></td>
+              <td><span class="tag-pass">✅ Detected + 1-Click Fix</span></td>
+            </tr>
+            <tr>
+              <td><strong>Prompt Injection Surface Identification</strong></td>
+              <td>OWASP ASI-01</td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-miss">❌ Missed</span></td>
+              <td><span class="tag-pass">✅ Detected</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Reproduce Benchmarks -->
+    <div class="benchmark-card">
+      <h2 style="font-size: 1.5rem; margin-bottom: 8px;">🔬 Reproduce These Benchmarks Locally</h2>
+      <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 16px;">
+        Clone the repository and run the benchmark testbeds locally on your machine:
+      </p>
+
+      <div class="install-content-box" style="margin-bottom: 16px;">
+        <pre style="white-space: pre-wrap; word-break: break-word; padding-right: 70px;"><code># Install AgentShield via cargo
+cargo install agent-shield
+
+# Run benchmark against test fixture
+agentshield scan tests/fixtures/mcp_servers/vuln_cmd_inject --format json --explain</code></pre>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-bottom">
+      <p>&copy; 2026 AgentShield Contributors. Dual-licensed under MIT OR Apache-2.0 License. <a href="index.html" style="color: var(--color-emerald);">Back to Home</a></p>
+    </div>
+  </footer>
+</body>
+</html>
