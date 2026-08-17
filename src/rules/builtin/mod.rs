@@ -4,8 +4,10 @@ mod capability_mismatch;
 mod command_injection;
 mod composite_toxic_flow;
 mod credential_exfil;
+mod cross_session_state_bleed;
 mod download_exec;
 mod dynamic_exec;
+mod dynamic_tool_registration;
 mod excessive_permissions;
 mod hardcoded_secrets;
 mod insecure_bind;
@@ -29,7 +31,7 @@ mod webhook_file_exfil;
 
 use super::{ContextDetector, Detector};
 
-/// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..027).
+/// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..029).
 pub fn all_detectors() -> Vec<Box<dyn Detector>> {
     vec![
         Box::new(command_injection::CommandInjectionDetector),
@@ -58,6 +60,8 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(insecure_temp_file::InsecureTempFileDetector),
         Box::new(insecure_prompt_concat::InsecurePromptConcatDetector),
         Box::new(hardcoded_secrets::HardcodedSecretsDetector),
+        Box::new(dynamic_tool_registration::DynamicToolRegistrationDetector),
+        Box::new(cross_session_state_bleed::CrossSessionStateBleedDetector),
     ]
 }
 
