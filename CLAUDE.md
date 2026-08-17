@@ -84,12 +84,39 @@ agentshield/
 │   │   │   ├── python.rs         # Python function definition & call site extraction
 │   │   │   ├── typescript.rs     # TypeScript/JS function definition & call site extraction
 │   │   │   └── propagate.rs      # DFS taint propagation & cycle handling
-│   │   ├── composite_flow/       # Deep value-flow & semantic taint engine
+│   │   ├── composite_flow/       # Deep value-flow & semantic taint engine (modularized)
+│   │   │   ├── mod.rs            # build_composite_flow_candidates, tests
+│   │   │   ├── ast.rs            # Tree-sitter AST helpers and normalization
+│   │   │   ├── guard.rs          # Control-flow & containment guards
+│   │   │   ├── types.rs          # ValueId, ScopeId, FlowEdge, SemanticAnchor
+│   │   │   └── builder/          # AST walker & candidate graph builder (modularized)
+│   │   │       ├── mod.rs        # build(), exports
+│   │   │       ├── types.rs      # ParsedUnit, Imports, Lineage, Analyzer
+│   │   │       ├── parse.rs      # Source parser & relative import resolution
+│   │   │       ├── anchors.rs    # Semantic anchor generators
+│   │   │       └── trace.rs      # Function analyzer & expression lineage evaluator
 │   │   ├── cross_file/           # Cross-file sanitizer-aware validation (modularized)
 │   │   │   ├── mod.rs            # apply_cross_file_sanitization, CrossFileResult
 │   │   │   ├── sanitizer.rs      # SanitizerCategory, pattern tables, categorization
 │   │   │   └── sink_policy.rs    # Sink safety logic, sanitizer_allows_sink
 │   │   └── sensitivity.rs        # Sensitive-name heuristics (pub(crate))
+│   ├── discovery/                # Local client discovery & config parsing (modularized)
+│   │   ├── mod.rs                # Module re-exports, test suite
+│   │   ├── types.rs              # ClientId, DiscoveryEnvelope, DiscoveryEntry, limits
+│   │   ├── registry.rs           # Descriptor registry & path prefix validation
+│   │   ├── parser.rs             # Config parsing (Cursor, Claude Code, VSCode)
+│   │   ├── envelope.rs           # Envelope builder, deterministic sorting, budget caps
+│   │   └── filesystem/           # Safe filesystem boundary & traversal
+│   ├── egress/                   # Egress network filtering & proxy (modularized)
+│   │   ├── mod.rs                # Egress policy and proxy exports
+│   │   ├── policy/               # Egress policy schema & merge engine (modularized)
+│   │   │   ├── mod.rs            # Re-exports, test suite
+│   │   │   ├── types.rs          # EgressPolicy struct, load/save, rate limits
+│   │   │   ├── infer.rs          # from_scan_targets domain extraction
+│   │   │   ├── domain.rs         # Domain allow/deny rules & glob matching
+│   │   │   ├── network.rs        # IP/CIDR blocking (private, loopback, link-local)
+│   │   │   └── merge.rs          # Operator override restrict-only merge engine
+│   │   └── proxy.rs              # HTTP/HTTPS forward proxy & rate limiter
 │   ├── rules/                    # Detection engine
 │   │   ├── mod.rs                # RuleEngine, Detector trait
 │   │   ├── finding.rs            # Finding, Severity, Evidence structs
