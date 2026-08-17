@@ -1,11 +1,8 @@
-use std::collections::BTreeSet;
+pub(crate) mod eval;
+pub(crate) mod severity;
 
-use crate::ir::{
-    Capability, CapabilityDeclarationSource, CapabilityEvidence, ScanTarget, ToolSurface,
-};
-use crate::rules::{
-    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
-};
+use crate::ir::ScanTarget;
+use crate::rules::{AttackCategory, Detector, Finding, OwaspMcp, RuleMetadata, Severity};
 
 /// SHIELD-019: Capability / Description Mismatch.
 ///
@@ -27,222 +24,28 @@ impl Detector for CapabilityMismatchDetector {
     }
 
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
-        target.tools.iter().flat_map(find_mismatches).collect()
-    }
-}
-
-fn find_mismatches(tool: &ToolSurface) -> Vec<Finding> {
-    let description_declared = tool
-        .capability_declarations
-        .iter()
-        .filter(|declaration| declaration.source == CapabilityDeclarationSource::Description)
-        .map(|declaration| declaration.capability)
-        .collect::<BTreeSet<_>>();
-
-    if description_declared.is_empty() {
-        return Vec::new();
-    }
-
-    let mut findings = Vec::new();
-    let stealth = tool
-        .observed_capabilities
-        .difference(&description_declared)
-        .filter(|capability| {
-            tool.capability_evidence
-                .iter()
-                .any(|evidence| evidence.capability == **capability)
-        })
-        .copied()
-        .collect::<BTreeSet<_>>();
-    if !stealth.is_empty() {
-        findings.push(stealth_finding(tool, &description_declared, &stealth));
-    }
-
-    if tool.capability_observation_complete {
-        let overclaim = description_declared
-            .difference(&tool.observed_capabilities)
-            .copied()
-            .collect::<BTreeSet<_>>();
-        if !overclaim.is_empty() {
-            findings.push(overclaim_finding(tool, &description_declared, &overclaim));
-        }
-    }
-
-    findings
-}
-
-fn stealth_finding(
-    tool: &ToolSurface,
-    description_declared: &BTreeSet<Capability>,
-    stealth: &BTreeSet<Capability>,
-) -> Finding {
-    let primary_evidence = first_matching_evidence(tool, stealth);
-    let location = primary_evidence
-        .map(|evidence| evidence.location.clone())
-        .or_else(|| tool.defined_at.clone());
-    let mut evidence = common_evidence(tool, "stealth", description_declared, stealth);
-    evidence.extend(
-        tool.capability_evidence
+        target
+            .tools
             .iter()
-            .filter(|item| stealth.contains(&item.capability))
-            .map(|item| Evidence {
-                description: format!("Observed {}: {}", item.capability.code(), item.description),
-                location: Some(item.location.clone()),
-                snippet: None,
-            }),
-    );
-    evidence.push(Evidence {
-        description: "Association: deterministic handler binding".into(),
-        location: tool.defined_at.clone(),
-        snippet: None,
-    });
-
-    Finding {
-        rule_id: "SHIELD-019".into(),
-        rule_name: "Capability / Description Mismatch".into(),
-        severity: stealth
-            .iter()
-            .copied()
-            .map(capability_severity)
-            .max()
-            .unwrap_or(Severity::Low),
-        confidence: Confidence::High,
-        attack_category: AttackCategory::CapabilityMismatch,
-        message: format!(
-            "[stealth] Tool '{}' performs undeclared capabilities: {}",
-            tool.name,
-            capability_codes(stealth)
-        ),
-        location,
-        evidence,
-        taint_path: None,
-        remediation: Some(
-            "Make the tool description explicitly disclose its behavior, or remove the \
-             hidden capability from the implementation."
-                .into(),
-        ),
-        cwe_id: None,
-    }
-}
-
-fn overclaim_finding(
-    tool: &ToolSurface,
-    description_declared: &BTreeSet<Capability>,
-    overclaim: &BTreeSet<Capability>,
-) -> Finding {
-    Finding {
-        rule_id: "SHIELD-019".into(),
-        rule_name: "Capability / Description Mismatch".into(),
-        severity: Severity::Low,
-        confidence: Confidence::Medium,
-        attack_category: AttackCategory::CapabilityMismatch,
-        message: format!(
-            "[overclaim] Tool '{}' describes capabilities not observed in code: {}",
-            tool.name,
-            capability_codes(overclaim)
-        ),
-        location: tool.defined_at.clone(),
-        evidence: common_evidence(tool, "overclaim", description_declared, overclaim),
-        taint_path: None,
-        remediation: Some(
-            "Update the tool description to match its implementation, or implement the \
-             documented behavior."
-                .into(),
-        ),
-        cwe_id: None,
-    }
-}
-
-fn common_evidence(
-    tool: &ToolSurface,
-    kind: &str,
-    description_declared: &BTreeSet<Capability>,
-    mismatch: &BTreeSet<Capability>,
-) -> Vec<Evidence> {
-    let phrases = tool
-        .capability_declarations
-        .iter()
-        .filter(|declaration| declaration.source == CapabilityDeclarationSource::Description)
-        .map(|declaration| {
-            format!(
-                "{}={}",
-                declaration.phrase_or_field,
-                declaration.capability.code()
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    vec![
-        Evidence {
-            description: format!(
-                "capability_mismatch:v1:{}:{}:{}",
-                tool.name,
-                kind,
-                capability_codes(mismatch)
-            ),
-            location: None,
-            snippet: None,
-        },
-        Evidence {
-            description: format!(
-                "Tool description: {}",
-                tool.description.as_deref().unwrap_or_default()
-            ),
-            location: tool.defined_at.clone(),
-            snippet: None,
-        },
-        Evidence {
-            description: format!(
-                "Description declarations: {} ({phrases})",
-                capability_codes(description_declared)
-            ),
-            location: tool.defined_at.clone(),
-            snippet: None,
-        },
-    ]
-}
-
-fn first_matching_evidence<'a>(
-    tool: &'a ToolSurface,
-    capabilities: &BTreeSet<Capability>,
-) -> Option<&'a CapabilityEvidence> {
-    tool.capability_evidence
-        .iter()
-        .find(|evidence| capabilities.contains(&evidence.capability))
-}
-
-fn capability_codes(capabilities: &BTreeSet<Capability>) -> String {
-    capabilities
-        .iter()
-        .map(|capability| capability.code())
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-fn capability_severity(capability: Capability) -> Severity {
-    match capability {
-        Capability::CredentialAccess
-        | Capability::ProcessExec
-        | Capability::DynamicEval
-        | Capability::PackageInstall => Severity::High,
-        Capability::NetworkEgress | Capability::FsWrite | Capability::DatabaseWrite => {
-            Severity::Medium
-        }
-        Capability::FsRead | Capability::EnvRead | Capability::DatabaseRead => Severity::Low,
+            .flat_map(eval::find_mismatches)
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+    use std::path::PathBuf;
+
     use super::*;
     use crate::adapter::auto_detect_and_load;
     use crate::ir::execution_surface::{ExecutionSurface, NetworkOperation};
-    use crate::ir::tool_surface::{DeclaredPermission, PermissionType};
-    use crate::ir::{ArgumentSource, CapabilityDeclaration, Framework, ScanTarget, SourceLocation};
+    use crate::ir::tool_surface::{
+        Capability, CapabilityDeclarationSource, CapabilityEvidence, DeclaredPermission,
+        PermissionType, ToolSurface,
+    };
+    use crate::ir::{ArgumentSource, CapabilityDeclaration, Framework, SourceLocation};
     use crate::rules::RuleEngine;
-    use std::path::Path;
-    use std::path::PathBuf;
 
     fn location(line: usize) -> SourceLocation {
         SourceLocation {
@@ -307,91 +110,152 @@ mod tests {
             },
         ];
 
-        let findings = find_mismatches(&tool);
-
+        let findings = eval::find_mismatches(&tool);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].severity, Severity::High);
-        assert!(findings[0].message.starts_with("[stealth]"));
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "SHIELD-019");
+        assert_eq!(finding.severity, Severity::High);
         assert_eq!(
-            findings[0].evidence[0].description,
+            finding.message,
+            "[stealth] Tool 'read_file' performs undeclared capabilities: network_egress,process_exec"
+        );
+        assert_eq!(finding.location, Some(location(5)));
+        assert_eq!(finding.evidence.len(), 6);
+        assert_eq!(
+            finding.evidence[0].description,
             "capability_mismatch:v1:read_file:stealth:network_egress,process_exec"
         );
-        assert_eq!(findings[0].location.as_ref().unwrap().line, 5);
     }
 
     #[test]
-    fn permission_does_not_suppress_description_stealth() {
+    fn suppresses_stealth_when_no_evidence_is_bound() {
         let mut tool = tool(&[Capability::FsRead]);
-        tool.declared_capabilities.insert(Capability::NetworkEgress);
+        tool.observed_capabilities =
+            BTreeSet::from([Capability::FsRead, Capability::NetworkEgress]);
+
+        let findings = eval::find_mismatches(&tool);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn ignores_undescribed_tools() {
+        let mut tool = tool(&[]);
+        tool.description = None;
+        tool.capability_declarations.clear();
+        tool.observed_capabilities = BTreeSet::from([Capability::NetworkEgress]);
+        tool.capability_evidence = vec![CapabilityEvidence {
+            capability: Capability::NetworkEgress,
+            location: location(2),
+            description: "network egress via fetch".into(),
+        }];
+
+        let findings = eval::find_mismatches(&tool);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn reports_overclaim_only_when_observation_is_complete() {
+        let mut incomplete = tool(&[Capability::FsRead, Capability::NetworkEgress]);
+        incomplete.observed_capabilities = BTreeSet::from([Capability::FsRead]);
+        incomplete.capability_observation_complete = false;
+
+        assert!(eval::find_mismatches(&incomplete).is_empty());
+
+        let mut complete = incomplete;
+        complete.capability_observation_complete = true;
+        let findings = eval::find_mismatches(&complete);
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.severity, Severity::Low);
+        assert_eq!(
+            finding.message,
+            "[overclaim] Tool 'read_file' describes capabilities not observed in code: network_egress"
+        );
+    }
+
+    #[test]
+    fn declared_permissions_do_not_suppress_stealth_mismatches() {
+        let mut tool = tool(&[Capability::FsRead]);
+        tool.declared_permissions = vec![DeclaredPermission {
+            permission_type: PermissionType::NetworkAccess,
+            target: None,
+            description: None,
+        }];
+        tool.declared_capabilities =
+            BTreeSet::from([Capability::FsRead, Capability::NetworkEgress]);
         tool.capability_declarations.push(CapabilityDeclaration {
             capability: Capability::NetworkEgress,
             source: CapabilityDeclarationSource::Permission,
             phrase_or_field: "network_access".into(),
         });
-        tool.observed_capabilities.insert(Capability::NetworkEgress);
-        tool.capability_evidence.push(CapabilityEvidence {
+        tool.observed_capabilities =
+            BTreeSet::from([Capability::FsRead, Capability::NetworkEgress]);
+        tool.capability_evidence = vec![CapabilityEvidence {
             capability: Capability::NetworkEgress,
-            location: location(4),
+            location: location(3),
             description: "network egress via fetch".into(),
-        });
+        }];
 
-        let findings = find_mismatches(&tool);
-
+        let findings = eval::find_mismatches(&tool);
         assert_eq!(findings.len(), 1);
-        assert!(findings[0].message.contains("network_egress"));
-    }
-
-    #[test]
-    fn vague_description_and_matching_behavior_do_not_find() {
-        let mut vague = tool(&[]);
-        vague
-            .observed_capabilities
-            .insert(Capability::NetworkEgress);
-        assert!(find_mismatches(&vague).is_empty());
-
-        let mut matching = tool(&[Capability::FsRead]);
-        matching.observed_capabilities.insert(Capability::FsRead);
-        assert!(find_mismatches(&matching).is_empty());
-    }
-
-    #[test]
-    fn observed_capability_without_bound_evidence_does_not_find() {
-        let mut tool = tool(&[Capability::FsRead]);
-        tool.observed_capabilities.insert(Capability::NetworkEgress);
-
-        assert!(find_mismatches(&tool).is_empty());
-    }
-
-    #[test]
-    fn incomplete_observation_suppresses_overclaim() {
-        let tool = tool(&[Capability::NetworkEgress]);
-        assert!(find_mismatches(&tool).is_empty());
-    }
-
-    #[test]
-    fn complete_observation_can_emit_distinct_overclaim_and_stealth() {
-        let mut tool = tool(&[Capability::FsRead]);
-        tool.capability_observation_complete = true;
-        tool.observed_capabilities.insert(Capability::NetworkEgress);
-        tool.capability_evidence.push(CapabilityEvidence {
-            capability: Capability::NetworkEgress,
-            location: location(8),
-            description: "network egress via fetch".into(),
-        });
-
-        let findings = find_mismatches(&tool);
-
-        assert_eq!(findings.len(), 2);
-        assert!(findings[0].message.starts_with("[stealth]"));
-        assert!(findings[1].message.starts_with("[overclaim]"));
-        assert_ne!(
-            findings[0].fingerprint(Path::new(".")),
-            findings[1].fingerprint(Path::new("."))
+        assert_eq!(
+            findings[0].message,
+            "[stealth] Tool 'read_file' performs undeclared capabilities: network_egress"
         );
     }
 
     #[test]
-    fn shield_008_and_019_operate_on_distinct_axes() {
+    fn engine_runs_and_sorts_all_tools() {
+        let target = ScanTarget {
+            name: "test-target".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("/test"),
+            tools: vec![
+                tool(&[Capability::FsRead]),
+                ToolSurface {
+                    name: "fetch_url".into(),
+                    description: Some("Fetch URLs".into()),
+                    input_schema: None,
+                    output_schema: None,
+                    declared_permissions: Vec::new(),
+                    defined_at: Some(location(10)),
+                    declared_capabilities: BTreeSet::from([Capability::NetworkEgress]),
+                    capability_declarations: vec![CapabilityDeclaration {
+                        capability: Capability::NetworkEgress,
+                        source: CapabilityDeclarationSource::Description,
+                        phrase_or_field: "fetch_url".into(),
+                    }],
+                    observed_capabilities: BTreeSet::from([
+                        Capability::NetworkEgress,
+                        Capability::CredentialAccess,
+                    ]),
+                    capability_observation_complete: false,
+                    capability_evidence: vec![CapabilityEvidence {
+                        capability: Capability::CredentialAccess,
+                        location: location(12),
+                        description: "sensitive environment read".into(),
+                    }],
+                },
+            ],
+            execution: ExecutionSurface::default(),
+            data: Default::default(),
+            dependencies: Default::default(),
+            provenance: Default::default(),
+            source_files: Vec::new(),
+        };
+
+        let findings = RuleEngine::new().run(&target);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-019");
+        assert_eq!(
+            findings[0].message,
+            "[stealth] Tool 'fetch_url' performs undeclared capabilities: credential_access"
+        );
+    }
+
+    #[test]
+    fn rules_008_and_019_remain_separated() {
         let mut tool = tool(&[Capability::FsRead]);
         tool.declared_permissions.push(DeclaredPermission {
             permission_type: PermissionType::ProcessExec,
