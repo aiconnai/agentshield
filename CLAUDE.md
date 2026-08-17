@@ -39,7 +39,11 @@ agentshield/
 │   │   ├── openclaw.rs           # OpenClaw SKILL.md adapter
 │   │   ├── crewai.rs             # CrewAI adapter (BaseTool, @tool)
 │   │   ├── langchain.rs          # LangChain adapter (@tool, BaseTool, langgraph)
-│   │   ├── gpt_actions.rs        # GPT Actions adapter (OpenAPI specs)
+│   │   ├── gpt_actions/          # GPT Actions adapter (OpenAPI specs, modularized)
+│   │   │   ├── mod.rs            # GptActionsAdapter struct, Adapter impl, test suite
+│   │   │   ├── openapi.rs        # Spec discovery & YAML/JSON deserialization
+│   │   │   ├── endpoints.rs      # Endpoint tool extraction & server URL collection
+│   │   │   └── auth.rs           # Security scheme & authentication resolution
 │   │   ├── cursor_rules.rs       # Cursor Rules adapter (.cursorrules files)
 │   │   └── hermes/               # Hermes Agent config, context, and skills adapter
 │   │       ├── mod.rs            # Adapter trait impl, lifecycle, test helpers
@@ -77,7 +81,12 @@ agentshield/
 │   │   ├── finding.rs            # Finding, Severity, Evidence structs
 │   │   ├── registry.rs           # Rule metadata registry
 │   │   ├── policy.rs             # Policy evaluation (.agentshield.toml)
-│   │   └── builtin/              # 27 built-in detectors (SHIELD-001..027)
+│   │   └── builtin/              # 29 built-in detectors (SHIELD-001..029)
+│   ├── risk/                     # Deterministic risk assessment model (modularized)
+│   │   ├── mod.rs                # assess(), render_experimental(), property tests
+│   │   ├── types.rs              # RiskAssessment, RiskContribution, CoverageDescriptor
+│   │   ├── scoring.rs            # Mathematical saturation, point calculation, fingerprinting
+│   │   └── render.rs             # Console and JSON report renderers
 │   ├── output/                   # Report formatters
 │   │   ├── mod.rs                # OutputFormat enum, render()
 │   │   ├── console.rs            # Plain text
@@ -269,7 +278,7 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 5. `load()` uses the 3-phase pipeline (parse → cross-file analysis → merge)
 6. Reuse shared helpers from the `mcp` module submodules: `collect_source_files()`, `parse_dependencies()`, `parse_provenance()`
 
-**Existing adapters:** MCP (`mcp/`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), GPT Actions (`gpt_actions.rs`), Cursor Rules (`cursor_rules.rs`), Hermes Agent (`hermes/`)
+**Existing adapters:** MCP (`mcp/`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), GPT Actions (`gpt_actions/`), Cursor Rules (`cursor_rules.rs`), Hermes Agent (`hermes/`)
 
 ## Conventions
 
