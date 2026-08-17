@@ -60,6 +60,13 @@ agentshield/
 │   │   └── json_schema.rs        # JSON Schema → ToolSurface
 │   ├── analysis/                 # Static analysis
 │   │   ├── mod.rs                # Module exports
+│   │   ├── interprocedural/      # Interprocedural call-graph & multi-hop taint (modularized)
+│   │   │   ├── mod.rs            # propagate_interprocedural_taint, unit tests
+│   │   │   ├── types.rs          # CallGraph, CallSite, FunctionNode
+│   │   │   ├── python.rs         # Python function definition & call site extraction
+│   │   │   ├── typescript.rs     # TypeScript/JS function definition & call site extraction
+│   │   │   └── propagate.rs      # DFS taint propagation & cycle handling
+│   │   ├── composite_flow/       # Deep value-flow & semantic taint engine
 │   │   ├── cross_file/           # Cross-file sanitizer-aware validation (modularized)
 │   │   │   ├── mod.rs            # apply_cross_file_sanitization, CrossFileResult
 │   │   │   ├── sanitizer.rs      # SanitizerCategory, pattern tables, categorization
