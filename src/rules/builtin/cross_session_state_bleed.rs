@@ -17,14 +17,14 @@ static PY_GLOBAL_STATE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r#"(?x)
         (?:
-            # 1. Global mutable session / user history state collections
-            (?:^|\n)\s*(?:SESSION_HISTORY|USER_SESSIONS|CONVERSATION_CACHE|CHAT_HISTORY|USER_TOKENS|SESSION_DATA|GLOBAL_STATE|MEMORY_STORE|USER_DATA|CLIENT_CACHE)\s*=\s*(?:\[\]|\{\}|list\(\)|dict\(\)|set\(\))|
+            # 1. Global mutable session / user history state collections (with optional type annotations)
+            (?:^|\n)\s*(?:SESSION_HISTORY|USER_SESSIONS|CONVERSATION_CACHE|CHAT_HISTORY|USER_TOKENS|SESSION_DATA|GLOBAL_STATE|MEMORY_STORE|USER_DATA|CLIENT_CACHE|user_sessions|session_history|chat_history)(?:\s*:[^=]+)?\s*=\s*(?:\[\]|\{\}|list\(\)|dict\(\)|set\(\))|
 
             # 2. Global keyword modifying sensitive session state inside tool handlers
-            \bglobal\s+(?:SESSION_HISTORY|USER_SESSIONS|CONVERSATION_CACHE|CHAT_HISTORY|USER_TOKENS|SESSION_DATA|GLOBAL_STATE|MEMORY_STORE|USER_DATA|CLIENT_CACHE)\b|
+            \bglobal\s+(?:SESSION_HISTORY|USER_SESSIONS|CONVERSATION_CACHE|CHAT_HISTORY|USER_TOKENS|SESSION_DATA|GLOBAL_STATE|MEMORY_STORE|USER_DATA|CLIENT_CACHE|user_sessions|session_history|chat_history)\b|
 
-            # 3. Direct global session collection mutations
-            \b(?:SESSION_HISTORY|USER_SESSIONS|CONVERSATION_CACHE|CHAT_HISTORY|USER_TOKENS|SESSION_DATA|GLOBAL_STATE|MEMORY_STORE|USER_DATA|CLIENT_CACHE)\.(?:append|extend|update|insert)\s*\(
+            # 3. Direct global session collection mutations or indexing
+            \b(?:SESSION_HISTORY|USER_SESSIONS|CONVERSATION_CACHE|CHAT_HISTORY|USER_TOKENS|SESSION_DATA|GLOBAL_STATE|MEMORY_STORE|USER_DATA|CLIENT_CACHE|user_sessions|session_history|chat_history)(?:\.(?:append|extend|update|insert|add)\s*\(|\[[^\]]+\]\s*=)
         )
     "#,
     )
@@ -35,11 +35,11 @@ static TS_GLOBAL_STATE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r#"(?x)
         (?:
-            # 1. Module-level mutable state maps and arrays
-            (?:^|\n)\s*(?:const|let|var)\s+(?:sessionHistory|userSessions|conversationCache|chatHistory|userTokens|sessionData|globalState|memoryStore|userData|clientCache)\s*=\s*(?:new\s+(?:Map|Set|Array)\(\)|\[\]|\{\})|
+            # 1. Module-level mutable state maps and arrays (with optional type annotations)
+            (?:^|\n)\s*(?:const|let|var)\s+(?:sessionHistory|userSessions|conversationCache|chatHistory|userTokens|sessionData|globalState|memoryStore|userData|clientCache)(?:\s*:[^=]+)?\s*=\s*(?:new\s+(?:Map|Set|Array)\(\)|\[\]|\{\})|
 
-            # 2. Direct push/set mutations on global session identifiers
-            \b(?:sessionHistory|userSessions|conversationCache|chatHistory|userTokens|sessionData|globalState|memoryStore|userData|clientCache)\.(?:push|set|add|unshift)\s*\(
+            # 2. Direct push/set mutations or index assignments on global session identifiers
+            \b(?:sessionHistory|userSessions|conversationCache|chatHistory|userTokens|sessionData|globalState|memoryStore|userData|clientCache)(?:\.(?:push|set|add|unshift)\s*\(|\[[^\]]+\]\s*=)
         )
     "#,
     )
@@ -206,6 +206,34 @@ export async function handleQuery(userId: string, query: string) {
 
         assert!(!findings.is_empty());
         assert_eq!(findings[0].rule_id, "SHIELD-029");
+    }
+
+    #[test]
+    fn test_flags_typed_declarations_and_indexing() {
+        let py_content = r#"
+SESSION_HISTORY: list[dict] = []
+
+def handle_event(session_id: str, payload: dict):
+    SESSION_HISTORY[session_id] = payload
+"#;
+        let target_py = make_target_with_source("typed_agent.py", py_content, Language::Python);
+        let detector = CrossSessionStateBleedDetector;
+        let findings_py = detector.run(&target_py);
+        assert!(!findings_py.is_empty());
+        assert_eq!(findings_py[0].rule_id, "SHIELD-029");
+
+        let ts_content = r#"
+const userSessions: Map<string, any> = new Map();
+
+export function storeUser(id: string, data: any) {
+    userSessions[id] = data;
+}
+"#;
+        let target_ts =
+            make_target_with_source("typed_server.ts", ts_content, Language::TypeScript);
+        let findings_ts = detector.run(&target_ts);
+        assert!(!findings_ts.is_empty());
+        assert_eq!(findings_ts[0].rule_id, "SHIELD-029");
     }
 
     #[test]

@@ -58,6 +58,7 @@ pub(crate) fn collect_spec_source_files(root: &Path, filter: &ScanPathFilter) ->
     let candidates: Vec<PathBuf> = OPENAPI_FILENAMES
         .iter()
         .chain(PLUGIN_MANIFEST_FILENAMES.iter())
+        .chain(OPENAI_TOOL_FILENAMES.iter())
         .map(|f| root.join(f))
         .chain(std::iter::once(
             root.join(".well-known").join("ai-plugin.json"),
@@ -105,6 +106,14 @@ pub(crate) fn collect_spec_source_files(root: &Path, filter: &ScanPathFilter) ->
 }
 
 pub(crate) fn parse_openapi_spec(spec_path: &Path) -> Result<serde_json::Value> {
+    if let Ok(metadata) = std::fs::metadata(spec_path) {
+        if metadata.len() > 1_048_576 {
+            return Err(crate::error::ShieldError::Parse {
+                file: spec_path.display().to_string(),
+                message: "OpenAPI spec exceeds maximum supported file size (1MB)".to_string(),
+            });
+        }
+    }
     let content = std::fs::read_to_string(spec_path)?;
     let extension = spec_path
         .extension()

@@ -177,6 +177,6 @@ pub(crate) fn enabled_feature_names() -> Vec<String> {
 }
 
 pub(crate) fn hash_field(hasher: &mut Sha256, value: &str) {
-    hasher.update(value.len().to_le_bytes());
+    hasher.update((value.len() as u64).to_le_bytes());
     hasher.update(value.as_bytes());
 }

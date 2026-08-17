@@ -12,31 +12,55 @@ pub(crate) fn extract_server_urls(
     spec_path: &Path,
     execution: &mut ExecutionSurface,
 ) {
-    let servers = match spec.get("servers").and_then(|v| v.as_array()) {
-        Some(s) => s,
-        None => return,
-    };
+    if let Some(servers) = spec.get("servers").and_then(|v| v.as_array()) {
+        for (idx, server) in servers.iter().enumerate() {
+            let url = server
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
 
-    for (idx, server) in servers.iter().enumerate() {
-        let url = server
-            .get("url")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
+            if url.is_empty() {
+                continue;
+            }
 
-        if url.is_empty() {
-            continue;
+            execution.network_operations.push(NetworkOperation {
+                function: "openapi_server".to_string(),
+                url_arg: ArgumentSource::Literal(url),
+                method: None,
+                sends_data: false,
+                location: SourceLocation {
+                    file: spec_path.to_path_buf(),
+                    // Line numbers are not easily derivable from parsed JSON; use index as proxy
+                    line: idx + 1,
+                    column: 0,
+                    end_line: None,
+                    end_column: None,
+                },
+            });
         }
+        return;
+    }
+
+    // Swagger 2.0 fallback: host, schemes, basePath
+    if let Some(host) = spec.get("host").and_then(|h| h.as_str()) {
+        let scheme = spec
+            .get("schemes")
+            .and_then(|s| s.as_array())
+            .and_then(|a| a.first())
+            .and_then(|s| s.as_str())
+            .unwrap_or("https");
+        let base_path = spec.get("basePath").and_then(|b| b.as_str()).unwrap_or("");
+        let url = format!("{scheme}://{host}{base_path}");
 
         execution.network_operations.push(NetworkOperation {
-            function: "openapi_server".to_string(),
+            function: "swagger_server".to_string(),
             url_arg: ArgumentSource::Literal(url),
             method: None,
             sends_data: false,
             location: SourceLocation {
                 file: spec_path.to_path_buf(),
-                // Line numbers are not easily derivable from parsed JSON; use index as proxy
-                line: idx + 1,
+                line: 1,
                 column: 0,
                 end_line: None,
                 end_column: None,

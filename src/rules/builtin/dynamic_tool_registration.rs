@@ -21,7 +21,7 @@ static PY_DYNAMIC_TOOL_RE: Lazy<Regex> = Lazy::new(|| {
             (?:server|mcp|app)\s*\.\s*(?:tool|add_tool|register_tool|custom_tool)\s*\(\s*(?:exec|eval|importlib|getattr|globals\(\)|locals\(\)|requests\.|urllib\.)|
 
             # 2. Dynamic execution of network responses or remote code
-            (?:exec|eval)\s*\(\s*(?:requests\.|urllib\.|session\.|http\.|response\.text|res\.text|resp\.text|response\.content|res\.content|resp\.content|downloaded_code|code|plugin_code|remote_code|script|tool_code|payload)|
+            (?:exec|eval)\s*\(\s*(?:requests\.|urllib\.|session\.|http\.|response\.(?:text|content)|res\.(?:text|content)|resp\.(?:text|content)|\b(?:downloaded_code|code|plugin_code|remote_code|script|tool_code|payload)\b)|
 
             # 3. Dynamic import from remote URLs or unverified variables inside tool handlers
             importlib\.import_module\s*\(\s*(?:requests\.|urllib\.|remote_module|url|untrusted_module)|
@@ -42,10 +42,10 @@ static TS_DYNAMIC_TOOL_RE: Lazy<Regex> = Lazy::new(|| {
             (?:server|mcp|app)\s*\.\s*(?:tool|addTool|registerTool|customTool)\s*\(\s*(?:eval|new\s+Function|vm\.run|import\s*\()|
 
             # 2. Dynamic evaluation of fetched network payloads
-            (?:eval|new\s+Function|vm\.runIn(?:New)?Context)\s*\(\s*(?:await\s+)?(?:fetch|axios|http|res\.text|response\.data|body|codePayload|code|pluginCode|remoteCode|script|toolCode|payload)|
+            (?:eval|new\s+Function|vm\.runIn(?:New)?Context)\s*\(\s*(?:await\s+)?(?:fetch|axios|http|res\.text|response\.data|body|codePayload|\b(?:code|pluginCode|remoteCode|script|toolCode|payload)\b)|
 
             # 3. Dynamic ESM import of remote or variable URL endpoints
-            import\s*\(\s*(?:`https?://|["']https?://|`[^`]*\$\{[^}]*(?:url|remote|host)[^}]*\}`)
+            import\s*\(\s*(?:`https?://|["']https?://|`[^`]*\$\{[^}]*(?:url|remote|host)[^}]*\}|[a-zA-Z_$][a-zA-Z0-9_$]*\s*\))
         )
     "#,
     )
@@ -226,6 +226,44 @@ export async function loadModule(moduleUrl: string) {
         let findings = detector.run(&target);
 
         assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn test_flags_dynamic_variable_import() {
+        let content = r#"
+export async function loadDynamicPlugin(pluginModule: string) {
+    const mod = await import(pluginModule);
+    server.registerTool(mod);
+}
+"#;
+        let target = make_target_with_source("server.ts", content, Language::TypeScript);
+        let detector = DynamicToolRegistrationDetector;
+        let findings = detector.run(&target);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-028");
+    }
+
+    #[test]
+    fn test_ignores_benign_codecs_and_body_parser() {
+        let py_content = r#"
+import codecs
+
+def decode_payload(data: str):
+    return codecs.decode(data, 'hex')
+"#;
+        let target_py = make_target_with_source("decoder.py", py_content, Language::Python);
+        let detector = DynamicToolRegistrationDetector;
+        assert!(detector.run(&target_py).is_empty());
+
+        let ts_content = r#"
+export function parseBody(req: any) {
+    const body = bodyParser(req);
+    return body;
+}
+"#;
+        let target_ts = make_target_with_source("parser.ts", ts_content, Language::TypeScript);
+        assert!(detector.run(&target_ts).is_empty());
     }
 
     #[test]
