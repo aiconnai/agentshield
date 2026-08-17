@@ -62,7 +62,7 @@ impl super::Adapter for CursorRulesAdapter {
                 source_files.push(sf);
             }
 
-            if let Ok(content) = std::fs::read_to_string(&mcp_json_path) {
+            if let Some(content) = super::read_file_capped(&mcp_json_path) {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
                     parse_mcp_servers(&value, &mcp_json_path, &mut tools, &mut execution);
                 }

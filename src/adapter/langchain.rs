@@ -23,7 +23,7 @@ impl super::Adapter for LangChainAdapter {
         // Check pyproject.toml for langchain dependency
         let pyproject = root.join("pyproject.toml");
         if pyproject.exists() {
-            if let Ok(content) = std::fs::read_to_string(&pyproject) {
+            if let Some(content) = super::read_file_capped(&pyproject) {
                 if content.contains("langchain") || content.contains("langgraph") {
                     return true;
                 }
@@ -33,7 +33,7 @@ impl super::Adapter for LangChainAdapter {
         // Check requirements.txt for langchain/langgraph
         let requirements = root.join("requirements.txt");
         if requirements.exists() {
-            if let Ok(content) = std::fs::read_to_string(&requirements) {
+            if let Some(content) = super::read_file_capped(&requirements) {
                 if content.lines().any(|l| {
                     let trimmed = l.trim();
                     trimmed.starts_with("langchain") || trimmed.starts_with("langgraph")
@@ -51,7 +51,7 @@ impl super::Adapter for LangChainAdapter {
         // Check package.json for @langchain dependencies
         let package_json = root.join("package.json");
         if package_json.exists() {
-            if let Ok(content) = std::fs::read_to_string(&package_json) {
+            if let Some(content) = super::read_file_capped(&package_json) {
                 if content.contains("@langchain/")
                     || content.contains("\"langchain\"")
                     || content.contains("@langchain/core")
