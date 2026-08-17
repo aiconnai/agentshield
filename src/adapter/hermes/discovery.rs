@@ -128,7 +128,9 @@ pub(crate) fn push_source_file(path: &Path, source_files: &mut Vec<SourceFile>) 
         return Ok(());
     }
 
-    let metadata = std::fs::metadata(path)?;
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return Ok(());
+    };
     if metadata.len() > 1_048_576 {
         return Ok(());
     }

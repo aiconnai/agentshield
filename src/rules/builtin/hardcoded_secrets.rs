@@ -139,20 +139,23 @@ fn is_placeholder(secret: &str) -> bool {
         || lower.contains("placeholder")
         || lower.contains("your_key")
         || lower.contains("your-key")
+        || lower.contains("your_token")
         || lower.contains("dummy")
         || lower.contains("xxxx")
-        || lower.contains("0000")
-        || lower.contains("test")
+        || lower.contains("1234567890")
+        || lower.starts_with("sk-proj-test")
+        || lower.starts_with("sk-ant-test")
         || secret == "AKIAIOSFODNN7EXAMPLE" // Standard AWS documentation example
 }
 
-/// Redact secret string for safe display in findings
+/// Redact secret string for safe display in findings (UTF-8 character boundary safe)
 fn redact_secret(secret: &str) -> String {
-    if secret.len() <= 8 {
+    let chars: Vec<char> = secret.chars().collect();
+    if chars.len() <= 8 {
         return "********".into();
     }
-    let prefix = &secret[..4];
-    let suffix = &secret[secret.len() - 4..];
+    let prefix: String = chars[..4].iter().collect();
+    let suffix: String = chars[chars.len() - 4..].iter().collect();
     format!("{prefix}...{suffix}")
 }
 
@@ -175,12 +178,6 @@ impl Detector for HardcodedSecretsDetector {
 
         for source in &target.source_files {
             for (line_idx, line) in source.content.lines().enumerate() {
-                let trimmed = line.trim();
-                // Skip full line comments that are not test fixtures
-                if trimmed.starts_with('#') || trimmed.starts_with("//") {
-                    continue;
-                }
-
                 for pattern in KNOWN_PATTERNS {
                     for mat in pattern.regex.find_iter(line) {
                         let candidate = mat.as_str();
@@ -297,7 +294,7 @@ OPENAI_API_KEY = "sk-proj-uR8x9Q2wK1pL0mZnVbC4x7Y6t5R3e2W1qAsDfGhJkLmNoPqRsTuV"
     #[test]
     fn test_flags_anthropic_api_key() {
         let content = r#"
-client = Anthropic(api_key="sk-ant-api03-abcdef1234567890-ABCDEF1234567890_XYZabc")
+client = Anthropic(api_key="sk-ant-api03-ab9c8d7e6f5a4b3c-AB9C8D7E6F5A4B3C_XYZabc")
 "#;
         let target = make_target_with_source("client.py", content);
         let detector = HardcodedSecretsDetector;
@@ -311,7 +308,7 @@ client = Anthropic(api_key="sk-ant-api03-abcdef1234567890-ABCDEF1234567890_XYZab
     #[test]
     fn test_flags_aws_access_key() {
         let content = r#"
-aws_key = "AKIA1234567890ABCDEF"
+aws_key = "AKIA9B8C7D6E5F4A3B2C"
 "#;
         let target = make_target_with_source("aws.py", content);
         let detector = HardcodedSecretsDetector;
@@ -335,5 +332,48 @@ dummy = "sk-xxxxxxxxxxxxxxxxxxxxxxxx"
         let findings = detector.run(&target);
 
         assert!(findings.is_empty(), "Placeholders must be ignored");
+    }
+
+    #[test]
+    fn test_flags_google_gemini_api_key() {
+        let content = r#"
+gemini_key = "AIzaSyD9x8w7v6u5t4s3r2q1p0o9n8m7l6k5j4i"
+"#;
+        let target = make_target_with_source("gemini.py", content);
+        let detector = HardcodedSecretsDetector;
+        let findings = detector.run(&target);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-027");
+        assert!(findings[0].message.contains("Google"));
+    }
+
+    #[test]
+    fn test_flags_huggingface_and_github_tokens() {
+        let content = r#"
+hf_token = "hf_aBcDeFgHiJkLmNoPqRsTuVwXyZ98765432"
+gh_token = "ghp_9B8C7D6E5F4A3B2C1D0E9F8A7B6C5D4E3F2A"
+"#;
+        let target = make_target_with_source("tokens.py", content);
+        let detector = HardcodedSecretsDetector;
+        let findings = detector.run(&target);
+
+        assert_eq!(findings.len(), 2);
+    }
+
+    #[test]
+    fn test_rejects_low_entropy_secret_strings() {
+        // Repeated character pattern has very low entropy (< 2.0)
+        let content = r#"
+fake_key = "sk-proj-abababababababababababababababababababababab"
+"#;
+        let target = make_target_with_source("fake.py", content);
+        let detector = HardcodedSecretsDetector;
+        let findings = detector.run(&target);
+
+        assert!(
+            findings.is_empty(),
+            "Low-entropy repeating keys should be rejected"
+        );
     }
 }
