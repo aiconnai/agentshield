@@ -18,19 +18,19 @@ static PY_PROMPT_CONCAT_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r#"(?x)
         (?:
-            # 1. Direct prompt variable assignments with format strings or concatenation
-            (?:user_prompt|prompt|user_message|query_prompt|full_prompt|llm_prompt|llm_input|instruction_prompt|task_prompt)\s*=\s*
-            (?:f["']|(?:\"[^\"]*\"|'[^']*')\.format\s*\(|[a-zA-Z_]\w*\s*\+\s*(?:\"[^\"]*\"|'[^']*')|(?:\"[^\"]*\"|'[^']*')\s*\+\s*[a-zA-Z_])|
+            # 1. Direct prompt variable assignments with format strings or concatenation (with optional type annotations)
+            (?:user_prompt|prompt|user_message|query_prompt|full_prompt|llm_prompt|llm_input|instruction_prompt|task_prompt)(?:\s*:\s*[a-zA-Z0-9_\[\],\s.]+)?\s*=\s*
+            (?:[fF]["']|(?:\"[^\"]*\"|'[^']*'|[a-zA-Z_]\w*)\.format\s*\(|[a-zA-Z_]\w*\s*\+\s*(?:\"[^\"]*\"|'[^']*'|[a-zA-Z_]\w*)|(?:\"[^\"]*\"|'[^']*')\s*\+\s*[a-zA-Z_]\w*)|
 
             # 2. Dictionary user message: {"role": "user", "content": f"..."} or {"role": "user", "content": "..." + var}
-            \{[^{}]*["']role["']\s*:\s*["']user["'][^{}]*["']content["']\s*:\s*(?:f["']|(?:\"[^\"]*\"|'[^']*')\.format\s*\(|[a-zA-Z_]\w*\s*\+|(?:\"[^\"]*\"|'[^']*')\s*\+\s*[a-zA-Z_])|
+            \{[^{}]*["']role["']\s*:\s*["']user["'][^{}]*["']content["']\s*:\s*(?:[fF]["']|(?:\"[^\"]*\"|'[^']*'|[a-zA-Z_]\w*)\.format\s*\(|[a-zA-Z_]\w*\s*\+|(?:\"[^\"]*\"|'[^']*')\s*\+\s*[a-zA-Z_]\w*)|
 
             # 3. LangChain / LlamaIndex: HumanMessage(content=f"...") or ("user", f"...") or ("human", f"...")
-            (?:HumanMessage|HumanMessagePromptTemplate)\s*\(\s*(?:content\s*=\s*)?(?:f["']|(?:\"[^\"]*\"|'[^']*')\.format\s*\(|[a-zA-Z_]\w*\s*\+|(?:\"[^\"]*\"|'[^']*')\s*\+\s*[a-zA-Z_])|
-            \(["'](?:user|human)["']\s*,\s*(?:f["']|(?:\"[^\"]*\"|'[^']*')\.format\s*\(|[a-zA-Z_]\w*\s*\+|(?:\"[^\"]*\"|'[^']*')\s*\+\s*[a-zA-Z_])|
+            (?:HumanMessage|HumanMessagePromptTemplate)\s*\(\s*(?:content\s*=\s*)?(?:[fF]["']|(?:\"[^\"]*\"|'[^']*'|[a-zA-Z_]\w*)\.format\s*\(|[a-zA-Z_]\w*\s*\+|(?:\"[^\"]*\"|'[^']*')\s*\+\s*[a-zA-Z_]\w*)|
+            \(["'](?:user|human)["']\s*,\s*(?:[fF]["']|(?:\"[^\"]*\"|'[^']*'|[a-zA-Z_]\w*)\.format\s*\(|[a-zA-Z_]\w*\s*\+|(?:\"[^\"]*\"|'[^']*')\s*\+\s*[a-zA-Z_]\w*)|
 
             # 4. PromptTemplate initialization with format strings (antipattern: formatting template before passing parameters)
-            PromptTemplate(?:\.from_template)?\s*\(\s*(?:template\s*=\s*)?f["']
+            PromptTemplate(?:\.from_template)?\s*\(\s*(?:template\s*=\s*)?[fF]["']
         )
     "#,
     )
@@ -42,13 +42,13 @@ static TS_PROMPT_CONCAT_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r#"(?x)
         (?:
-            # 1. Variable or property: prompt = `...${var}...`
-            (?:userPrompt|prompt|userMessage|queryPrompt|fullPrompt|llmPrompt|llmInput|taskPrompt)\s*(?::|=)\s*`[^`]*\$\{.+?\}[^`]*`|
-            (?:userPrompt|prompt|userMessage|queryPrompt|fullPrompt|llmPrompt|llmInput|taskPrompt)\s*(?::|=)\s*(?:[a-zA-Z_$]\w*\s*\+\s*["'][^"']*["']|["'][^"']*["']\s*\+\s*[a-zA-Z_$])|
+            # 1. Variable or property: prompt: string = `...${var}...` (with optional type annotations)
+            (?:userPrompt|prompt|userMessage|queryPrompt|fullPrompt|llmPrompt|llmInput|taskPrompt)(?:\s*:\s*[a-zA-Z0-9_\[\]\s<>,.]+)?\s*(?::|=)\s*`[^`]*\$\{.+?\}[^`]*`|
+            (?:userPrompt|prompt|userMessage|queryPrompt|fullPrompt|llmPrompt|llmInput|taskPrompt)(?:\s*:\s*[a-zA-Z0-9_\[\]\s<>,.]+)?\s*(?::|=)\s*(?:[a-zA-Z_$]\w*\s*\+\s*["'][^"']*["']|["'][^"']*["']\s*\+\s*[a-zA-Z_$]\w*|[a-zA-Z_$]\w*\s*\+\s*[a-zA-Z_$]\w*)|
 
             # 2. Message object: { role: 'user', content: `...${var}...` }
             \{[^{}]*role\s*:\s*["'](?:user|human)["'][^{}]*content\s*:\s*`[^`]*\$\{.+?\}[^`]*`|
-            \{[^{}]*role\s*:\s*["'](?:user|human)["'][^{}]*content\s*:\s*(?:[a-zA-Z_$]\w*\s*\+\s*["'][^"']*["']|["'][^"']*["']\s*\+\s*[a-zA-Z_$])|
+            \{[^{}]*role\s*:\s*["'](?:user|human)["'][^{}]*content\s*:\s*(?:[a-zA-Z_$]\w*\s*\+\s*["'][^"']*["']|["'][^"']*["']\s*\+\s*[a-zA-Z_$]\w*)|
 
             # 3. LangChain TS: new HumanMessage(`...${var}...`)
             new\s+HumanMessage\s*\(\s*`[^`]*\$\{.+?\}[^`]*`|
@@ -281,6 +281,39 @@ def handle_query(user_query: str):
             findings.is_empty(),
             "XML boundary tags should prevent finding"
         );
+    }
+
+    #[test]
+    fn test_flags_typed_python_and_typescript_prompts() {
+        let py_content = r#"
+def handle_query(user_query: str):
+    prompt: str = f"Answer query: {user_query}"
+    return call_llm(prompt)
+"#;
+        let target = make_target_with_source("server.py", py_content, Language::Python);
+        let detector = InsecurePromptConcatDetector;
+        assert_eq!(detector.run(&target).len(), 1);
+
+        let ts_content = r#"
+export async function summarize(userInput: string) {
+    const userPrompt: string = `Summarize: ${userInput}`;
+    return await llm.complete(userPrompt);
+}
+"#;
+        let target_ts = make_target_with_source("tool.ts", ts_content, Language::TypeScript);
+        assert_eq!(detector.run(&target_ts).len(), 1);
+    }
+
+    #[test]
+    fn test_flags_string_concatenation_addition() {
+        let py_content = r#"
+def run(input_val: str):
+    prompt = "Process this data: " + input_val
+    return call_llm(prompt)
+"#;
+        let target = make_target_with_source("server.py", py_content, Language::Python);
+        let detector = InsecurePromptConcatDetector;
+        assert_eq!(detector.run(&target).len(), 1);
     }
 
     #[test]

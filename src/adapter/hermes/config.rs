@@ -11,7 +11,8 @@ use crate::ir::tool_surface::ToolSurface;
 use crate::ir::{ArgumentSource, SourceLocation};
 
 static INTERPOLATION_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\$\{[^}]+\}|\$\w+|\{\{[^}]+\}\}|`[^`]+`").expect("static regex pattern is valid")
+    Regex::new(r"\$\{[^}]+\}|\$\([^)]+\)|\$\w+|\{\{[^}]+\}\}|`[^`]+`")
+        .expect("static regex pattern is valid")
 });
 
 pub(crate) fn contains_config_interpolation(value: &str) -> bool {
@@ -90,13 +91,21 @@ pub(crate) fn has_optional_mcp_catalog(root: &Path) -> bool {
 }
 
 pub(crate) fn has_skill_md_under(dir: &Path) -> bool {
+    has_skill_md_under_depth(dir, 0)
+}
+
+fn has_skill_md_under_depth(dir: &Path, depth: usize) -> bool {
+    if depth > 4 {
+        return false;
+    }
     let Ok(entries) = std::fs::read_dir(dir) else {
         return false;
     };
 
     entries.flatten().any(|entry| {
         let path = entry.path();
-        path.join("SKILL.md").exists() || has_skill_md_under(&path)
+        path.join("SKILL.md").exists()
+            || (path.is_dir() && !path.is_symlink() && has_skill_md_under_depth(&path, depth + 1))
     })
 }
 
@@ -224,7 +233,7 @@ pub(crate) fn parse_mcp_server_entries(content: &str) -> Vec<HermesMcpServer> {
             if let Some(server) = current.take() {
                 servers.push(server);
             }
-            let name = trimmed.trim_end_matches(':').to_string();
+            let name = clean_scalar(trimmed.trim_end_matches(':'));
             current = Some(HermesMcpServer {
                 name,
                 enabled: true,
@@ -303,13 +312,11 @@ pub(crate) fn parse_mcp_server_entries(content: &str) -> Vec<HermesMcpServer> {
 
 pub(crate) fn parse_inline_list(value: &str) -> Vec<String> {
     let value = value.trim();
-    if !value.starts_with('[') || !value.ends_with(']') {
+    let Some(inner) = value.strip_prefix('[').and_then(|v| v.strip_suffix(']')) else {
         return Vec::new();
-    }
+    };
 
-    value
-        .trim_start_matches('[')
-        .trim_end_matches(']')
+    inner
         .split(',')
         .map(clean_scalar)
         .filter(|item| !item.is_empty())
