@@ -12,6 +12,7 @@ mod excessive_permissions;
 mod hardcoded_secrets;
 mod insecure_bind;
 mod insecure_prompt_concat;
+mod insecure_subagent_delegation;
 mod insecure_temp_file;
 pub(crate) mod metadata_ssrf;
 mod no_lockfile;
@@ -23,6 +24,7 @@ mod self_modification;
 mod sql_injection;
 mod ssrf;
 mod system_prompt_tampering;
+mod tool_description_injection;
 mod typosquat;
 mod unpinned_deps;
 mod unsafe_deser;
@@ -31,7 +33,7 @@ mod webhook_file_exfil;
 
 use super::{ContextDetector, Detector};
 
-/// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..029).
+/// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..031).
 pub fn all_detectors() -> Vec<Box<dyn Detector>> {
     vec![
         Box::new(command_injection::CommandInjectionDetector),
@@ -62,6 +64,8 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(hardcoded_secrets::HardcodedSecretsDetector),
         Box::new(dynamic_tool_registration::DynamicToolRegistrationDetector),
         Box::new(cross_session_state_bleed::CrossSessionStateBleedDetector),
+        Box::new(tool_description_injection::ToolDescriptionInjectionDetector),
+        Box::new(insecure_subagent_delegation::InsecureSubagentDelegationDetector),
     ]
 }
 
