@@ -28,6 +28,11 @@ agentshield/
 │   │   ├── data_surface.rs       # Sources, sinks, taint paths
 │   │   ├── dependency_surface.rs # Dependencies, lockfiles
 │   │   ├── provenance_surface.rs # Author, repo, license
+│   │   ├── capability/           # Capability projection & NL inference (modularized)
+│   │   │   ├── mod.rs            # Module re-exports, test suite
+│   │   │   ├── types.rs          # Token enums, phrase table, macro phrase!
+│   │   │   ├── inference.rs      # NL description capability inference & negation
+│   │   │   └── projection.rs     # Permission and execution surface capability projection
 │   │   └── taint_builder/        # DataSurface & 1-hop taint path builder (modularized)
 │   │       ├── mod.rs            # build_data_surface(), test suite
 │   │       ├── sources.rs        # Tool parameters & env var source extraction
@@ -91,6 +96,7 @@ agentshield/
 │   │   ├── registry.rs           # Rule metadata registry
 │   │   ├── policy.rs             # Policy evaluation (.agentshield.toml)
 │   │   └── builtin/              # 31 built-in detectors (SHIELD-001..031)
+│   │       └── capability_mismatch/ # SHIELD-019 detector & eval engine (modularized)
 │   ├── risk/                     # Deterministic risk assessment model (modularized)
 │   │   ├── mod.rs                # assess(), render_experimental(), property tests
 │   │   ├── types.rs              # RiskAssessment, RiskContribution, CoverageDescriptor
