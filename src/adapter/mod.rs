@@ -15,6 +15,18 @@ use crate::config::ScanPathFilter;
 use crate::error::{Result, ShieldError};
 use crate::ir::{Framework, ScanTarget};
 
+/// Maximum file size (1 MB) that adapters will read into memory.
+pub(crate) const MAX_ADAPTER_FILE_SIZE_BYTES: u64 = 1_048_576;
+
+/// Safely read a text file up to 1 MB. Returns None if the file exceeds 1 MB or cannot be read.
+pub(crate) fn read_file_capped(path: &Path) -> Option<String> {
+    let metadata = std::fs::metadata(path).ok()?;
+    if metadata.len() > MAX_ADAPTER_FILE_SIZE_BYTES {
+        return None;
+    }
+    std::fs::read_to_string(path).ok()
+}
+
 /// Contextual analysis adapters load both public IR and non-serialized sidecar
 /// data needed by future context-dependent detectors.
 pub(crate) trait AnalysisAdapter: Send + Sync {

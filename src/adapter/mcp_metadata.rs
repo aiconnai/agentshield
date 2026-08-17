@@ -38,18 +38,18 @@ fn has_mcp_metadata(root: &Path) -> bool {
 
 fn package_json_declares_mcp(root: &Path) -> bool {
     let path = root.join("package.json");
-    std::fs::read_to_string(path).is_ok_and(|content| {
+    crate::adapter::read_file_capped(&path).is_some_and(|content| {
         content.contains("@modelcontextprotocol/sdk") || content.contains("mcp-server")
     })
 }
 
 fn pyproject_declares_mcp(root: &Path) -> bool {
-    std::fs::read_to_string(root.join("pyproject.toml"))
-        .is_ok_and(|content| content.contains("mcp"))
+    crate::adapter::read_file_capped(&root.join("pyproject.toml"))
+        .is_some_and(|content| content.contains("mcp"))
 }
 
 fn requirements_declare_mcp(root: &Path) -> bool {
-    std::fs::read_to_string(root.join("requirements.txt")).is_ok_and(|content| {
+    crate::adapter::read_file_capped(&root.join("requirements.txt")).is_some_and(|content| {
         content
             .lines()
             .map(str::trim)
@@ -86,8 +86,8 @@ fn contains_mcp_source(root: &Path, mode: SourceDetectionMode) -> bool {
         if !is_mcp_source_candidate(path) {
             continue;
         }
-        if std::fs::read_to_string(path)
-            .is_ok_and(|content| source_mentions_mcp(path, &content, mode))
+        if crate::adapter::read_file_capped(path)
+            .is_some_and(|content| source_mentions_mcp(path, &content, mode))
         {
             return true;
         }

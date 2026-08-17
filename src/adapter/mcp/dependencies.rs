@@ -16,7 +16,7 @@ pub fn parse_dependencies(root: &Path, filter: &ScanPathFilter) -> DependencySur
     // Parse requirements.txt as a dependency manifest (NOT a lockfile)
     let req_file = root.join("requirements.txt");
     if req_file.exists() && filter.allows_path(root, &req_file) {
-        if let Ok(content) = std::fs::read_to_string(&req_file) {
+        if let Some(content) = crate::adapter::read_file_capped(&req_file) {
             for (idx, line) in content.lines().enumerate() {
                 let line = line.trim();
                 if line.is_empty() || line.starts_with('#') || line.starts_with('-') {
@@ -63,22 +63,23 @@ pub fn parse_dependencies(root: &Path, filter: &ScanPathFilter) -> DependencySur
     ] {
         let lock_path = root.join(filename);
         if lock_path.exists() && filter.allows_path(root, &lock_path) {
-            let content = std::fs::read_to_string(&lock_path).unwrap_or_default();
-            let (all_pinned, all_hashed) = detect_dependency_lock_confidence(format, &content);
-            surface.lockfile = Some(LockfileInfo {
-                path: lock_path,
-                format,
-                all_pinned,
-                all_hashed,
-            });
-            break;
+            if let Some(content) = crate::adapter::read_file_capped(&lock_path) {
+                let (all_pinned, all_hashed) = detect_dependency_lock_confidence(format, &content);
+                surface.lockfile = Some(LockfileInfo {
+                    path: lock_path,
+                    format,
+                    all_pinned,
+                    all_hashed,
+                });
+                break;
+            }
         }
     }
 
     // Parse package.json dependencies
     let pkg_json = root.join("package.json");
     if pkg_json.exists() && filter.allows_path(root, &pkg_json) {
-        if let Ok(content) = std::fs::read_to_string(&pkg_json) {
+        if let Some(content) = crate::adapter::read_file_capped(&pkg_json) {
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
                 for (key, is_dev) in [("dependencies", false), ("devDependencies", true)] {
                     if let Some(deps) = value.get(key).and_then(|v| v.as_object()) {
@@ -119,15 +120,17 @@ pub fn parse_dependencies(root: &Path, filter: &ScanPathFilter) -> DependencySur
         ] {
             let lock_path = root.join(filename);
             if lock_path.exists() && filter.allows_path(root, &lock_path) {
-                let content = std::fs::read_to_string(&lock_path).unwrap_or_default();
-                let (all_pinned, all_hashed) = detect_dependency_lock_confidence(format, &content);
-                surface.lockfile = Some(LockfileInfo {
-                    path: lock_path,
-                    format,
-                    all_pinned,
-                    all_hashed,
-                });
-                break;
+                if let Some(content) = crate::adapter::read_file_capped(&lock_path) {
+                    let (all_pinned, all_hashed) =
+                        detect_dependency_lock_confidence(format, &content);
+                    surface.lockfile = Some(LockfileInfo {
+                        path: lock_path,
+                        format,
+                        all_pinned,
+                        all_hashed,
+                    });
+                    break;
+                }
             }
         }
     }

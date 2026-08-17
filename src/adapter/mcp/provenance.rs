@@ -21,7 +21,7 @@ pub fn parse_provenance(root: &Path, filter: &ScanPathFilter) -> ProvenanceSurfa
     // From package.json
     let pkg_json = root.join("package.json");
     if pkg_json.exists() && filter.allows_path(root, &pkg_json) {
-        if let Ok(content) = std::fs::read_to_string(&pkg_json) {
+        if let Some(content) = crate::adapter::read_file_capped(&pkg_json) {
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
                 prov.author = value
                     .get("author")
@@ -46,7 +46,7 @@ pub fn parse_provenance(root: &Path, filter: &ScanPathFilter) -> ProvenanceSurfa
     // From pyproject.toml
     let pyproject = root.join("pyproject.toml");
     if pyproject.exists() && filter.allows_path(root, &pyproject) {
-        if let Ok(content) = std::fs::read_to_string(&pyproject) {
+        if let Some(content) = crate::adapter::read_file_capped(&pyproject) {
             if let Ok(value) = content.parse::<toml::Value>() {
                 if let Some(project) = value.get("project") {
                     prov.license = project

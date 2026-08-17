@@ -22,7 +22,7 @@ impl super::Adapter for CrewAiAdapter {
         // Check pyproject.toml for crewai dependency or [tool.crewai] section
         let pyproject = root.join("pyproject.toml");
         if pyproject.exists() {
-            if let Ok(content) = std::fs::read_to_string(&pyproject) {
+            if let Some(content) = super::read_file_capped(&pyproject) {
                 if content.contains("crewai") {
                     return true;
                 }
@@ -32,7 +32,7 @@ impl super::Adapter for CrewAiAdapter {
         // Check requirements.txt for crewai
         let requirements = root.join("requirements.txt");
         if requirements.exists() {
-            if let Ok(content) = std::fs::read_to_string(&requirements) {
+            if let Some(content) = super::read_file_capped(&requirements) {
                 if content.lines().any(|l| {
                     let trimmed = l.trim();
                     trimmed == "crewai"

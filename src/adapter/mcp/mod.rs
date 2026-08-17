@@ -221,7 +221,7 @@ fn load_mcp_target(
     // Parse tool definitions from JSON if available
     let tools_json = root.join("tools.json");
     if tools_json.exists() && filter.allows_path(root, &tools_json) {
-        if let Ok(content) = std::fs::read_to_string(&tools_json) {
+        if let Some(content) = crate::adapter::read_file_capped(&tools_json) {
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
                 tools.extend(parser::json_schema::parse_tools_from_json(&value));
                 tools = dedupe_tools_by_name(tools);
