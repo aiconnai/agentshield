@@ -90,7 +90,7 @@ agentshield/
 │   │   ├── finding.rs            # Finding, Severity, Evidence structs
 │   │   ├── registry.rs           # Rule metadata registry
 │   │   ├── policy.rs             # Policy evaluation (.agentshield.toml)
-│   │   └── builtin/              # 29 built-in detectors (SHIELD-001..029)
+│   │   └── builtin/              # 31 built-in detectors (SHIELD-001..031)
 │   ├── risk/                     # Deterministic risk assessment model (modularized)
 │   │   ├── mod.rs                # assess(), render_experimental(), property tests
 │   │   ├── types.rs              # RiskAssessment, RiskContribution, CoverageDescriptor
