@@ -13,6 +13,7 @@ pub(crate) fn extract_security_schemes(
     let schemes = match spec
         .get("components")
         .and_then(|c| c.get("securitySchemes"))
+        .or_else(|| spec.get("securityDefinitions"))
         .and_then(|s| s.as_object())
     {
         Some(s) => s,
@@ -32,11 +33,13 @@ pub(crate) fn extract_security_schemes(
         let is_sensitive = looks_sensitive_name(header_or_var_name)
             || scheme_type == "oauth2"
             || scheme_type == "http"
-            || scheme_type == "apiKey";
+            || scheme_type == "apiKey"
+            || scheme_type == "openIdConnect"
+            || scheme_type == "mutualTLS";
 
         execution.env_accesses.push(EnvAccess {
             is_sensitive,
-            var_name: ArgumentSource::Literal(format!("auth:{header_or_var_name}")),
+            var_name: ArgumentSource::Literal(header_or_var_name.to_string()),
             location: SourceLocation {
                 file: spec_path.to_path_buf(),
                 line: 1,

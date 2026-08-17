@@ -19,8 +19,8 @@ use crate::ir::*;
 
 pub(crate) use endpoints::{extract_openai_tools_json, extract_path_tools, extract_server_urls};
 pub(crate) use openapi::{
-    OPENAI_TOOL_FILENAMES, OPENAPI_FILENAMES, PLUGIN_MANIFEST_FILENAMES, collect_spec_source_files,
-    find_openapi_spec, has_plugin_manifest, parse_openapi_spec,
+    OPENAI_TOOL_FILENAMES, OPENAPI_FILENAMES, collect_spec_source_files, find_openapi_spec,
+    has_plugin_manifest, parse_openapi_spec,
 };
 
 /// GPT Actions and OpenAI Tools adapter.
@@ -40,29 +40,23 @@ impl super::Adapter for GptActionsAdapter {
 
     fn detect(&self, root: &Path) -> bool {
         // Legacy plugin manifest at root or .well-known/
-        for filename in PLUGIN_MANIFEST_FILENAMES {
-            if root.join(filename).exists() {
-                return true;
-            }
-        }
-        if root.join(".well-known").join("ai-plugin.json").exists() {
+        if has_plugin_manifest(root) {
             return true;
         }
 
-        // OpenAPI spec with x-openai-* extensions
+        // OpenAPI / Swagger specs
         for filename in OPENAPI_FILENAMES {
             let path = root.join(filename);
             if path.exists() {
                 if let Ok(content) = std::fs::read_to_string(&path) {
-                    if content.contains("x-openai-") || content.contains("x-openai") {
+                    if content.contains("x-openai-")
+                        || content.contains("x-openai")
+                        || content.contains("\"openapi\"")
+                        || content.contains("openapi:")
+                        || content.contains("\"swagger\"")
+                        || content.contains("swagger:")
+                    {
                         return true;
-                    }
-                    // JSON spec: check for openapi version field alongside plugin manifest check
-                    if content.contains("\"openapi\"") || content.contains("openapi:") {
-                        // Also accept if ai-plugin.json exists anywhere nearby
-                        if has_plugin_manifest(root) {
-                            return true;
-                        }
                     }
                 }
             }
