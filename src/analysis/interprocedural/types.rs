@@ -68,7 +68,7 @@ impl CallGraph {
                 let start = node.start_line.saturating_sub(1);
                 if node.file_path == file_path && line >= start && line <= node.end_line {
                     let span = node.end_line - start;
-                    if best_match.is_none() || span < best_match.unwrap().1 {
+                    if best_match.is_none_or(|(_, best_span)| span < best_span) {
                         best_match = Some((node, span));
                     }
                 }

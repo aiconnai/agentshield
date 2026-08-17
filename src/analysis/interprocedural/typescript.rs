@@ -8,7 +8,7 @@ use crate::ir::{ScanTarget, SourceLocation};
 use super::types::{CALL_EXPR_RE, CallGraph, CallSite, FunctionNode};
 
 pub(crate) static TS_FUNC_DEF_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)|(?:const|let|var)\s+([A-Za-z0-9_]+)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*=>"#)
+    Regex::new(r#"(?m)^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)|(?:const|let|var)\s+([A-Za-z0-9_]+)\s*=\s*(?:async\s*)?\(([^)]*)\)(?:\s*:[^=]+)?\s*=>"#)
         .expect("valid regex")
 });
 
@@ -125,10 +125,7 @@ pub(crate) fn parse_typescript_file(
     for (line_idx, line) in lines.iter().enumerate() {
         let line_num = line_idx + 1;
         let trimmed = line.trim();
-        if trimmed.starts_with("//")
-            || trimmed.starts_with("/*")
-            || trimmed.starts_with("function ")
-        {
+        if trimmed.starts_with("//") || trimmed.starts_with("/*") || TS_FUNC_DEF_RE.is_match(line) {
             continue;
         }
 

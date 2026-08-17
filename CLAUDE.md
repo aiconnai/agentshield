@@ -269,7 +269,7 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 5. `load()` uses the 3-phase pipeline (parse → cross-file analysis → merge)
 6. Reuse shared helpers from the `mcp` module submodules: `collect_source_files()`, `parse_dependencies()`, `parse_provenance()`
 
-**Existing adapters:** MCP (`mcp.rs`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), GPT Actions (`gpt_actions.rs`), Cursor Rules (`cursor_rules.rs`), Hermes Agent (`hermes.rs`)
+**Existing adapters:** MCP (`mcp/`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), GPT Actions (`gpt_actions.rs`), Cursor Rules (`cursor_rules.rs`), Hermes Agent (`hermes/`)
 
 ## Conventions
 
