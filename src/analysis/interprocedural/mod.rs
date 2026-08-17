@@ -316,4 +316,81 @@ export async function handleApiRequest(urlInput: string) {
         assert_eq!(paths[0].source.location.file, file_a);
         assert_eq!(paths[0].sink.location.file, file_b);
     }
+
+    #[test]
+    fn test_typed_arrow_function_and_no_spurious_call_sites() {
+        let ts_code = r#"
+const helperExec = async (cmd: string): Promise<void> => {
+    child_process.execSync(cmd);
+};
+
+export async function runTool(userInput: string) {
+    return await helperExec(userInput);
+}
+"#;
+        let file_path = PathBuf::from("index.ts");
+        let target = ScanTarget {
+            name: "test-ts-arrow".into(),
+            framework: crate::ir::Framework::Mcp,
+            root_path: PathBuf::from("/test-ts-arrow"),
+            source_files: vec![crate::ir::SourceFile {
+                path: file_path.clone(),
+                language: Language::TypeScript,
+                content: ts_code.into(),
+                size_bytes: ts_code.len() as u64,
+                content_hash: "hash-arrow".into(),
+            }],
+            dependencies: DependencySurface::default(),
+            data: DataSurface {
+                sources: vec![TaintSource {
+                    source_type: TaintSourceType::ToolArgument,
+                    description: "Tool param 'userInput'".into(),
+                    location: SourceLocation {
+                        file: file_path.clone(),
+                        line: 6,
+                        column: 0,
+                        end_line: None,
+                        end_column: None,
+                    },
+                }],
+                sinks: vec![TaintSink {
+                    sink_type: TaintSinkType::ProcessExec,
+                    description: "ExecSync sink".into(),
+                    location: SourceLocation {
+                        file: file_path.clone(),
+                        line: 3,
+                        column: 4,
+                        end_line: None,
+                        end_column: None,
+                    },
+                }],
+                taint_paths: vec![],
+            },
+            tools: vec![],
+            execution: ExecutionSurface::default(),
+            provenance: ProvenanceSurface::default(),
+        };
+
+        let graph = CallGraph::build(&target);
+        assert!(
+            graph.functions.contains_key("helperExec"),
+            "Typed arrow function must be captured in CallGraph"
+        );
+        assert!(graph.functions.contains_key("runTool"));
+
+        // Verify no spurious self-call on runTool definition line
+        let self_calls = graph
+            .call_sites
+            .iter()
+            .filter(|c| c.caller_name == "runTool" && c.callee_name == "runTool")
+            .count();
+        assert_eq!(
+            self_calls, 0,
+            "Function signature must not create spurious self-call"
+        );
+
+        let paths = propagate_interprocedural_taint(&target, &graph);
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].sink.sink_type, TaintSinkType::ProcessExec);
+    }
 }
