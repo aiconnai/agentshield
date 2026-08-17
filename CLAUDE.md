@@ -27,7 +27,12 @@ agentshield/
 │   │   ├── execution_surface.rs  # Commands, file IO, network IO
 │   │   ├── data_surface.rs       # Sources, sinks, taint paths
 │   │   ├── dependency_surface.rs # Dependencies, lockfiles
-│   │   └── provenance_surface.rs # Author, repo, license
+│   │   ├── provenance_surface.rs # Author, repo, license
+│   │   └── taint_builder/        # DataSurface & 1-hop taint path builder (modularized)
+│   │       ├── mod.rs            # build_data_surface(), test suite
+│   │       ├── sources.rs        # Tool parameters & env var source extraction
+│   │       ├── sinks.rs          # Process, HTTP, file write & eval sink collection
+│   │       └── paths.rs          # 1-hop taint paths and source resolution
 │   ├── adapter/                  # Framework → IR (3-phase pipeline)
 │   │   ├── mod.rs                # Adapter trait, auto_detect_and_load(root, ignore_tests)
 │   │   ├── mcp/                   # MCP server adapter (modularized)
@@ -60,7 +65,11 @@ agentshield/
 │   │   │   ├── ast.rs            # Tree-sitter AST traversal (cfg feature)
 │   │   │   ├── classify.rs       # Argument and sanitizer resolution
 │   │   │   └── patterns.rs       # Static sink/source pattern arrays
-│   │   ├── shell.rs              # Regex-based shell parser
+│   │   ├── shell/                # Shell script parser (modularized)
+│   │   │   ├── mod.rs            # ShellParser struct, LanguageParser impl, tests
+│   │   │   ├── patterns.rs       # Static Lazy<Regex> invocations & variables
+│   │   │   ├── quote.rs          # Quote state machine & tokenization
+│   │   │   └── classify.rs       # Argument classification & range derivation
 │   │   └── json_schema.rs        # JSON Schema → ToolSurface
 │   ├── analysis/                 # Static analysis
 │   │   ├── mod.rs                # Module exports
