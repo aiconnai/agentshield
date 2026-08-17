@@ -102,6 +102,25 @@ agentshield/
 │   │   ├── json.rs               # JSON
 │   │   ├── sarif.rs              # SARIF 2.1.0
 │   │   └── html.rs               # Self-contained HTML
+│   ├── runtime/                  # Runtime guard & MCP proxy (modularized)
+│   │   ├── mod.rs                # Runtime action, event, guard and redaction exports
+│   │   ├── event.rs              # RuntimeEvent, RuntimeGuardFinding, RuntimeVerdict
+│   │   ├── guard.rs              # Policy evaluation engine (evaluate_runtime_event)
+│   │   ├── mcp_proxy.rs          # Decision engine (ProxyDecision, decide)
+│   │   ├── mcp_proxy_stdio.rs    # Stdio-based MCP proxy loop & JSON-RPC interceptor
+│   │   ├── mcp_proxy_http/       # HTTP/SSE MCP proxy server (modularized)
+│   │   │   ├── mod.rs            # run_http_sse_proxy(), tests
+│   │   │   ├── types.rs          # ProxyMetrics, AtomicMetrics, HttpAuditEvent
+│   │   │   ├── sse.rs            # SSE stream tunnel & live data redaction
+│   │   │   ├── forward.rs        # HTTP request forwarding & audit logging
+│   │   │   └── server.rs         # TCP listener & request dispatcher
+│   │   ├── redaction/            # Secret redaction engine (modularized)
+│   │   │   ├── mod.rs            # redact_text(), redact_runtime_event()
+│   │   │   ├── types.rs          # RedactionKind, Redaction, RedactionReport
+│   │   │   ├── patterns.rs       # Static regexes (OpenAI, AWS, GitHub, JWT, Stripe)
+│   │   │   ├── engine.rs         # Text scanning, key-value collectors, overlap resolution
+│   │   │   └── json.rs           # JSON tree walking, depth cap, key normalizer
+│   │   └── schema.rs             # JSON Schema definitions for events and results
 │   └── config/                   # .agentshield.toml parsing (policy + scan sections)
 ├── tests/fixtures/               # Test fixtures (safe + vulnerable)
 │   ├── mcp_servers/
