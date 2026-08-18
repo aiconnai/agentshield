@@ -104,7 +104,19 @@ pub fn apply_cross_file_sanitization(
         let sites = match call_sites.get(func_name) {
             Some(s) if !s.is_empty() => s,
             _ => {
-                // No discovered call sites. If exported, stay conservative.
+                // No discovered call sites. Uncalled functions must invalidate
+                // unambiguous safety for their params within their declaring files
+                // so no unsafe sibling sharing the param name gets downgraded.
+                for (file_idx, params, _) in defs {
+                    if let Some(set) = file_safe_param_sinks.get_mut(file_idx) {
+                        for param in params {
+                            set.remove(&(param.clone(), SinkClass::Command));
+                            set.remove(&(param.clone(), SinkClass::FilePath));
+                            set.remove(&(param.clone(), SinkClass::NetworkUrl));
+                            set.remove(&(param.clone(), SinkClass::DynamicExec));
+                        }
+                    }
+                }
                 continue;
             }
         };
@@ -137,6 +149,9 @@ pub fn apply_cross_file_sanitization(
             }
         }
     }
+
+    // Sort params_to_downgrade deterministically
+    params_to_downgrade.sort();
 
     // Phase 4: Downgrade operations in the target functions.
     // Scope guard (issue #33): only downgrade a (param, sink) that is in
@@ -210,6 +225,8 @@ pub fn apply_cross_file_sanitization(
             sanitized_functions.push(func_name.clone());
         }
     }
+
+    sanitized_functions.sort();
 
     CrossFileResult {
         downgraded_count,

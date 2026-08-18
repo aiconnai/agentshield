@@ -524,4 +524,55 @@ mod tests {
         assert!(files[1].1.file_operations[0].path_arg.is_tainted()); // safeRead: stays tainted (ambiguous)
         assert!(files[1].1.file_operations[1].path_arg.is_tainted()); // rawRead: stays tainted (unsafe sibling protected)
     }
+
+    #[test]
+    fn uncalled_sibling_with_shared_param_stays_tainted() {
+        // Uncalled/exported function sharing a parameter name with a called safe function
+        // in the same file must NOT have its operations downgraded.
+        let mut file_a = ParsedFile::default();
+        file_a.call_sites.push(CallSite {
+            callee: "internalRead".into(),
+            arguments: vec![ArgumentSource::Sanitized {
+                sanitizer: "validatePath".into(),
+            }],
+            caller: Some("handler".into()),
+            location: loc("index.ts", 5),
+        });
+
+        let mut file_b = ParsedFile::default();
+        // internalRead is called safely
+        file_b.function_defs.push(FunctionDef {
+            name: "internalRead".into(),
+            params: vec!["path".into()],
+            is_exported: false,
+            location: loc("lib.ts", 1),
+        });
+        // exportRead has ZERO discovered call sites (uncalled)
+        file_b.function_defs.push(FunctionDef {
+            name: "exportRead".into(),
+            params: vec!["path".into()],
+            is_exported: true,
+            location: loc("lib.ts", 10),
+        });
+        file_b.file_operations.push(FileOperation {
+            path_arg: ArgumentSource::Parameter {
+                name: "path".into(),
+            },
+            operation: FileOpType::Read,
+            location: loc("lib.ts", 3),
+        });
+
+        let mut files = vec![
+            (PathBuf::from("index.ts"), file_a),
+            (PathBuf::from("lib.ts"), file_b),
+        ];
+
+        let result = apply_cross_file_sanitization(&mut files);
+
+        assert_eq!(
+            result.downgraded_count, 0,
+            "uncalled sibling with shared param must invalidate unambiguous safety"
+        );
+        assert!(files[1].1.file_operations[0].path_arg.is_tainted());
+    }
 }
