@@ -39,7 +39,7 @@ static TS_READ_RESOURCE_HANDLER_RE: Lazy<Regex> = Lazy::new(|| {
 });
 
 static PATH_CONFINEMENT_GUARD_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?i)(?:validate_path|realpath|path_is_safe|is_safe_path|is_relative_to|startsWith\s*\(|startsWith\s*\(\s*root|resolve\([^)]*\)\.startsWith|indexOf\s*\(\s*root\)\s*===?\s*0|commonpath|commonprefix)"#)
+    Regex::new(r#"(?i)(?:validate_path|realpath|path_is_safe|is_safe_path|is_relative_to|resolve\([^)]*\)\.startsWith|indexOf\s*\(\s*root\)\s*===?\s*0|commonpath|commonprefix)"#)
         .expect("valid path confinement guard regex")
 });
 
@@ -250,6 +250,25 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
         let detector = InsecureMcpResourceDetector;
         let findings = detector.run(&target);
         assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-032");
+    }
+
+    #[test]
+    fn detects_insecure_resource_even_with_uri_startswith_check() {
+        let ts_code = r#"
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const uri = request.params.uri;
+    if (uri.startsWith("file://")) {
+        const content = fs.readFileSync(new URL(uri).pathname, "utf-8");
+        return { contents: [{ uri, text: content }] };
+    }
+    throw new Error("Invalid URI");
+});
+"#;
+        let target = target_with_source(Language::TypeScript, ts_code);
+        let detector = InsecureMcpResourceDetector;
+        let findings = detector.run(&target);
+        assert_eq!(findings.len(), 1, "uri.startsWith('file://') should NOT suppress unconfined path access");
         assert_eq!(findings[0].rule_id, "SHIELD-032");
     }
 }
