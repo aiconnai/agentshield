@@ -141,6 +141,8 @@ impl Detector for SensitiveSchemaReflectionDetector {
                         end_column: None,
                     });
 
+                    // Note: cap[0] is the matched configuration pattern expression (e.g. `default(process.env.OPENAI_API_KEY)`),
+                    // not a live secret payload, so it does not require redaction.
                     findings.push(Finding {
                         rule_id: "SHIELD-033".into(),
                         rule_name: "Unrestricted Tool Schema Reflection / Sensitive Introspection".into(),
