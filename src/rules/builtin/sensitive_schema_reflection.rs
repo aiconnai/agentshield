@@ -28,6 +28,17 @@ static HARDCODED_SECRET_IN_SCHEMA_RE: Lazy<Regex> = Lazy::new(|| {
         .expect("valid hardcoded secret in schema regex")
 });
 
+/// Redact secret string for safe display in findings (UTF-8 character boundary safe)
+fn redact_secret(secret: &str) -> String {
+    let chars: Vec<char> = secret.chars().collect();
+    if chars.len() <= 8 {
+        return "********".into();
+    }
+    let prefix: String = chars[..4].iter().collect();
+    let suffix: String = chars[chars.len() - 4..].iter().collect();
+    format!("{prefix}...{suffix}")
+}
+
 impl Detector for SensitiveSchemaReflectionDetector {
     fn metadata(&self) -> RuleMetadata {
         RuleMetadata {
@@ -48,7 +59,10 @@ impl Detector for SensitiveSchemaReflectionDetector {
         for tool in &target.tools {
             if let Some(ref desc) = tool.description {
                 if let Some(cap) = HARDCODED_SECRET_IN_SCHEMA_RE.captures(desc) {
+                    let matched_secret = &cap[0];
+                    let redacted = redact_secret(matched_secret);
                     let loc = tool.defined_at.clone();
+                    let safe_snippet = desc.replace(matched_secret, &redacted);
                     findings.push(Finding {
                         rule_id: "SHIELD-033".into(),
                         rule_name: "Unrestricted Tool Schema Reflection / Sensitive Introspection".into(),
@@ -57,13 +71,13 @@ impl Detector for SensitiveSchemaReflectionDetector {
                         attack_category: AttackCategory::CredentialExfiltration,
                         message: format!(
                             "Tool '{}' exposes an embedded credential in its schema description: \"{}\"",
-                            tool.name, &cap[0]
+                            tool.name, redacted
                         ),
                         location: loc.clone(),
                         evidence: vec![Evidence {
                             description: "Hardcoded credential detected in tool schema description".into(),
                             location: loc,
-                            snippet: Some(desc.clone()),
+                            snippet: Some(safe_snippet),
                         }],
                         taint_path: None,
                         remediation: Some(
@@ -77,7 +91,10 @@ impl Detector for SensitiveSchemaReflectionDetector {
             if let Some(ref schema) = tool.input_schema {
                 let schema_str = schema.to_string();
                 if let Some(cap) = HARDCODED_SECRET_IN_SCHEMA_RE.captures(&schema_str) {
+                    let matched_secret = &cap[0];
+                    let redacted = redact_secret(matched_secret);
                     let loc = tool.defined_at.clone();
+                    let safe_snippet = schema_str.replace(matched_secret, &redacted);
                     findings.push(Finding {
                         rule_id: "SHIELD-033".into(),
                         rule_name: "Unrestricted Tool Schema Reflection / Sensitive Introspection".into(),
@@ -86,13 +103,13 @@ impl Detector for SensitiveSchemaReflectionDetector {
                         attack_category: AttackCategory::CredentialExfiltration,
                         message: format!(
                             "Tool '{}' contains a live credential inside its input schema: \"{}\"",
-                            tool.name, &cap[0]
+                            tool.name, redacted
                         ),
                         location: loc.clone(),
                         evidence: vec![Evidence {
                             description: "Live secret embedded in tool JSON schema properties".into(),
                             location: loc,
-                            snippet: Some(schema_str),
+                            snippet: Some(safe_snippet),
                         }],
                         taint_path: None,
                         remediation: Some(
