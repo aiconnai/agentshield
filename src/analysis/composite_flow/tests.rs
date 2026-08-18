@@ -581,6 +581,38 @@ async function handler({ path, url }) {
 
 #[cfg(feature = "typescript")]
 #[test]
+fn destructured_shadowing_fails_closed() {
+    let destructured_fetch = r#"
+import { readFile } from "node:fs/promises";
+const { fetch } = require("./custom-net");
+async function handler({ path, url }) {
+  const content = await readFile(path, "utf8");
+  await fetch(url, { method: "POST", body: content });
+}
+"#;
+    assert!(candidates(destructured_fetch, "async function handler").is_empty());
+}
+
+#[cfg(feature = "typescript")]
+#[test]
+fn helper_direct_expression_return_builds_candidate() {
+    let source = r#"
+import { readFile } from "node:fs/promises";
+async function load(path) {
+  return await readFile(path, "utf8");
+}
+async function handler({ path, url }) {
+  const content = await load(path);
+  await fetch(url, { method: "POST", body: content });
+}
+"#;
+    let result = candidates(source, "async function handler");
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].tool_name, "read_and_send");
+}
+
+#[cfg(feature = "typescript")]
+#[test]
 fn normalize_path_preserves_leading_parent_dirs() {
     use crate::analysis::composite_flow::ast::normalize_path;
     use std::path::PathBuf;

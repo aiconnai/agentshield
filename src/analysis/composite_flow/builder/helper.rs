@@ -76,7 +76,8 @@ pub(crate) fn analyze_helper_return(
             }
             "return_statement" => {
                 let returned = named_children(event).into_iter().next()?;
-                let mut lineage = resolve_lineage(returned, unit.content, &variables)?;
+                let mut lineage = resolve_lineage(returned, unit.content, &variables)
+                    .or_else(|| evaluate_helper_expression(unit, returned, &variables, &helper_scope))?;
                 let returned_value = ValueId {
                     definition: DefinitionId {
                         scope: caller_scope.clone(),
