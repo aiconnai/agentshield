@@ -73,11 +73,14 @@ pub(crate) fn sanitized_label_for_var(
         SanitizerCategory::Network,
         SanitizerCategory::TypeCoercion,
     ] {
-        let prefix = format!("{}:", category.as_str());
-        if let Some(marker) = sanitized_vars
+        let prefix = format!("{ident}::{}:", category.as_str());
+        let mut matches: Vec<&str> = sanitized_vars
             .iter()
-            .find(|value| value.starts_with(&format!("{ident}::{prefix}")))
-        {
+            .filter(|value| value.starts_with(&prefix))
+            .map(|s| s.as_str())
+            .collect();
+        matches.sort();
+        if let Some(marker) = matches.first() {
             return marker.split_once("::").map(|(_, label)| label.to_string());
         }
     }
