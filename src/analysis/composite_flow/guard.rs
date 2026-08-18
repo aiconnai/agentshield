@@ -4,7 +4,7 @@ use tree_sitter::Node;
 
 use super::ast::{
     binding_names, collect_bindings, function_body, function_name, is_function, named_children,
-    text, walk,
+    walk,
 };
 use super::builder::ParsedUnit;
 
@@ -78,7 +78,11 @@ pub(crate) fn global_name_shadowed(unit: &ParsedUnit<'_>, name: &str) -> bool {
         if node.kind() == "variable_declarator"
             && node
                 .child_by_field_name("name")
-                .is_some_and(|candidate| text(candidate, unit.content) == name)
+                .is_some_and(|candidate| {
+                    binding_names(candidate, unit.content)
+                        .iter()
+                        .any(|b| b == name)
+                })
         {
             shadowed = true;
         }
