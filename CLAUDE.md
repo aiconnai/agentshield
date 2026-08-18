@@ -6,7 +6,7 @@ This file provides guidance to AI coding agents when working with this repositor
 
 **AgentShield** is a Rust-based, offline-first security scanner and runtime guard for AI agent extensions
 (MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, GPT Actions, Cursor Rules,
-and Hermes Agent projects).
+Hermes Agent projects, Vercel AI SDK, AutoGen, LlamaIndex, and Semantic Kernel).
 Official Website: https://aiconnai.github.io/agentshield/
 
 It produces SARIF output compatible with GitHub Code Scanning, supports DSSE attestation,
@@ -51,6 +51,10 @@ agentshield/
 │   │   ├── openclaw.rs           # OpenClaw SKILL.md adapter
 │   │   ├── crewai.rs             # CrewAI adapter (BaseTool, @tool)
 │   │   ├── langchain.rs          # LangChain adapter (@tool, BaseTool, langgraph)
+│   │   ├── vercel_ai.rs          # Vercel AI SDK adapter (tool(), @ai-sdk/*)
+│   │   ├── autogen.rs            # Microsoft AutoGen adapter (register_function, @register_tool)
+│   │   ├── llama_index.rs        # LlamaIndex adapter (FunctionTool, QueryEngineTool)
+│   │   ├── semantic_kernel.rs    # Microsoft Semantic Kernel adapter (@kernel_function)
 │   │   ├── gpt_actions/          # GPT Actions adapter (OpenAPI specs, modularized)
 │   │   │   ├── mod.rs            # GptActionsAdapter struct, Adapter impl, test suite
 │   │   │   ├── openapi.rs        # Spec discovery & YAML/JSON deserialization

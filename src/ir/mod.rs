@@ -56,6 +56,10 @@ pub enum Framework {
     CrewAi,
     GptActions,
     CursorRules,
+    VercelAi,
+    AutoGen,
+    LlamaIndex,
+    SemanticKernel,
     Unknown,
 }
 
@@ -69,6 +73,10 @@ impl std::fmt::Display for Framework {
             Self::CrewAi => write!(f, "CrewAI"),
             Self::GptActions => write!(f, "GPT Actions"),
             Self::CursorRules => write!(f, "Cursor Rules"),
+            Self::VercelAi => write!(f, "Vercel AI SDK"),
+            Self::AutoGen => write!(f, "AutoGen"),
+            Self::LlamaIndex => write!(f, "LlamaIndex"),
+            Self::SemanticKernel => write!(f, "Semantic Kernel"),
             Self::Unknown => write!(f, "Unknown"),
         }
     }

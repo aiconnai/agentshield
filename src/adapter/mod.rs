@@ -1,12 +1,16 @@
+pub mod autogen;
 pub mod crewai;
 pub mod cursor_rules;
 pub mod gpt_actions;
 pub mod hermes;
 pub mod langchain;
+pub mod llama_index;
 pub mod mcp;
 pub(super) mod mcp_metadata;
 pub mod openclaw;
 mod pipeline;
+pub mod semantic_kernel;
+pub mod vercel_ai;
 
 use std::path::Path;
 
@@ -72,6 +76,10 @@ enum AdapterSpec {
     LangChain,
     GptActions,
     CursorRules,
+    VercelAi,
+    AutoGen,
+    LlamaIndex,
+    SemanticKernel,
 }
 
 impl AdapterSpec {
@@ -84,6 +92,10 @@ impl AdapterSpec {
             Self::LangChain => Box::new(langchain::LangChainAdapter),
             Self::GptActions => Box::new(gpt_actions::GptActionsAdapter),
             Self::CursorRules => Box::new(cursor_rules::CursorRulesAdapter),
+            Self::VercelAi => Box::new(vercel_ai::VercelAiAdapter),
+            Self::AutoGen => Box::new(autogen::AutoGenAdapter),
+            Self::LlamaIndex => Box::new(llama_index::LlamaIndexAdapter),
+            Self::SemanticKernel => Box::new(semantic_kernel::SemanticKernelAdapter),
         }
     }
 
@@ -98,6 +110,12 @@ impl AdapterSpec {
             Self::CursorRules => {
                 Box::new(legacy_analysis_adapter(cursor_rules::CursorRulesAdapter))
             }
+            Self::VercelAi => Box::new(legacy_analysis_adapter(vercel_ai::VercelAiAdapter)),
+            Self::AutoGen => Box::new(legacy_analysis_adapter(autogen::AutoGenAdapter)),
+            Self::LlamaIndex => Box::new(legacy_analysis_adapter(llama_index::LlamaIndexAdapter)),
+            Self::SemanticKernel => {
+                Box::new(legacy_analysis_adapter(semantic_kernel::SemanticKernelAdapter))
+            }
         }
     }
 }
@@ -105,7 +123,7 @@ impl AdapterSpec {
 fn analysis_adapters() -> &'static [AdapterSpec] {
     use std::sync::OnceLock;
 
-    static ADAPTERS: OnceLock<[AdapterSpec; 7]> = OnceLock::new();
+    static ADAPTERS: OnceLock<[AdapterSpec; 11]> = OnceLock::new();
     ADAPTERS.get_or_init(|| {
         [
             AdapterSpec::Mcp,
@@ -115,6 +133,10 @@ fn analysis_adapters() -> &'static [AdapterSpec] {
             AdapterSpec::LangChain,
             AdapterSpec::GptActions,
             AdapterSpec::CursorRules,
+            AdapterSpec::VercelAi,
+            AdapterSpec::AutoGen,
+            AdapterSpec::LlamaIndex,
+            AdapterSpec::SemanticKernel,
         ]
     })
 }
