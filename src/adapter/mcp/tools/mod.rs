@@ -57,7 +57,11 @@ pub(crate) fn extract_mcp_tool_declarations_from_source(
         let handler = arguments
             .last()
             .and_then(|&(start, end)| parse_mcp_tool_handler(path, content, start, end));
-        let line = content[..call_start].lines().count() + 1;
+        let line = content.as_bytes()[..call_start]
+            .iter()
+            .filter(|&&b| b == b'\n')
+            .count()
+            + 1;
 
         declarations.push(McpToolDeclaration {
             tool: ToolSurface {
