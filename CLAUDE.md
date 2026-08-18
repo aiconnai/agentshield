@@ -77,7 +77,9 @@ agentshield/
 │   │   │   ├── mod.rs            # TypeScriptParser struct, LanguageParser impl
 │   │   │   ├── ast.rs            # Tree-sitter AST traversal (cfg feature)
 │   │   │   ├── classify.rs       # Argument and sanitizer resolution
-│   │   │   └── patterns.rs       # Static sink/source pattern arrays
+│   │   │   ├── patterns.rs       # Static sink/source pattern arrays
+│   │   │   ├── fallback.rs       # Regex-based fallback parser (no-feature)
+│   │   │   └── tests.rs          # Comprehensive parser unit tests
 │   │   ├── shell/                # Shell script parser (modularized)
 │   │   │   ├── mod.rs            # ShellParser struct, LanguageParser impl, tests
 │   │   │   ├── patterns.rs       # Static Lazy<Regex> invocations & variables
