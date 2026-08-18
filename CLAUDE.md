@@ -42,6 +42,8 @@ agentshield/
 │   │   ├── mod.rs                # Adapter trait, auto_detect_and_load(root, ignore_tests)
 │   │   ├── mcp/                   # MCP server adapter (modularized)
 │   │   │   ├── mod.rs             # Adapter trait impl, lifecycle, test helpers
+│   │   │   ├── loader.rs          # Target loading, file collection, composite analysis
+│   │   │   ├── filter.rs          # Test file heuristics and filtering
 │   │   │   ├── tools.rs           # Tool extraction (TS .tool(), Python @mcp.tool)
 │   │   │   ├── binding.rs         # Handler resolution and scope binding
 │   │   │   ├── dependencies.rs    # Lockfile parsing (npm, uv, poetry, pip)
@@ -63,6 +65,8 @@ agentshield/
 │   │   ├── mod.rs                # Parser trait, ParsedFile, FunctionDef, CallSite
 │   │   ├── python/               # Python parser (modularized)
 │   │   │   ├── mod.rs            # PythonParser struct, LanguageParser impl
+│   │   │   ├── defs.rs           # Function definition & context manager extractors
+│   │   │   ├── scanner.rs        # Token & AST line-by-line / multiline scanner
 │   │   │   ├── patterns.rs       # Static patterns and Lazy<Regex> definitions
 │   │   │   └── classify.rs       # Argument classification and sanitizer helpers
 │   │   ├── typescript/           # TypeScript/TSX parser (modularized)
@@ -96,7 +100,8 @@ agentshield/
 │   │   │       ├── anchors.rs    # Semantic anchor generators
 │   │   │       └── trace.rs      # Function analyzer & expression lineage evaluator
 │   │   ├── cross_file/           # Cross-file sanitizer-aware validation (modularized)
-│   │   │   ├── mod.rs            # apply_cross_file_sanitization, CrossFileResult
+│   │   │   ├── mod.rs            # Public exports, test suite
+│   │   │   ├── engine.rs         # apply_cross_file_sanitization, CrossFileResult
 │   │   │   ├── sanitizer.rs      # SanitizerCategory, pattern tables, categorization
 │   │   │   └── sink_policy.rs    # Sink safety logic, sanitizer_allows_sink
 │   │   └── sensitivity.rs        # Sensitive-name heuristics (pub(crate))
