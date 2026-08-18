@@ -140,7 +140,12 @@ pub(crate) fn extract_vercel_ai_tools_from_source(path: &Path, content: &str) ->
         let match_start = cap.get(0).map(|m| m.start()).unwrap_or(0);
         let line = content[..match_start].lines().count() + 1;
 
-        let tool_snippet = &content[match_start..(match_start + 1500).min(content.len())];
+        let max_end = (match_start + 1500).min(content.len());
+        let mut end = max_end;
+        while !content.is_char_boundary(end) {
+            end -= 1;
+        }
+        let tool_snippet = &content[match_start..end];
         let mut parameter_descriptions = Vec::new();
 
         for prop_cap in VERCEL_PROPERTY_DESC_RE.captures_iter(tool_snippet) {
@@ -230,5 +235,33 @@ export const getWeather = tool({
         assert!(tools[0].description.as_deref().unwrap().contains("weather for a city"));
         assert!(tools[0].description.as_deref().unwrap().contains("The target city name"));
         assert_eq!(tools[0].defined_at.as_ref().unwrap().line, 5);
+    }
+
+    #[test]
+    fn extracts_vercel_ai_tool_with_unicode_characters() {
+        // Multi-byte UTF-8 string (emojis & accented text) spanning across the 1500-byte boundary
+        let unicode_padding = "🚀 Informação confidencial e análise de segurança ".repeat(40);
+        let content = format!(
+            r#"
+import {{ tool }} from 'ai';
+import {{ z }} from 'zod';
+
+export const analyzeData = tool({{
+  description: 'Análise de dados avançada com IA',
+  parameters: z.object({{
+    query: z.string().describe('Consulta SQL para execução'),
+  }}),
+  // {unicode_padding}
+  execute: async ({{ query }}) => {{
+    return db.query(query);
+  }},
+}});
+"#
+        );
+
+        let tools = extract_vercel_ai_tools_from_source(Path::new("tools.ts"), &content);
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "analyzeData");
+        assert!(tools[0].description.as_deref().unwrap().contains("Consulta SQL"));
     }
 }
