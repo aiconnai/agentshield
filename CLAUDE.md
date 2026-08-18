@@ -44,10 +44,14 @@ agentshield/
 │   │   │   ├── mod.rs             # Adapter trait impl, lifecycle, test helpers
 │   │   │   ├── loader.rs          # Target loading, file collection, composite analysis
 │   │   │   ├── filter.rs          # Test file heuristics and filtering
-│   │   │   ├── tools.rs           # Tool extraction (TS .tool(), Python @mcp.tool)
+│   │   │   ├── tools/             # Tool extraction (modularized)
+│   │   │   │   ├── mod.rs         # McpToolDeclaration, extract_mcp_tools_from_source
+│   │   │   │   ├── scan.rs        # JS/TS lexical scanner, delimiters & string parsing
+│   │   │   │   └── python.rs      # Python @mcp.tool & FastMCP decorator extraction
 │   │   │   ├── binding.rs         # Handler resolution and scope binding
 │   │   │   ├── dependencies.rs    # Lockfile parsing (npm, uv, poetry, pip)
-│   │   │   └── provenance.rs      # Author, license, repository metadata
+│   │   │   ├── provenance.rs      # Author, license, repository metadata
+│   │   │   └── tests.rs           # Comprehensive MCP adapter unit tests
 │   │   ├── openclaw.rs           # OpenClaw SKILL.md adapter
 │   │   ├── crewai.rs             # CrewAI adapter (BaseTool, @tool)
 │   │   ├── langchain.rs          # LangChain adapter (@tool, BaseTool, langgraph)
