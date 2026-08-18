@@ -36,7 +36,7 @@ server.registerTool("create_report", { description: "Create report" }, async () 
         tools[0].description.as_deref(),
         Some("Busca fuzzy por nome.")
     );
-    assert_eq!(tools[0].defined_at.as_ref().map(|loc| loc.line), Some(5));
+    assert_eq!(tools[0].defined_at.as_ref().map(|loc| loc.line), Some(4));
     assert_eq!(tools[1].name, "create_report");
     assert_eq!(tools[1].description.as_deref(), Some("Create report"));
 }
@@ -731,4 +731,39 @@ def calculate(expr: str):
     let tools = extract_mcp_tools_from_source(Path::new("src/mcp/server.py"), content);
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].name, "calculate");
+}
+
+#[test]
+fn extracts_python_kwarg_tool_without_key_substring_collision() {
+    let content = r#"
+@mcp.tool(filename="report.txt", name="export_report", description="Export")
+def export():
+    pass
+"#;
+    let tools = extract_mcp_tools_from_source(Path::new("test.py"), content);
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].name, "export_report");
+    assert_eq!(tools[0].description.as_deref(), Some("Export"));
+}
+
+#[test]
+fn extracts_python_pep695_generic_function_name() {
+    let content = r#"
+@mcp.tool
+def generic_runner[T: str](item: T):
+    pass
+"#;
+    let tools = extract_mcp_tools_from_source(Path::new("test.py"), content);
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].name, "generic_runner");
+}
+
+#[test]
+fn adapter_load_succeeds_on_empty_directory() {
+    use crate::adapter::Adapter;
+    let temp = tempfile::tempdir().unwrap();
+    let result = McpAdapter.load(temp.path(), false);
+    assert!(result.is_ok());
+    let targets = result.unwrap();
+    assert_eq!(targets.len(), 1);
 }

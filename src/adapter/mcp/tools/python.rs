@@ -93,28 +93,30 @@ pub(crate) fn parse_next_string_argument(content: &str, offset: usize) -> Option
 
 pub(crate) fn parse_python_kwarg_string_arg(args: &str, key: &str) -> Option<String> {
     let needle = format!("{key}=");
-    let idx = args.find(&needle)?;
-    let rest = &args[idx + needle.len()..];
-    let rest = rest.trim_start();
-    parse_string_literal_at(rest, 0).map(|(value, _)| value)
+    let mut offset = 0;
+    while let Some(rel_idx) = args[offset..].find(&needle) {
+        let match_idx = offset + rel_idx;
+        if match_idx == 0
+            || args[..match_idx]
+                .chars()
+                .last()
+                .is_some_and(|ch| !ch.is_alphanumeric() && ch != '_')
+        {
+            let rest = args[match_idx + needle.len()..].trim_start();
+            return parse_string_literal_at(rest, 0).map(|(value, _)| value);
+        }
+        offset = match_idx + needle.len();
+    }
+    None
 }
 
 pub(crate) fn parse_python_function_name(line: &str) -> Option<String> {
     let trimmed = line.trim_start();
-    if !trimmed.starts_with("def ") && !trimmed.starts_with("async def ") {
-        return None;
-    }
+    let rest = trimmed
+        .strip_prefix("def ")
+        .or_else(|| trimmed.strip_prefix("async def "))?;
 
-    if let Some(rest) = trimmed.strip_prefix("def ") {
-        let func = rest.split('(').next()?.trim();
-        if func.is_empty() {
-            return None;
-        }
-        return Some(func.to_string());
-    }
-
-    let rest = trimmed.strip_prefix("async def ")?;
-    let func = rest.split('(').next()?.trim();
+    let func = rest.split(['(', '[']).next()?.trim();
     if func.is_empty() {
         return None;
     }

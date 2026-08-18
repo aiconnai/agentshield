@@ -57,10 +57,7 @@ impl super::Adapter for McpAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
-        Ok(load_mcp_target(root, filter)
-            .into_iter()
-            .map(|(target, _)| target)
-            .collect())
+        load_mcp_target(root, filter).map(|(target, _)| vec![target])
     }
 }
 
