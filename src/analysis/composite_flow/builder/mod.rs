@@ -4,7 +4,9 @@ use super::ast::function_name;
 use super::types::{CompositeFlowCandidate, SourceUnit, ToolFlowInput};
 
 pub(crate) mod anchors;
+pub(crate) mod helper;
 pub(crate) mod parse;
+pub(crate) mod resolve;
 pub(crate) mod trace;
 pub(crate) mod types;
 

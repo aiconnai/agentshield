@@ -99,16 +99,19 @@ agentshield/
 │   │   │   ├── typescript.rs     # TypeScript/JS function definition & call site extraction
 │   │   │   └── propagate.rs      # DFS taint propagation & cycle handling
 │   │   ├── composite_flow/       # Deep value-flow & semantic taint engine (modularized)
-│   │   │   ├── mod.rs            # build_composite_flow_candidates, tests
+│   │   │   ├── mod.rs            # build_composite_flow_candidates entry point
 │   │   │   ├── ast.rs            # Tree-sitter AST helpers and normalization
 │   │   │   ├── guard.rs          # Control-flow & containment guards
 │   │   │   ├── types.rs          # ValueId, ScopeId, FlowEdge, SemanticAnchor
+│   │   │   ├── tests.rs          # Comprehensive composite flow unit tests
 │   │   │   └── builder/          # AST walker & candidate graph builder (modularized)
 │   │   │       ├── mod.rs        # build(), exports
 │   │   │       ├── types.rs      # ParsedUnit, Imports, Lineage, Analyzer
 │   │   │       ├── parse.rs      # Source parser & relative import resolution
 │   │   │       ├── anchors.rs    # Semantic anchor generators
-│   │   │       └── trace.rs      # Function analyzer & expression lineage evaluator
+│   │   │       ├── trace.rs      # Analyzer::analyze_function, evaluate_expression
+│   │   │       ├── helper.rs     # Interprocedural helper return tracing
+│   │   │       └── resolve.rs    # Lineage resolution, assign, read/network APIs
 │   │   ├── cross_file/           # Cross-file sanitizer-aware validation (modularized)
 │   │   │   ├── mod.rs            # Public exports, test suite
 │   │   │   ├── engine.rs         # apply_cross_file_sanitization, CrossFileResult
