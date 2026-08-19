@@ -74,8 +74,10 @@ runs:
       if: inputs.binary-path == ''
       id: version
       shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        if [ "${{ inputs.version }}" = "latest" ]; then
+        if [ "$INPUT_VERSION" = "latest" ]; then
           VERSION=$(
             curl -fsSL https://api.github.com/repos/aiconnai/agentshield/releases/latest 2>/dev/null \
               | sed -nE 's/.*"tag_name": *"([^"]+)".*/\1/p' \
@@ -86,7 +88,7 @@ runs:
             exit 1
           fi
         else
-          VERSION="${{ inputs.version }}"
+          VERSION="$INPUT_VERSION"
           # Normalize: release archives are named with a 'v' prefix (e.g. v0.8.0).
           # Prepend it if the user omitted it.
           case "$VERSION" in
@@ -104,50 +106,56 @@ runs:
       if: inputs.binary-path == ''
       id: platform
       shell: bash
+      env:
+        RUNNER_OS: ${{ runner.os }}
+        RUNNER_ARCH: ${{ runner.arch }}
       run: |
-        case "${{ runner.os }}-${{ runner.arch }}" in
+        case "${RUNNER_OS}-${RUNNER_ARCH}" in
           Linux-X64)   TARGET="x86_64-unknown-linux-gnu" ;;
           Linux-ARM64) TARGET="aarch64-unknown-linux-gnu" ;;
           macOS-X64)   TARGET="x86_64-apple-darwin" ;;
           macOS-ARM64) TARGET="aarch64-apple-darwin" ;;
           Windows-X64) TARGET="x86_64-pc-windows-msvc" ;;
-          *) echo "::error::Unsupported platform: ${{ runner.os }}-${{ runner.arch }}"; exit 1 ;;
+          *) echo "::error::Unsupported platform: ${RUNNER_OS}-${RUNNER_ARCH}"; exit 1 ;;
         esac
         echo "target=$TARGET" >> $GITHUB_OUTPUT
 
     - name: Download AgentShield
       if: inputs.binary-path == ''
       shell: bash
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+        TARGET: ${{ steps.platform.outputs.target }}
+        RUNNER_TEMP_DIR: ${{ runner.temp }}
       run: |
-        VERSION="${{ steps.version.outputs.version }}"
-        TARGET="${{ steps.platform.outputs.target }}"
         BASE_URL="https://github.com/aiconnai/agentshield/releases/download/${VERSION}"
 
         if [[ "$TARGET" == *"windows"* ]]; then
           ARCHIVE="agentshield-${VERSION}-${TARGET}.zip"
           curl -fsSL "${BASE_URL}/${ARCHIVE}" -o agentshield.zip
-          unzip -o agentshield.zip -d ${{ runner.temp }}/agentshield
+          unzip -o agentshield.zip -d "${RUNNER_TEMP_DIR}/agentshield"
         else
           ARCHIVE="agentshield-${VERSION}-${TARGET}.tar.gz"
           curl -fsSL "${BASE_URL}/${ARCHIVE}" -o agentshield.tar.gz
-          mkdir -p ${{ runner.temp }}/agentshield
-          tar xzf agentshield.tar.gz -C ${{ runner.temp }}/agentshield
+          mkdir -p "${RUNNER_TEMP_DIR}/agentshield"
+          tar xzf agentshield.tar.gz -C "${RUNNER_TEMP_DIR}/agentshield"
         fi
 
-        chmod +x ${{ runner.temp }}/agentshield/agentshield* 2>/dev/null || true
-        echo "${{ runner.temp }}/agentshield" >> $GITHUB_PATH
+        chmod +x "${RUNNER_TEMP_DIR}"/agentshield/agentshield* 2>/dev/null || true
+        echo "${RUNNER_TEMP_DIR}/agentshield" >> $GITHUB_PATH
 
     - name: Use provided AgentShield
       if: inputs.binary-path != ''
       shell: bash
       env:
         AGENTSHIELD_BINARY_PATH: ${{ inputs.binary-path }}
+        RUNNER_TEMP_DIR: ${{ runner.temp }}
       run: |
         if [ ! -x "$AGENTSHIELD_BINARY_PATH" ]; then
           echo "::error::Provided AgentShield binary is not executable: $AGENTSHIELD_BINARY_PATH"
           exit 2
         fi
-        AGENTSHIELD_DEST="${{ runner.temp }}/agentshield/agentshield"
+        AGENTSHIELD_DEST="${RUNNER_TEMP_DIR}/agentshield/agentshield"
         mkdir -p "$(dirname "$AGENTSHIELD_DEST")"
         if [ "$AGENTSHIELD_BINARY_PATH" != "$AGENTSHIELD_DEST" ]; then
           cp "$AGENTSHIELD_BINARY_PATH" "$AGENTSHIELD_DEST"
@@ -158,28 +166,36 @@ runs:
     - name: Run scan
       id: scan
       shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_IGNORE_TESTS: ${{ inputs.ignore-tests }}
+        RUNNER_TEMP_DIR: ${{ runner.temp }}
       run: |
-        SCAN_LOG="${{ runner.temp }}/agentshield-scan.log"
-        ARGS="scan ${{ inputs.path }}"
-        ARGS="$ARGS --fail-on ${{ inputs.fail-on }}"
+        SCAN_LOG="${RUNNER_TEMP_DIR}/agentshield-scan.log"
+        ARGS="scan ${INPUT_PATH}"
+        ARGS="$ARGS --fail-on ${INPUT_FAIL_ON}"
 
         SARIF_FILE=""
-        if [ "${{ inputs.format }}" = "sarif" ]; then
-          SARIF_FILE="${{ runner.temp }}/agentshield-results.sarif"
+        if [ "${INPUT_FORMAT}" = "sarif" ]; then
+          SARIF_FILE="${RUNNER_TEMP_DIR}/agentshield-results.sarif"
           ARGS="$ARGS --format sarif --output $SARIF_FILE"
         else
-          ARGS="$ARGS --format ${{ inputs.format }}"
+          ARGS="$ARGS --format ${INPUT_FORMAT}"
         fi
 
-        if [ -n "${{ inputs.config }}" ]; then
-          ARGS="$ARGS --config ${{ inputs.config }}"
+        if [ -n "${INPUT_CONFIG}" ]; then
+          ARGS="$ARGS --config ${INPUT_CONFIG}"
         fi
 
-        if [ -n "${{ inputs.baseline }}" ]; then
-          ARGS="$ARGS --baseline ${{ inputs.baseline }}"
+        if [ -n "${INPUT_BASELINE}" ]; then
+          ARGS="$ARGS --baseline ${INPUT_BASELINE}"
         fi
 
-        if [ "${{ inputs.ignore-tests }}" = "true" ]; then
+        if [ "${INPUT_IGNORE_TESTS}" = "true" ]; then
           ARGS="$ARGS --ignore-tests"
         fi
 
@@ -242,7 +258,7 @@ runs:
 
     - name: Upload SARIF to GitHub Code Scanning
       if: inputs.upload-sarif == 'true' && inputs.format == 'sarif' && steps.scan.outputs.sarif-file != ''
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@d6317709a54fd87078d323eeb0e48ec331c8e621 # v3.28.11
       with:
         sarif_file: ${{ steps.scan.outputs.sarif-file }}
         category: agentshield
@@ -332,15 +348,19 @@ runs:
 
     - name: Check result
       shell: bash
+      env:
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_STRICT: ${{ inputs.strict }}
+        NO_ADAPTER: ${{ steps.scan.outputs.no_adapter }}
       run: |
         if [ "$AGENTSHIELD_EXIT" = "1" ]; then
-          echo "::error::AgentShield found findings above the '${{ inputs.fail-on }}' threshold"
+          echo "::error::AgentShield found findings above the '$INPUT_FAIL_ON' threshold"
           exit 1
         elif [ "$AGENTSHIELD_EXIT" = "2" ]; then
-          if [ "${{ steps.scan.outputs.no_adapter }}" = "true" ] && [ "${{ inputs.strict }}" = "false" ]; then
+          if [ "$NO_ADAPTER" = "true" ] && [ "$INPUT_STRICT" = "false" ]; then
             echo "::warning::AgentShield found no supported adapter for the scanned path; non-blocking due strict=false"
             exit 0
-          elif [ "${{ steps.scan.outputs.no_adapter }}" = "true" ]; then
+          elif [ "$NO_ADAPTER" = "true" ]; then
             echo "::error::AgentShield encountered a scan error: No suitable adapter found"
             exit 2
           else
