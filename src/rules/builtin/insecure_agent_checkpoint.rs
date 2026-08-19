@@ -13,9 +13,9 @@ use crate::rules::{
 /// `cloudpickle.load`, `shelve.open`) that can lead to arbitrary code execution (CWE-502).
 pub struct InsecureAgentCheckpointDetector;
 
-// Matches torch.load(...) calls
-static TORCH_LOAD_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)\btorch\.load\s*\(([^)]*)\)"#).expect("valid regex")
+// Matches torch.load( invocation start
+static TORCH_LOAD_START_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?m)\btorch\.load\s*\("#).expect("valid regex")
 });
 
 // Matches joblib, dill, cloudpickle, shelve deserializers
@@ -67,9 +67,11 @@ impl Detector for InsecureAgentCheckpointDetector {
                     continue;
                 }
 
-                if let Some(caps) = TORCH_LOAD_RE.captures(line) {
-                    let args = caps.get(1).map_or("", |m| m.as_str());
-                    if !WEIGHTS_ONLY_TRUE_RE.is_match(args) {
+                if TORCH_LOAD_START_RE.is_match(line) {
+                    let end_idx = (line_idx + 15).min(lines.len());
+                    let call_window = lines[line_idx..end_idx].join("\n");
+
+                    if !WEIGHTS_ONLY_TRUE_RE.is_match(&call_window) {
                         let loc = SourceLocation {
                             file: file.path.clone(),
                             line: line_idx + 1,
@@ -138,39 +140,39 @@ impl Detector for InsecureAgentCheckpointDetector {
                 if !trimmed.starts_with("from ") && !trimmed.starts_with("import ") {
                     if let Some(caps) = INSECURE_CHECKPOINT_SAVER_RE.captures(line) {
                         let class_name = caps.get(1).map_or("CheckpointSaver", |m| m.as_str());
-                    let loc = SourceLocation {
-                        file: file.path.clone(),
-                        line: line_idx + 1,
-                        column: line.find(class_name).unwrap_or(0),
-                        end_line: None,
-                        end_column: None,
-                    };
+                        let loc = SourceLocation {
+                            file: file.path.clone(),
+                            line: line_idx + 1,
+                            column: line.find(class_name).unwrap_or(0),
+                            end_line: None,
+                            end_column: None,
+                        };
 
-                    findings.push(Finding {
-                        rule_id: "SHIELD-034".into(),
-                        rule_name: "Insecure Agent Checkpoint / Unsigned State Deserialization".into(),
-                        severity: Severity::Medium,
-                        confidence: Confidence::High,
-                        attack_category: AttackCategory::CodeInjection,
-                        message: format!(
-                            "Agent uses `{class_name}` for state persistence without integrity verification — susceptible to checkpoint tampering"
-                        ),
-                        location: Some(loc.clone()),
-                        evidence: vec![Evidence {
-                            description: format!("Insecure checkpoint saver class '{class_name}' found"),
-                            location: Some(loc),
-                            snippet: Some(trimmed.to_string()),
-                        }],
-                        taint_path: None,
-                        remediation: Some(
-                            "Sign and verify state checkpoints with digital signatures (e.g. Ed25519) or use secure encrypted storage adapters.".into(),
-                        ),
-                        cwe_id: Some("CWE-502".into()),
-                    });
+                        findings.push(Finding {
+                            rule_id: "SHIELD-034".into(),
+                            rule_name: "Insecure Agent Checkpoint / Unsigned State Deserialization".into(),
+                            severity: Severity::Medium,
+                            confidence: Confidence::High,
+                            attack_category: AttackCategory::CodeInjection,
+                            message: format!(
+                                "Agent uses `{class_name}` for state persistence without integrity verification — susceptible to checkpoint tampering"
+                            ),
+                            location: Some(loc.clone()),
+                            evidence: vec![Evidence {
+                                description: format!("Insecure checkpoint saver class '{class_name}' found"),
+                                location: Some(loc),
+                                snippet: Some(trimmed.to_string()),
+                            }],
+                            taint_path: None,
+                            remediation: Some(
+                                "Sign and verify state checkpoints with digital signatures (e.g. Ed25519) or use secure encrypted storage adapters.".into(),
+                            ),
+                            cwe_id: Some("CWE-502".into()),
+                        });
+                    }
                 }
             }
         }
-    }
 
         findings
     }
@@ -220,12 +222,47 @@ def restore_agent_model(checkpoint_path: str):
     }
 
     #[test]
+    fn detects_unsafe_multiline_torch_load() {
+        let code = r#"
+import torch
+
+def restore_agent_model(checkpoint_path: str):
+    checkpoint = torch.load(
+        checkpoint_path,
+        map_location="cpu"
+    )
+    return checkpoint
+"#;
+        let target = target_with_python_source(code);
+        let detector = InsecureAgentCheckpointDetector;
+        let findings = detector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-034");
+    }
+
+    #[test]
     fn ignores_safe_torch_load_with_weights_only() {
         let code = r#"
 import torch
 
 def restore_agent_model(checkpoint_path: str):
     checkpoint = torch.load(checkpoint_path, weights_only=True)
+    return checkpoint
+"#;
+        let target = target_with_python_source(code);
+        let detector = InsecureAgentCheckpointDetector;
+        let findings = detector.run(&target);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn ignores_safe_torch_load_with_nested_function_call() {
+        let code = r#"
+import os
+import torch
+
+def restore_agent_model(checkpoint_dir: str):
+    checkpoint = torch.load(os.path.join(checkpoint_dir, "model.pt"), weights_only=True)
     return checkpoint
 "#;
         let target = target_with_python_source(code);

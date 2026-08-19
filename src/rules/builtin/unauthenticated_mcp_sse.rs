@@ -57,7 +57,7 @@ impl Detector for UnauthenticatedMcpSseDetector {
             let lines: Vec<&str> = file.content.lines().collect();
 
             match file.language {
-                Language::TypeScript => {
+                Language::TypeScript | Language::JavaScript => {
                     // Check for SSEServerTransport usage without Origin validation
                     for (line_idx, line) in lines.iter().enumerate() {
                         let trimmed = line.trim();
@@ -234,6 +234,27 @@ app.get("/sse", async (req, res) => {
 });
 "#;
         let target = target_with_source(code, Language::TypeScript);
+        let detector = UnauthenticatedMcpSseDetector;
+        let findings = detector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-035");
+        assert_eq!(findings[0].severity, Severity::High);
+    }
+
+    #[test]
+    fn detects_unauthenticated_js_sse_transport() {
+        let code = r#"
+const express = require("express");
+const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");
+
+const app = express();
+
+app.get("/sse", async (req, res) => {
+    const transport = new SSEServerTransport("/messages", res);
+    await server.connect(transport);
+});
+"#;
+        let target = target_with_source(code, Language::JavaScript);
         let detector = UnauthenticatedMcpSseDetector;
         let findings = detector.run(&target);
         assert_eq!(findings.len(), 1);
