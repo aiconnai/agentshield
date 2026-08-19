@@ -29,10 +29,11 @@ Existing SAST tools (Semgrep, SonarQube) analyze traditional web apps, but miss 
 ### What AgentShield does:
 1. Interprocedural Call-Graph Taint Engine: Builds an AST + interprocedural call-graph in native Rust to track tainted parameters from tool declarations all the way into deep execution sinks across files.
 2. 100% Offline & Private: Zero telemetry, zero cloud calls, executes in <50ms.
-3. 7 Framework Adapters: Native support for Model Context Protocol (MCP), Hermes Agent (.hermes.md / SKILL.md), OpenAI Codex / GPT Actions (OpenAPI), Cursor Rules (.cursorrules), CrewAI, LangChain/LangGraph, and OpenClaw.
-4. 25 Built-in Security Rules: Comprehensive coverage for OWASP MCP Top 10 and CWEs.
+3. 11 Framework Adapters: Native support for Model Context Protocol (MCP), Hermes Agent (.hermes.md / SKILL.md), OpenAI Codex / GPT Actions (OpenAPI), Cursor Rules (.cursorrules), CrewAI, LangChain/LangGraph, OpenClaw, Vercel AI SDK, AutoGen, LlamaIndex, and Semantic Kernel.
+4. 35 Built-in Security Rules: Comprehensive coverage for OWASP MCP Top 10 (2025) and CWEs (SHIELD-001..035).
 5. 1-Click Auto-Remediation: Safely patches vulnerable code (e.g. `yaml.load` -> `yaml.safe_load`, pinning unpinned dependencies).
-6. Native IDE & CI Integration: Official VS Code Extension (Marketplace & Open VSX) with lightbulb code actions, and GitHub Action for automated SARIF Code Scanning.
+6. Continuous Fuzzing & Criterion Benchmarks: Fuzz-tested with cargo-fuzz (libfuzzer-sys) and proptest property-based generative testing.
+7. Native IDE & CI Integration: Official VS Code Extension (Marketplace & Open VSX) with lightbulb code actions, and GitHub Action for automated SARIF Code Scanning.
 
 ### Quick Start:
 # ⚡ 1-Line Universal Installer (macOS & Linux):
@@ -113,28 +114,28 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 ## 3. 🔴 Reddit Strategy
 
 ### Subreddit: `r/rust`
-**Title**: `[Media] AgentShield: A 100% offline AI tool security scanner written in Rust (<50ms, AST + Interprocedural Taint Graph)`
+**Title**: `[Media] AgentShield v1.0.0: A 100% offline AI tool security scanner written in Rust (<50ms, AST + Interprocedural Taint Graph)`
 **Key Talking Points**:
 - AST parsing using tree-sitter & rust-native regex heuristics.
 - Interprocedural call-graph construction with bounded recursion depth (`MAX_PROPAGATION_DEPTH = 16`).
 - Zero-allocation sensitivity classifiers (`eq_ignore_ascii_case`).
-- Atomic filesystem patcher (`tempfile` + `fs::rename`).
-- 569 unit and integration tests, 0 clippy warnings (`-D warnings`).
+- Continuous fuzzing with `cargo-fuzz` / `libfuzzer-sys` and `proptest` generative property suites.
+- 586 unit and integration tests, 0 clippy warnings (`-D warnings`).
 - Dual-licensed under MIT OR Apache-2.0.
 
 ### Subreddit: `r/LocalLLaMA`
 **Title**: `Securing Local Agents & MCP Servers: AgentShield v1.0.0 (Offline SAST Scanner + Runtime Guard)`
 **Key Talking Points**:
 - Why running local models (Hermes Agent, DeepSeek-R1/V4, Qwen) with local tool access requires zero-trust security.
-- How tool poisoning and prompt injection can turn a benign-looking Python MCP server into a shell execution backdoor.
+- How tool poisoning, unsigned checkpoint loading (`SHIELD-034`), and unauthenticated SSE transports (`SHIELD-035`) can turn a benign-looking MCP server into a shell execution backdoor.
 - How AgentShield runs locally without leaking code to cloud scanners.
 - How to install via `curl | sh`, `brew`, or `cargo`.
 
 ### Subreddit: `r/cybersecurity` & `r/netsec`
 **Title**: `AgentShield: Static Application Security Testing (SAST) for Model Context Protocol (MCP) & AI Agent Extensions`
 **Key Talking Points**:
-- OWASP Top 10 for LLM Applications mapping (ASI-01 Prompt Injection, ASI-02 Insecure Output Handling, ASI-05 Supply Chain).
-- CWE mapping (CWE-78 Command Injection, CWE-89 SQL Injection, CWE-918 SSRF, CWE-502 Deserialization, CWE-200 Exfiltration, CWE-74 Prompt Tampering).
+- OWASP Top 10 for LLM Applications and MCP mapping (MCP01..MCP10).
+- CWE mapping (CWE-78 Command Injection, CWE-89 SQL Injection, CWE-918 SSRF, CWE-502 Deserialization, CWE-346 Origin Validation, CWE-200 Exfiltration, CWE-74 Prompt Tampering).
 - GitHub Code Scanning SARIF integration for automated PR gating.
 
 ---
@@ -145,4 +146,4 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 > **The 100% offline security firewall for AI agent tools & MCP servers (<50ms)**
 
 ### Short Description:
-> Protect your autonomous AI agents and MCP servers from command injection, credential theft, and toxic data flows. Built in Rust with an interprocedural taint engine, 1-click auto-fix, VS Code extension, and SARIF CI integration.
+> Protect your autonomous AI agents and MCP servers from command injection, credential theft, and toxic data flows. Built in Rust with an interprocedural taint engine, 35 security rules, 1-click auto-fix, VS Code extension, and SARIF CI integration.
