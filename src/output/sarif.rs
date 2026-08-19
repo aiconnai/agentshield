@@ -183,16 +183,13 @@ fn render_impl(
         })
         .collect();
 
-    let mut driver = json!({
+    let driver = json!({
         "name": "AgentShield",
         "informationUri": "https://github.com/aiconnai/agentshield",
         "version": env!("CARGO_PKG_VERSION"),
         "semanticVersion": env!("CARGO_PKG_VERSION"),
         "rules": rules,
     });
-    if !taxonomies.is_empty() {
-        driver["taxonomies"] = json!(taxonomies);
-    }
 
     let mut run = json!({
         "tool": { "driver": driver },
@@ -201,6 +198,9 @@ fn render_impl(
             "id": format!("agentshield/{}", target_name),
         },
     });
+    if !taxonomies.is_empty() {
+        run["taxonomies"] = json!(taxonomies);
+    }
 
     if let Some(verdict) = verdict {
         run["properties"] = json!({
@@ -369,7 +369,7 @@ mod tests {
             "OWASP MCP Top 10"
         );
 
-        let taxonomies = &driver["taxonomies"];
+        let taxonomies = &log["runs"][0]["taxonomies"];
         assert_eq!(taxonomies[0]["name"], "OWASP MCP Top 10");
         assert_eq!(taxonomies[0]["taxa"].as_array().unwrap().len(), 10);
         assert!(
@@ -396,7 +396,7 @@ mod tests {
         // CWE tag still present
         assert_eq!(rule["properties"]["tags"][0], "CWE-918");
         // No taxonomy declared when nothing references it
-        assert!(driver.get("taxonomies").is_none());
+        assert!(log["runs"][0].get("taxonomies").is_none());
     }
 
     #[test]
