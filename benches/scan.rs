@@ -118,7 +118,7 @@ fn bench_rules_engine(c: &mut Criterion) {
     let target = McpAdapter.load(fixture.path(), false).unwrap().remove(0);
     let detectors = all_detectors();
 
-    group.bench_function("run_all_33_detectors", |b| {
+    group.bench_function("run_all_35_detectors", |b| {
         b.iter(|| {
             let mut findings = Vec::new();
             for detector in &detectors {
