@@ -1,6 +1,6 @@
 [package]
 name = "agent-shield"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 authors = ["AgentShield Contributors"]
 description = "Security scanner for AI agent extensions — offline-first, multi-framework, SARIF output"
@@ -11,6 +11,13 @@ documentation = "https://docs.rs/agent-shield"
 keywords = ["security", "ai", "mcp", "static-analysis", "sarif"]
 categories = ["development-tools", "command-line-utilities"]
 readme = "README.md"
+exclude = [
+    "vscode/**",
+    "docs/**",
+    ".github/**",
+    "fuzz/**",
+    "tests/fixtures/**",
+]
 
 [lints.rust]
 unsafe_code = "warn"
