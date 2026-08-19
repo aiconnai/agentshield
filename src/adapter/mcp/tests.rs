@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(feature = "typescript")]
 use crate::parser;
 use std::path::Path;
 
