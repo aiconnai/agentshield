@@ -215,7 +215,11 @@ agentshield/
 # Build
 cargo build --release
 
+<<<<<<< Updated upstream
 # Test (593 Rust tests under the default feature set, including all targets)
+=======
+# Test (587 Rust tests under the default feature set, including all targets)
+>>>>>>> Stashed changes
 cargo test --workspace --all-targets --locked
 
 # Benchmarks
