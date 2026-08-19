@@ -404,3 +404,4 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 | 0.6.0 | ~180 | GPT Actions + Cursor Rules adapters — 6 adapters total |
 | 0.7.0 | ~195 | Egress policy operator override layering for `wrap` command |
 | 0.8.0 | 212 | `certify` command (DSSE attestation + Ed25519), 6 new detectors (SHIELD-013..018) |
+| 1.0.0 | 588 | 35 detectors (SHIELD-001..035), 11 adapters, criterion benchmarks, cargo-fuzz + proptest harnesses, Windows cross-compilation, SHIELD-034 (agent checkpoint CWE-502), SHIELD-035 (unauthenticated MCP SSE CWE-346), v1.0.0 launch kit |
