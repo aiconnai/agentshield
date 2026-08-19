@@ -142,6 +142,7 @@ mod platform {
 mod platform {
     use super::candidate::candidate_path_ref;
     use super::*;
+    use crate::discovery::DiscoveryBase;
     use std::path::Component;
 
     pub(super) fn discover(request: &DiscoveryRequest) -> Result<DiscoveryEnvelope, String> {

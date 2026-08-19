@@ -1,6 +1,7 @@
+use crate::discovery::{DiscoveryDescriptor, RedactedPathRef};
+#[cfg(unix)]
 use crate::discovery::{
-    DiagnosticCode, DiscoveryDescriptor, DiscoveryMethod, ParsedDiscoverySource, RedactedPathRef,
-    SourceStatus, parse_source,
+    DiagnosticCode, DiscoveryMethod, ParsedDiscoverySource, SourceStatus, parse_source,
 };
 
 #[cfg(unix)]
