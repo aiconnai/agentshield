@@ -15,10 +15,10 @@ jobs:
     name: Security scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
 
       - name: Run AgentShield
-        uses: aiconnai/agentshield@v1.0.0
+        uses: aiconnai/agentshield@19516de2c69b45eaca558f321019e8d14d31e591 # v1.0.1
         with:
           path: .
           config: .agentshield.toml

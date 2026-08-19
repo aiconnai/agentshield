@@ -50,13 +50,13 @@ jobs:
             archive: zip
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
         with:
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           key: ${{ matrix.target }}
 
@@ -86,19 +86,25 @@ jobs:
 
       - name: Package (unix)
         if: matrix.archive == 'tar.gz'
+        env:
+          TARGET: ${{ matrix.target }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          BINARY=target/${{ matrix.target }}/release/agentshield
-          ARCHIVE=agentshield-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
-          tar czf "$ARCHIVE" -C "$(dirname $BINARY)" "$(basename $BINARY)"
+          BINARY="target/${TARGET}/release/agentshield"
+          ARCHIVE="agentshield-${REF_NAME}-${TARGET}.tar.gz"
+          tar czf "$ARCHIVE" -C "$(dirname "$BINARY")" "$(basename "$BINARY")"
           shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
           echo "ARCHIVE=$ARCHIVE" >> $GITHUB_ENV
 
       - name: Package (windows)
         if: matrix.archive == 'zip'
         shell: pwsh
+        env:
+          TARGET: ${{ matrix.target }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          $BINARY = "target/${{ matrix.target }}/release/agentshield.exe"
-          $ARCHIVE = "agentshield-${{ github.ref_name }}-${{ matrix.target }}.zip"
+          $BINARY = "target/${env:TARGET}/release/agentshield.exe"
+          $ARCHIVE = "agentshield-${env:REF_NAME}-${env:TARGET}.zip"
           Compress-Archive -Path $BINARY -DestinationPath $ARCHIVE
           $HASH = (Get-FileHash -Algorithm SHA256 $ARCHIVE).Hash.ToLower()
           "$HASH  $ARCHIVE" | Out-File -Encoding ascii "$ARCHIVE.sha256"
@@ -130,7 +136,7 @@ jobs:
         run: ls -la artifacts/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@c062e49a0d8e2025eb270a24128f74e6f3b06bb0 # v2.2.1
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           generate_release_notes: true
           files: |
