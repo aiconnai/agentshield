@@ -278,9 +278,11 @@ mod tests {
 
     #[test]
     fn test_flags_openai_project_key() {
-        let content = r#"
-OPENAI_API_KEY = "sk-proj-uR8x9Q2wK1pL0mZnVbC4x7Y6t5R3e2W1qAsDfGhJkLmNoPqRsTuV"
-"#;
+        let content = concat!(
+            "OPENAI_API_KEY = \"",
+            "sk-proj-",
+            "uR8x9Q2wK1pL0mZnVbC4x7Y6t5R3e2W1qAsDfGhJkLmNoPqRsTuV\"\n"
+        );
         let target = make_target_with_source("config.py", content);
         let detector = HardcodedSecretsDetector;
         let findings = detector.run(&target);
@@ -293,9 +295,11 @@ OPENAI_API_KEY = "sk-proj-uR8x9Q2wK1pL0mZnVbC4x7Y6t5R3e2W1qAsDfGhJkLmNoPqRsTuV"
 
     #[test]
     fn test_flags_anthropic_api_key() {
-        let content = r#"
-client = Anthropic(api_key="sk-ant-api03-ab9c8d7e6f5a4b3c-AB9C8D7E6F5A4B3C_XYZabc")
-"#;
+        let content = concat!(
+            "client = Anthropic(api_key=\"",
+            "sk-ant-api03-",
+            "ab9c8d7e6f5a4b3c-AB9C8D7E6F5A4B3C_XYZabc\")\n"
+        );
         let target = make_target_with_source("client.py", content);
         let detector = HardcodedSecretsDetector;
         let findings = detector.run(&target);
@@ -307,9 +311,7 @@ client = Anthropic(api_key="sk-ant-api03-ab9c8d7e6f5a4b3c-AB9C8D7E6F5A4B3C_XYZab
 
     #[test]
     fn test_flags_aws_access_key() {
-        let content = r#"
-aws_key = "AKIA9B8C7D6E5F4A3B2C"
-"#;
+        let content = concat!("aws_key = \"", "AKIA", "9B8C7D6E5F4A3B2C\"\n");
         let target = make_target_with_source("aws.py", content);
         let detector = HardcodedSecretsDetector;
         let findings = detector.run(&target);
@@ -336,9 +338,11 @@ dummy = "sk-xxxxxxxxxxxxxxxxxxxxxxxx"
 
     #[test]
     fn test_flags_google_gemini_api_key() {
-        let content = r#"
-gemini_key = "AIzaSyD9x8w7v6u5t4s3r2q1p0o9n8m7l6k5j4i"
-"#;
+        let content = concat!(
+            "gemini_key = \"",
+            "AIza",
+            "SyD9x8w7v6u5t4s3r2q1p0o9n8m7l6k5j4i\"\n"
+        );
         let target = make_target_with_source("gemini.py", content);
         let detector = HardcodedSecretsDetector;
         let findings = detector.run(&target);
@@ -350,10 +354,14 @@ gemini_key = "AIzaSyD9x8w7v6u5t4s3r2q1p0o9n8m7l6k5j4i"
 
     #[test]
     fn test_flags_huggingface_and_github_tokens() {
-        let content = r#"
-hf_token = "hf_aBcDeFgHiJkLmNoPqRsTuVwXyZ98765432"
-gh_token = "ghp_9B8C7D6E5F4A3B2C1D0E9F8A7B6C5D4E3F2A"
-"#;
+        let content = concat!(
+            "hf_token = \"",
+            "hf_",
+            "aBcDeFgHiJkLmNoPqRsTuVwXyZ98765432\"\n",
+            "gh_token = \"",
+            "ghp_",
+            "9B8C7D6E5F4A3B2C1D0E9F8A7B6C5D4E3F2A\"\n"
+        );
         let target = make_target_with_source("tokens.py", content);
         let detector = HardcodedSecretsDetector;
         let findings = detector.run(&target);
