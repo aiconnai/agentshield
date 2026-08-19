@@ -61,6 +61,14 @@ pub(crate) fn load_mcp_analysis(root: &Path, filter: &ScanPathFilter) -> Result<
     }])
 }
 
+/// Load and construct the single [`ScanTarget`] for a given MCP server root.
+///
+/// Returns `Result<(ScanTarget, Vec<ToolDeclForComposite>)>` — exactly one target
+/// per root directory. The call site in `impl Adapter` wraps it as
+/// `load_mcp_target(root, filter).map(|(target, _)| vec![target])`.
+///
+/// This is intentionally a single-target function: MCP server roots are
+/// self-contained units. Do not refactor back to returning `Vec<(ScanTarget, _)>`.
 pub(crate) fn load_mcp_target(
     root: &Path,
     filter: &ScanPathFilter,

@@ -1,0 +1,40 @@
+[package]
+name = "agent-shield-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.agentshield]
+package = "agent-shield"
+path = ".."
+features = ["full"]
+
+[[bin]]
+name = "fuzz_ts_parser"
+path = "fuzz_targets/fuzz_ts_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_py_parser"
+path = "fuzz_targets/fuzz_py_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_mcp_tools"
+path = "fuzz_targets/fuzz_mcp_tools.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_composite_flow"
+path = "fuzz_targets/fuzz_composite_flow.rs"
+test = false
+doc = false

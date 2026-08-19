@@ -20,6 +20,7 @@ use crate::parser;
 pub use dependencies::parse_dependencies;
 pub use filter::is_test_file;
 pub use provenance::parse_provenance;
+pub use tools::extract_mcp_tools_from_source;
 
 pub(crate) use loader::{
     collect_source_files_with_filter, has_recursive_python_import, load_mcp_analysis,
@@ -30,8 +31,7 @@ pub(crate) use loader::{
 use binding::bind_mcp_tool_operations;
 #[cfg(test)]
 use tools::{
-    McpToolHandler, extract_mcp_tool_declarations_from_source, extract_mcp_tools_from_source,
-    parse_mcp_tool_handler,
+    McpToolHandler, extract_mcp_tool_declarations_from_source, parse_mcp_tool_handler,
 };
 
 /// MCP Server adapter.

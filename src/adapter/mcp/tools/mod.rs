@@ -86,7 +86,7 @@ pub(crate) fn extract_mcp_tool_declarations_from_source(
     dedupe_mcp_tool_declarations(declarations)
 }
 
-pub(crate) fn extract_mcp_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
+pub fn extract_mcp_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
     let mut tools = if path.extension().and_then(|ext| ext.to_str()) == Some("py") {
         extract_mcp_python_decorators(path, content)
     } else {
