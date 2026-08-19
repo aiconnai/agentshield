@@ -68,8 +68,24 @@ impl Detector for InsecureAgentCheckpointDetector {
                 }
 
                 if TORCH_LOAD_START_RE.is_match(line) {
+                    let mut paren_balance: i32 = 0;
+                    let mut call_lines = Vec::new();
                     let end_idx = (line_idx + 15).min(lines.len());
-                    let call_window = lines[line_idx..end_idx].join("\n");
+
+                    for &l in &lines[line_idx..end_idx] {
+                        call_lines.push(l);
+                        for ch in l.chars() {
+                            if ch == '(' {
+                                paren_balance += 1;
+                            } else if ch == ')' {
+                                paren_balance -= 1;
+                            }
+                        }
+                        if paren_balance <= 0 {
+                            break;
+                        }
+                    }
+                    let call_window = call_lines.join("\n");
 
                     if !WEIGHTS_ONLY_TRUE_RE.is_match(&call_window) {
                         let loc = SourceLocation {
