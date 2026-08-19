@@ -296,7 +296,7 @@ runs:
             body = (
                 f"{header}"
                 "✅ **No security vulnerabilities detected.** All agent tools, MCP endpoints, and execution flows passed security gates.\n\n"
-                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.0</sub>"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.1</sub>"
             )
         else:
             findings_table = "| Rule | Severity | Location | Message |\n|---|---|---|---|\n"
@@ -323,7 +323,7 @@ runs:
                 f"{findings_table}\n"
                 "#### 💡 Quick Fix\n"
                 "Run `agentshield fix .` locally to automatically remediate unpinned dependencies and unsafe deserializers.\n\n"
-                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.0</sub>"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.1</sub>"
             )
 
         import tempfile
