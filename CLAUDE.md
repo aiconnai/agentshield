@@ -215,7 +215,7 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (587 Rust tests under the default feature set, including all targets)
+# Test (593 Rust tests under the default feature set, including all targets)
 cargo test --workspace --all-targets --locked
 
 # Benchmarks
