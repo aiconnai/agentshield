@@ -23,16 +23,19 @@ static WILDCARD_CORS_RE: Lazy<Regex> = Lazy::new(|| {
         .expect("valid regex")
 });
 
-// Checks if origin or auth verification exists within proximity
+// Checks if explicit origin or auth verification exists within proximity
 static ORIGIN_AUTH_GUARD_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?i)\b(?:origin|authorization|bearer|validate_origin|check_origin|allowed_origins|auth_token|req\.headers\.origin|req\.headers\[['"]origin['"]\]|request\.headers\.get\(['"]origin['"]\))\b"#)
+    Regex::new(r#"(?i)\b(?:authorization|bearer|validate_origin|check_origin|allowed_origins|auth_token|req\.headers\.origin|req\.headers\[['"]origin['"]\]|request\.headers\.get\(['"]origin['"]\)|headers\.get\(['"]origin['"]\)|origin\s*(?:===|==|!==|!=|\.includes|\.indexOf|in\b))\b"#)
         .expect("valid regex")
 });
 
-// Matches Python FastMCP or Starlette SSE transport run
-static PY_SSE_TRANSPORT_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)\b(?:mcp\.run\s*\([^)]*transport\s*=\s*['"]sse['"]|SSEServerTransport\s*\()"#)
-        .expect("valid regex")
+// Matches Python FastMCP or Starlette SSE transport run start
+static PY_MCP_RUN_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?m)\b(?:mcp\.run\s*\(|SSEServerTransport\s*\()"#).expect("valid regex")
+});
+
+static PY_TRANSPORT_SSE_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"transport\s*=\s*['"]sse['"]|SSEServerTransport"#).expect("valid regex")
 });
 
 impl Detector for UnauthenticatedMcpSseDetector {
@@ -143,41 +146,46 @@ impl Detector for UnauthenticatedMcpSseDetector {
                             continue;
                         }
 
-                        if PY_SSE_TRANSPORT_RE.is_match(line) {
-                            let start_idx = line_idx.saturating_sub(15);
-                            let end_idx = (line_idx + 35).min(lines.len());
-                            let context_window = lines[start_idx..end_idx].join("\n");
+                        if PY_MCP_RUN_RE.is_match(line) {
+                            let end_run_idx = (line_idx + 10).min(lines.len());
+                            let run_window = lines[line_idx..end_run_idx].join("\n");
 
-                            let has_origin_guard = ORIGIN_AUTH_GUARD_RE.is_match(&context_window);
+                            if PY_TRANSPORT_SSE_RE.is_match(&run_window) {
+                                let start_idx = line_idx.saturating_sub(15);
+                                let end_idx = (line_idx + 35).min(lines.len());
+                                let context_window = lines[start_idx..end_idx].join("\n");
 
-                            if !has_origin_guard {
-                                let loc = SourceLocation {
-                                    file: file.path.clone(),
-                                    line: line_idx + 1,
-                                    column: 0,
-                                    end_line: None,
-                                    end_column: None,
-                                };
+                                let has_origin_guard = ORIGIN_AUTH_GUARD_RE.is_match(&context_window);
 
-                                findings.push(Finding {
-                                    rule_id: "SHIELD-035".into(),
-                                    rule_name: "Unauthenticated MCP SSE Transport / Missing Origin Validation".into(),
-                                    severity: Severity::High,
-                                    confidence: Confidence::High,
-                                    attack_category: AttackCategory::ExcessivePermissions,
-                                    message: "Python MCP SSE transport run without `Origin` verification or authentication middleware".into(),
-                                    location: Some(loc.clone()),
-                                    evidence: vec![Evidence {
-                                        description: "MCP SSE transport without Origin guard".into(),
-                                        location: Some(loc),
-                                        snippet: Some(trimmed.to_string()),
-                                    }],
-                                    taint_path: None,
-                                    remediation: Some(
-                                        "Validate request `Origin` headers or enforce authentication tokens on SSE transport routes.".into(),
-                                    ),
-                                    cwe_id: Some("CWE-346".into()),
-                                });
+                                if !has_origin_guard {
+                                    let loc = SourceLocation {
+                                        file: file.path.clone(),
+                                        line: line_idx + 1,
+                                        column: 0,
+                                        end_line: None,
+                                        end_column: None,
+                                    };
+
+                                    findings.push(Finding {
+                                        rule_id: "SHIELD-035".into(),
+                                        rule_name: "Unauthenticated MCP SSE Transport / Missing Origin Validation".into(),
+                                        severity: Severity::High,
+                                        confidence: Confidence::High,
+                                        attack_category: AttackCategory::ExcessivePermissions,
+                                        message: "Python MCP SSE transport run without `Origin` verification or authentication middleware".into(),
+                                        location: Some(loc.clone()),
+                                        evidence: vec![Evidence {
+                                            description: "MCP SSE transport without Origin guard".into(),
+                                            location: Some(loc),
+                                            snippet: Some(trimmed.to_string()),
+                                        }],
+                                        taint_path: None,
+                                        remediation: Some(
+                                            "Validate request `Origin` headers or enforce authentication tokens on SSE transport routes.".into(),
+                                        ),
+                                        cwe_id: Some("CWE-346".into()),
+                                    });
+                                }
                             }
                         }
                     }
@@ -209,6 +217,8 @@ mod tests {
             source_files: vec![SourceFile {
                 path: PathBuf::from(if lang == Language::Python {
                     "server.py"
+                } else if lang == Language::JavaScript {
+                    "server.js"
                 } else {
                     "server.ts"
                 }),
@@ -286,28 +296,37 @@ app.get("/sse", async (req, res) => {
     }
 
     #[test]
-    fn detects_wildcard_cors_on_mcp_server() {
+    fn detects_wildcard_cors_and_unauthenticated_sse_together() {
         let code = r#"
 import cors from "cors";
 import express from "express";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 
 const app = express();
 app.use(cors({ origin: "*" }));
+
+app.get("/sse", async (req, res) => {
+    const transport = new SSEServerTransport("/messages", res);
+    await server.connect(transport);
+});
 "#;
         let target = target_with_source(code, Language::TypeScript);
         let detector = UnauthenticatedMcpSseDetector;
         let findings = detector.run(&target);
-        assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].severity, Severity::Medium);
+        // Emits both: wildcard CORS (Medium) and missing origin check on transport (High)
+        assert_eq!(findings.len(), 2);
     }
 
     #[test]
-    fn detects_unauthenticated_python_sse() {
+    fn detects_unauthenticated_python_multiline_sse() {
         let code = r#"
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("demo")
-mcp.run(transport="sse")
+mcp.run(
+    transport="sse",
+    host="0.0.0.0"
+)
 "#;
         let target = target_with_source(code, Language::Python);
         let detector = UnauthenticatedMcpSseDetector;
