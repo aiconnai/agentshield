@@ -23,7 +23,7 @@ mod tests;
 pub use types::*;
 
 #[cfg(feature = "typescript")]
-pub(crate) fn build_composite_flow_candidates(
+pub fn build_composite_flow_candidates(
     tools: &[ToolFlowInput],
     sources: &[SourceUnit<'_>],
 ) -> Vec<CompositeFlowCandidate> {
@@ -31,7 +31,7 @@ pub(crate) fn build_composite_flow_candidates(
 }
 
 #[cfg(not(feature = "typescript"))]
-pub(crate) fn build_composite_flow_candidates(
+pub fn build_composite_flow_candidates(
     _tools: &[ToolFlowInput],
     _sources: &[SourceUnit<'_>],
 ) -> Vec<CompositeFlowCandidate> {

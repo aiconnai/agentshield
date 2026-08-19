@@ -183,6 +183,15 @@ agentshield/
 │   ├── crewai_project/           # CrewAI adapter test (v0.2.4)
 │   ├── langchain_project/        # LangChain adapter test (v0.2.4)
 │   └── hermes_agent/             # Hermes Agent adapter fixtures
+├── benches/                      # Criterion benchmarks
+│   └── scan.rs                   # Parser, rules, composite flow, and taint benchmarks
+├── fuzz/                         # Continuous fuzzing targets (libfuzzer-sys / cargo-fuzz)
+│   ├── Cargo.toml                # Fuzz workspace config
+│   └── fuzz_targets/
+│       ├── fuzz_ts_parser.rs     # TypeScript AST & fallback fuzzing
+│       ├── fuzz_py_parser.rs     # Python parser fuzzing
+│       ├── fuzz_mcp_tools.rs     # MCP tools extractor fuzzing
+│       └── fuzz_composite_flow.rs # Composite flow engine fuzzing
 ├── vscode/                       # VS Code extension (v0.1.0)
 │   ├── package.json              # Extension manifest
 │   ├── tsconfig.json             # TypeScript config
@@ -206,8 +215,12 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (295 Rust tests under the default feature set, including all targets)
+# Test (656 Rust tests under the default feature set, including all targets)
 cargo test --workspace --all-targets --locked
+
+# Benchmarks
+cargo bench --no-run
+cargo bench --bench scan
 
 # Lint
 cargo clippy -- -D warnings
