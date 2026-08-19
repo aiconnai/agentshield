@@ -140,7 +140,7 @@ agentshield/
 │   │   ├── finding.rs            # Finding, Severity, Evidence structs
 │   │   ├── registry.rs           # Rule metadata registry
 │   │   ├── policy.rs             # Policy evaluation (.agentshield.toml)
-│   │   └── builtin/              # 33 built-in detectors (SHIELD-001..033)
+│   │   └── builtin/              # 35 built-in detectors (SHIELD-001..035)
 │   │       └── capability_mismatch/ # SHIELD-019 detector & eval engine (modularized)
 │   ├── risk/                     # Deterministic risk assessment model (modularized)
 │   │   ├── mod.rs                # assess(), render_experimental(), property tests
@@ -215,7 +215,7 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (656 Rust tests under the default feature set, including all targets)
+# Test (583 Rust tests under the default feature set, including all targets)
 cargo test --workspace --all-targets --locked
 
 # Benchmarks

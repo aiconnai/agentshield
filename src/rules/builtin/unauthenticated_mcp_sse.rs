@@ -1,0 +1,296 @@
+use once_cell::sync::Lazy;
+use regex::Regex;
+
+use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::rules::{
+    AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
+};
+
+/// SHIELD-035: Unauthenticated MCP SSE Transport / Missing Origin Validation
+///
+/// Detects MCP servers exposing Server-Sent Events (SSE) or HTTP transports (`SSEServerTransport`, `/sse`, `/messages`)
+/// without validating the `Origin` header or requiring authentication tokens (CWE-346, CWE-306).
+pub struct UnauthenticatedMcpSseDetector;
+
+// Matches SSEServerTransport instantiation or import in TypeScript/JavaScript
+static TS_SSE_TRANSPORT_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?m)\bnew\s+SSEServerTransport\s*\("#).expect("valid regex")
+});
+
+// Matches wildcard CORS in MCP transport files
+static WILDCARD_CORS_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?m)(?:cors\s*\(\s*\{\s*origin\s*:\s*["']\*["']|Access-Control-Allow-Origin["']?\s*,\s*["']\*["'])"#)
+        .expect("valid regex")
+});
+
+// Checks if origin or auth verification exists within proximity
+static ORIGIN_AUTH_GUARD_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?i)\b(?:origin|authorization|bearer|validate_origin|check_origin|allowed_origins|auth_token|req\.headers\.origin|req\.headers\[['"]origin['"]\]|request\.headers\.get\(['"]origin['"]\))\b"#)
+        .expect("valid regex")
+});
+
+// Matches Python FastMCP or Starlette SSE transport run
+static PY_SSE_TRANSPORT_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?m)\b(?:mcp\.run\s*\([^)]*transport\s*=\s*['"]sse['"]|SSEServerTransport\s*\()"#)
+        .expect("valid regex")
+});
+
+impl Detector for UnauthenticatedMcpSseDetector {
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            id: "SHIELD-035".into(),
+            name: "Unauthenticated MCP SSE Transport / Missing Origin Validation".into(),
+            description: "MCP Server-Sent Events (SSE) or HTTP endpoints exposed without \
+                          Origin validation or authentication headers, enabling cross-site hijacking"
+                .into(),
+            default_severity: Severity::High,
+            attack_category: AttackCategory::ExcessivePermissions,
+            cwe_id: Some("CWE-346".into()),
+            owasp_mcp: Some(OwaspMcp::InsecureCommunication),
+        }
+    }
+
+    fn run(&self, target: &ScanTarget) -> Vec<Finding> {
+        let mut findings = Vec::new();
+
+        for file in &target.source_files {
+            let lines: Vec<&str> = file.content.lines().collect();
+
+            match file.language {
+                Language::TypeScript => {
+                    // Check for SSEServerTransport usage without Origin validation
+                    for (line_idx, line) in lines.iter().enumerate() {
+                        let trimmed = line.trim();
+                        if trimmed.starts_with("//") || trimmed.starts_with('*') {
+                            continue;
+                        }
+
+                        if TS_SSE_TRANSPORT_RE.is_match(line) {
+                            // Lookahead and lookbehind window of 35 lines for origin / auth verification
+                            let start_idx = line_idx.saturating_sub(15);
+                            let end_idx = (line_idx + 35).min(lines.len());
+                            let context_window = lines[start_idx..end_idx].join("\n");
+
+                            let has_origin_guard = ORIGIN_AUTH_GUARD_RE.is_match(&context_window);
+
+                            if !has_origin_guard {
+                                let loc = SourceLocation {
+                                    file: file.path.clone(),
+                                    line: line_idx + 1,
+                                    column: line.find("SSEServerTransport").unwrap_or(0),
+                                    end_line: None,
+                                    end_column: None,
+                                };
+
+                                findings.push(Finding {
+                                    rule_id: "SHIELD-035".into(),
+                                    rule_name: "Unauthenticated MCP SSE Transport / Missing Origin Validation".into(),
+                                    severity: Severity::High,
+                                    confidence: Confidence::High,
+                                    attack_category: AttackCategory::ExcessivePermissions,
+                                    message: "MCP `SSEServerTransport` endpoint instantiated without `Origin` header validation or authentication — susceptible to Cross-Site SSE Hijacking and unauthorized tool invocation".into(),
+                                    location: Some(loc.clone()),
+                                    evidence: vec![Evidence {
+                                        description: "SSEServerTransport without Origin or Bearer verification".into(),
+                                        location: Some(loc),
+                                        snippet: Some(trimmed.to_string()),
+                                    }],
+                                    taint_path: None,
+                                    remediation: Some(
+                                        "Validate the `Origin` header against an explicit allowlist (e.g. check `req.headers.origin`) or require Bearer token authentication in HTTP/SSE middleware.".into(),
+                                    ),
+                                    cwe_id: Some("CWE-346".into()),
+                                });
+                            }
+                        }
+
+                        // Check for wildcard CORS on MCP transport file
+                        if WILDCARD_CORS_RE.is_match(line) {
+                            let loc = SourceLocation {
+                                file: file.path.clone(),
+                                line: line_idx + 1,
+                                column: 0,
+                                end_line: None,
+                                end_column: None,
+                            };
+
+                            findings.push(Finding {
+                                rule_id: "SHIELD-035".into(),
+                                rule_name: "Unauthenticated MCP SSE Transport / Missing Origin Validation".into(),
+                                severity: Severity::Medium,
+                                confidence: Confidence::High,
+                                attack_category: AttackCategory::ExcessivePermissions,
+                                message: "Wildcard CORS (`origin: '*'`) configured on MCP server endpoint — allows arbitrary web pages to access SSE streams".into(),
+                                location: Some(loc.clone()),
+                                evidence: vec![Evidence {
+                                    description: "Wildcard CORS configuration on MCP endpoint".into(),
+                                    location: Some(loc),
+                                    snippet: Some(trimmed.to_string()),
+                                }],
+                                taint_path: None,
+                                remediation: Some(
+                                    "Restrict CORS `origin` to trusted domains or localhost rather than wildcard `*`.".into(),
+                                ),
+                                cwe_id: Some("CWE-346".into()),
+                            });
+                        }
+                    }
+                }
+                Language::Python => {
+                    for (line_idx, line) in lines.iter().enumerate() {
+                        let trimmed = line.trim();
+                        if trimmed.starts_with('#') {
+                            continue;
+                        }
+
+                        if PY_SSE_TRANSPORT_RE.is_match(line) {
+                            let start_idx = line_idx.saturating_sub(15);
+                            let end_idx = (line_idx + 35).min(lines.len());
+                            let context_window = lines[start_idx..end_idx].join("\n");
+
+                            let has_origin_guard = ORIGIN_AUTH_GUARD_RE.is_match(&context_window);
+
+                            if !has_origin_guard {
+                                let loc = SourceLocation {
+                                    file: file.path.clone(),
+                                    line: line_idx + 1,
+                                    column: 0,
+                                    end_line: None,
+                                    end_column: None,
+                                };
+
+                                findings.push(Finding {
+                                    rule_id: "SHIELD-035".into(),
+                                    rule_name: "Unauthenticated MCP SSE Transport / Missing Origin Validation".into(),
+                                    severity: Severity::High,
+                                    confidence: Confidence::High,
+                                    attack_category: AttackCategory::ExcessivePermissions,
+                                    message: "Python MCP SSE transport run without `Origin` verification or authentication middleware".into(),
+                                    location: Some(loc.clone()),
+                                    evidence: vec![Evidence {
+                                        description: "MCP SSE transport without Origin guard".into(),
+                                        location: Some(loc),
+                                        snippet: Some(trimmed.to_string()),
+                                    }],
+                                    taint_path: None,
+                                    remediation: Some(
+                                        "Validate request `Origin` headers or enforce authentication tokens on SSE transport routes.".into(),
+                                    ),
+                                    cwe_id: Some("CWE-346".into()),
+                                });
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        findings
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::{Framework, SourceFile};
+    use std::path::PathBuf;
+
+    fn target_with_source(code: &str, lang: Language) -> ScanTarget {
+        ScanTarget {
+            name: "test-sse-server".into(),
+            framework: Framework::Mcp,
+            root_path: PathBuf::from("/test"),
+            tools: Vec::new(),
+            execution: Default::default(),
+            data: Default::default(),
+            dependencies: Default::default(),
+            provenance: Default::default(),
+            source_files: vec![SourceFile {
+                path: PathBuf::from(if lang == Language::Python {
+                    "server.py"
+                } else {
+                    "server.ts"
+                }),
+                language: lang,
+                size_bytes: code.len() as u64,
+                content_hash: "hash".into(),
+                content: code.into(),
+            }],
+        }
+    }
+
+    #[test]
+    fn detects_unauthenticated_ts_sse_transport() {
+        let code = r#"
+import express from "express";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+
+const app = express();
+
+app.get("/sse", async (req, res) => {
+    const transport = new SSEServerTransport("/messages", res);
+    await server.connect(transport);
+});
+"#;
+        let target = target_with_source(code, Language::TypeScript);
+        let detector = UnauthenticatedMcpSseDetector;
+        let findings = detector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "SHIELD-035");
+        assert_eq!(findings[0].severity, Severity::High);
+    }
+
+    #[test]
+    fn ignores_ts_sse_with_origin_validation() {
+        let code = r#"
+import express from "express";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+
+const app = express();
+
+app.get("/sse", async (req, res) => {
+    const origin = req.headers.origin;
+    if (origin !== "https://trusted.app") {
+        return res.status(403).send("Forbidden origin");
+    }
+    const transport = new SSEServerTransport("/messages", res);
+    await server.connect(transport);
+});
+"#;
+        let target = target_with_source(code, Language::TypeScript);
+        let detector = UnauthenticatedMcpSseDetector;
+        let findings = detector.run(&target);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn detects_wildcard_cors_on_mcp_server() {
+        let code = r#"
+import cors from "cors";
+import express from "express";
+
+const app = express();
+app.use(cors({ origin: "*" }));
+"#;
+        let target = target_with_source(code, Language::TypeScript);
+        let detector = UnauthenticatedMcpSseDetector;
+        let findings = detector.run(&target);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, Severity::Medium);
+    }
+
+    #[test]
+    fn detects_unauthenticated_python_sse() {
+        let code = r#"
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("demo")
+mcp.run(transport="sse")
+"#;
+        let target = target_with_source(code, Language::Python);
+        let detector = UnauthenticatedMcpSseDetector;
+        let findings = detector.run(&target);
+        assert_eq!(findings.len(), 1);
+    }
+}
