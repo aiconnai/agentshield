@@ -2,8 +2,10 @@
 useDefault = true
 
 [allowlist]
-description = "Ignore simulated demo keys in documentation and test files"
+description = "AgentShield detector and scanner test fixtures"
 paths = [
-    '''docs/.*''',
     '''tests/.*''',
+    '''src/rules/builtin/hardcoded_secrets\.rs''',
+    '''src/rules/builtin/sensitive_schema_reflection\.rs''',
+    '''docs/site\.js''',
 ]

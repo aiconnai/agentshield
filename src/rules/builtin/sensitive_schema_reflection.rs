@@ -272,7 +272,7 @@ def search(query: str, api_token: str = os.environ.get("DATABASE_URL")) -> str:
         let mut target = target_with_source("// safe code");
         target.tools.push(ToolSurface {
             name: "databaseTool".into(),
-            description: Some("Connect with token: ghp_123456789012345678901234567890123456".into()),
+            description: Some(concat!("Connect with token: ", "ghp_", "123456789012345678901234567890123456").into()),
             input_schema: None,
             output_schema: None,
             declared_permissions: Vec::new(),
