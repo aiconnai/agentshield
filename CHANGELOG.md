@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-19
+
+### Added
+
+- **New Security Detectors (`SHIELD-034` .. `SHIELD-036`)**:
+  - `SHIELD-034`: *Insecure Agent Checkpoint / Unsigned State Deserialization* (`torch.load`, `joblib`, `dill`, `cloudpickle`, `shelve`, `PickleCheckpointSaver`).
+  - `SHIELD-035`: *Unauthenticated MCP SSE Transport / Missing Origin Validation* (prevention of Cross-Site SSE Hijacking and unauthorized tool execution).
+  - `SHIELD-036`: *Tool Response Prompt Injection / Unsanitized Parameter Reflection*.
+- **Benchmarking & Continuous Fuzzing Infrastructure**:
+  - Criterion benchmark suite in `benches/scan.rs` benchmarking parsers, rule engines, and taint analysis.
+  - Generative property-based testing in `tests/proptest_parsers.rs` using `proptest`.
+  - Continuous fuzz testing targets in `fuzz/` using `cargo-fuzz` and `libfuzzer-sys`.
+
+### Fixed
+
+- **SARIF 2.1.0 Schema Compliance**: Corrected the placement of `taxonomies` under the `run` root object per OASIS / GitHub Code Scanning specification.
+- **Cross-Platform Compatibility**: Fixed Windows MSVC platform imports in `src/discovery/filesystem/mod.rs`.
+- **Security & Supply Chain Auditing**: Resolved all open alerts on GitHub Security (Semgrep action SHA pins and Gitleaks test fixture isolation).
+
 ## [1.0.0] - 2026-08-14
 
 ### Added
