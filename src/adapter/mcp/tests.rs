@@ -1,4 +1,5 @@
 use super::*;
+use crate::parser;
 use std::path::Path;
 
 #[test]

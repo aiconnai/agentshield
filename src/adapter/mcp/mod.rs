@@ -14,8 +14,6 @@ use crate::analysis::AnalysisBundle;
 use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::*;
-#[cfg(test)]
-use crate::parser;
 
 pub use dependencies::parse_dependencies;
 pub use filter::is_test_file;
