@@ -28,7 +28,6 @@ mod sql_injection;
 mod ssrf;
 mod system_prompt_tampering;
 mod tool_description_injection;
-mod tool_response_injection;
 mod typosquat;
 mod unauthenticated_mcp_sse;
 mod unpinned_deps;
@@ -75,7 +74,6 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(sensitive_schema_reflection::SensitiveSchemaReflectionDetector),
         Box::new(insecure_agent_checkpoint::InsecureAgentCheckpointDetector),
         Box::new(unauthenticated_mcp_sse::UnauthenticatedMcpSseDetector),
-        Box::new(tool_response_injection::ToolResponseInjectionDetector),
     ]
 }
 
