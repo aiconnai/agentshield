@@ -120,7 +120,7 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 - Interprocedural call-graph construction with bounded recursion depth (`MAX_PROPAGATION_DEPTH = 16`).
 - Zero-allocation sensitivity classifiers (`eq_ignore_ascii_case`).
 - Continuous fuzzing with `cargo-fuzz` / `libfuzzer-sys` and `proptest` generative property suites.
-- 586 unit and integration tests, 0 clippy warnings (`-D warnings`).
+- 588 unit and integration tests, 0 clippy warnings (`-D warnings`).
 - Dual-licensed under MIT OR Apache-2.0.
 
 ### Subreddit: `r/LocalLLaMA`
