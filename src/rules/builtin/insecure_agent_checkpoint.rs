@@ -15,18 +15,18 @@ pub struct InsecureAgentCheckpointDetector;
 
 // Matches torch.load( invocation start
 static TORCH_LOAD_START_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)\btorch\.load\s*\("#).expect("valid regex")
+    Regex::new(r#"\btorch\.load\s*\("#).expect("valid regex")
 });
 
 // Matches joblib, dill, cloudpickle, shelve deserializers
 static UNSAFE_STATE_LOADERS_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)\b(joblib\.load|dill\.loads?|cloudpickle\.loads?|shelve\.open)\s*\("#)
+    Regex::new(r#"\b(joblib\.load|dill\.loads?|dill\.load_session|dill\.load_module|cloudpickle\.loads?|shelve\.open)\s*\("#)
         .expect("valid regex")
 });
 
 // Matches insecure checkpoint saver classes or custom pickle loaders in agents
 static INSECURE_CHECKPOINT_SAVER_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)\b(PickleCheckpointSaver|UnsignedCheckpointSaver|FileCheckpointSaver)\b"#)
+    Regex::new(r#"\b(PickleCheckpointSaver|UnsignedCheckpointSaver|FileCheckpointSaver)\b"#)
         .expect("valid regex")
 });
 
@@ -71,17 +71,22 @@ impl Detector for InsecureAgentCheckpointDetector {
                     let mut paren_balance: i32 = 0;
                     let mut call_lines = Vec::new();
                     let end_idx = (line_idx + 15).min(lines.len());
+                    // Start scanning from the torch.load( position on the first line so that
+                    // any unmatched ) before torch.load (e.g. closing a prior expression) does
+                    // not cause premature termination. Use == 0 (not <= 0) for correct balance.
+                    let first_line_offset = line.find("torch.load").unwrap_or(0);
 
-                    for &l in &lines[line_idx..end_idx] {
+                    for (i, &l) in lines[line_idx..end_idx].iter().enumerate() {
                         call_lines.push(l);
-                        for ch in l.chars() {
+                        let scan = if i == 0 { &l[first_line_offset..] } else { l };
+                        for ch in scan.chars() {
                             if ch == '(' {
                                 paren_balance += 1;
                             } else if ch == ')' {
                                 paren_balance -= 1;
                             }
                         }
-                        if paren_balance <= 0 {
+                        if paren_balance == 0 {
                             break;
                         }
                     }
@@ -317,7 +322,13 @@ checkpointer = PickleCheckpointSaver()
         let target = target_with_python_source(code);
         let detector = InsecureAgentCheckpointDetector;
         let findings = detector.run(&target);
-        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings.len(),
+            1,
+            "expected exactly 1 finding (usage line only, import line must be skipped); got {}:\n{}",
+            findings.len(),
+            findings.iter().map(|f| format!("  [{:?}] {}", f.location, f.message)).collect::<Vec<_>>().join("\n")
+        );
         assert_eq!(findings[0].severity, Severity::Medium);
     }
 }

@@ -14,16 +14,21 @@ pub struct UnauthenticatedMcpSseDetector;
 
 // Matches SSEServerTransport instantiation or import in TypeScript/JavaScript
 static TS_SSE_TRANSPORT_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)\bnew\s+SSEServerTransport\s*\("#).expect("valid regex")
+    Regex::new(r#"\bnew\s+SSEServerTransport\s*\("#).expect("valid regex")
 });
 
-// Matches wildcard CORS in MCP transport files
+// Matches wildcard CORS in MCP transport files (applied to multi-line context windows).
+// Three forms are covered:
+//   1. cors({ origin: '*' }) — single-line object literal
+//   2. origin: '*' — standalone property line in a multiline cors() config
+//   3. setHeader / header('Access-Control-Allow-Origin', '*') — explicit header assignment
+// Template-literal backtick values (e.g. origin: `*`) are also caught via [`'"`].
 static WILDCARD_CORS_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)(?:cors\s*\(\s*\{\s*origin\s*:\s*["']\*["']|Access-Control-Allow-Origin["']?\s*,\s*["']\*["'])"#)
+    Regex::new(r#"(?m)(?:cors\s*\(\s*\{\s*origin\s*:\s*[`'"]\*[`'"]|(?:^|\s)origin\s*:\s*[`'"]\*[`'"]|Access-Control-Allow-Origin[`'"]?\s*,\s*[`'"]\*[`'"])"#)
         .expect("valid regex")
 });
 
-// Checks if explicit origin or auth verification exists within proximity
+// Checks if explicit origin or auth verification exists within proximity (applied to multi-line context windows)
 static ORIGIN_AUTH_GUARD_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"(?i)\b(?:authorization|bearer|validate_origin|check_origin|allowed_origins|auth_token|req\.headers\.origin|req\.headers\[['"]origin['"]\]|request\.headers\.get\(['"]origin['"]\)|headers\.get\(['"]origin['"]\)|origin\s*(?:===|==|!==|!=|\.includes|\.indexOf|in\b))\b"#)
         .expect("valid regex")
@@ -31,11 +36,14 @@ static ORIGIN_AUTH_GUARD_RE: Lazy<Regex> = Lazy::new(|| {
 
 // Matches Python FastMCP or Starlette SSE transport run start
 static PY_MCP_RUN_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)\b(?:mcp\.run\s*\(|SSEServerTransport\s*\()"#).expect("valid regex")
+    Regex::new(r#"\b(?:mcp\.run\s*\(|SSEServerTransport\s*\()"#).expect("valid regex")
 });
 
 static PY_TRANSPORT_SSE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"transport\s*=\s*['"]sse['"]|SSEServerTransport"#).expect("valid regex")
+    // Matches both legacy 'sse' and the newer 'streamable-http' transport (MCP SDK ≥ 1.2),
+    // which carries the same unauthenticated origin risk as SSE.
+    Regex::new(r#"transport\s*=\s*['"](?:sse|streamable-http)['"]|SSEServerTransport"#)
+        .expect("valid regex")
 });
 
 impl Detector for UnauthenticatedMcpSseDetector {
@@ -61,6 +69,11 @@ impl Detector for UnauthenticatedMcpSseDetector {
 
             match file.language {
                 Language::TypeScript | Language::JavaScript => {
+                    // Pre-check: only scan for CORS issues if this file actually uses
+                    // SSEServerTransport. Wildcard CORS in a plain REST API file must
+                    // not trigger SHIELD-035.
+                    let file_has_sse = lines.iter().any(|l| TS_SSE_TRANSPORT_RE.is_match(l));
+
                     // Check for SSEServerTransport usage without Origin validation
                     for (line_idx, line) in lines.iter().enumerate() {
                         let trimmed = line.trim();
@@ -89,7 +102,7 @@ impl Detector for UnauthenticatedMcpSseDetector {
                                     rule_id: "SHIELD-035".into(),
                                     rule_name: "Unauthenticated MCP SSE Transport / Missing Origin Validation".into(),
                                     severity: Severity::High,
-                                    confidence: Confidence::High,
+                                    confidence: Confidence::Medium,
                                     attack_category: AttackCategory::ExcessivePermissions,
                                     message: "MCP `SSEServerTransport` endpoint instantiated without `Origin` header validation or authentication — susceptible to Cross-Site SSE Hijacking and unauthorized tool invocation".into(),
                                     location: Some(loc.clone()),
@@ -107,8 +120,10 @@ impl Detector for UnauthenticatedMcpSseDetector {
                             }
                         }
 
-                        // Check for wildcard CORS on MCP transport file
-                        if WILDCARD_CORS_RE.is_match(line) {
+                        // Check for wildcard CORS — only when this file also exposes SSE transport,
+                        // to avoid false-positives in unrelated REST API files.
+                        if file_has_sse && WILDCARD_CORS_RE.is_match(line) {
+
                             let loc = SourceLocation {
                                 file: file.path.clone(),
                                 line: line_idx + 1,
@@ -170,7 +185,7 @@ impl Detector for UnauthenticatedMcpSseDetector {
                                         rule_id: "SHIELD-035".into(),
                                         rule_name: "Unauthenticated MCP SSE Transport / Missing Origin Validation".into(),
                                         severity: Severity::High,
-                                        confidence: Confidence::High,
+                                        confidence: Confidence::Medium,
                                         attack_category: AttackCategory::ExcessivePermissions,
                                         message: "Python MCP SSE transport run without `Origin` verification or authentication middleware".into(),
                                         location: Some(loc.clone()),
@@ -332,5 +347,29 @@ mcp.run(
         let detector = UnauthenticatedMcpSseDetector;
         let findings = detector.run(&target);
         assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn wildcard_cors_in_non_sse_file_does_not_trigger() {
+        // CORS wildcard in a plain REST API file with no SSEServerTransport must not
+        // produce a SHIELD-035 finding — it is unrelated to MCP SSE transport.
+        let code = r#"
+import cors from "cors";
+import express from "express";
+
+const app = express();
+app.use(cors({ origin: "*" }));
+
+app.get("/api/data", (req, res) => {
+    res.json({ data: "ok" });
+});
+"#;
+        let target = target_with_source(code, Language::TypeScript);
+        let detector = UnauthenticatedMcpSseDetector;
+        let findings = detector.run(&target);
+        assert!(
+            findings.is_empty(),
+            "wildcard CORS in a non-SSE file must not trigger SHIELD-035; got: {findings:#?}"
+        );
     }
 }
