@@ -115,10 +115,15 @@ fn bench_rules_engine(c: &mut Criterion) {
     .unwrap();
     std::fs::write(fixture.path().join("server.ts"), TS_FIXTURE).unwrap();
 
-    let target = McpAdapter.load(fixture.path(), false).unwrap().remove(0);
+    let target = McpAdapter
+        .load(fixture.path(), false)
+        .expect("bench fixture setup: MCP adapter load failed")
+        .into_iter()
+        .next()
+        .expect("bench fixture setup: no MCP target found");
     let detectors = all_detectors();
 
-    group.bench_function("run_all_35_detectors", |b| {
+    group.bench_function("run_all_detectors", |b| {
         b.iter(|| {
             let mut findings = Vec::new();
             for detector in &detectors {
@@ -175,7 +180,12 @@ fn bench_interprocedural_taint(c: &mut Criterion) {
     .unwrap();
     std::fs::write(fixture.path().join("server.ts"), TS_FIXTURE).unwrap();
 
-    let target = McpAdapter.load(fixture.path(), false).unwrap().remove(0);
+    let target = McpAdapter
+        .load(fixture.path(), false)
+        .expect("bench fixture setup: MCP adapter load failed")
+        .into_iter()
+        .next()
+        .expect("bench fixture setup: no MCP target found");
     let graph = CallGraph::build(&target);
 
     group.bench_function("propagate_interprocedural_taint", |b| {
