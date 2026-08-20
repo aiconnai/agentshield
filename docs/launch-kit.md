@@ -124,14 +124,14 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 - Interprocedural call-graph construction with bounded recursion depth (`MAX_PROPAGATION_DEPTH = 16`).
 - Zero-allocation sensitivity classifiers (`eq_ignore_ascii_case`).
 - Continuous fuzzing with `cargo-fuzz` / `libfuzzer-sys` and `proptest` generative property suites.
-- 587 unit and integration tests, 0 clippy warnings (`-D warnings`).
+- 601 unit and integration tests, 0 clippy warnings (`-D warnings`).
 - Dual-licensed under MIT OR Apache-2.0.
 
 ### Subreddit: `r/LocalLLaMA`
 **Title**: `Securing Local Agents & MCP Servers: AgentShield v1.0.1 (Offline SAST Scanner + Runtime Guard)`
 **Key Talking Points**:
 - Why running local models (Hermes Agent, DeepSeek-R1/V4, Qwen) with local tool access requires zero-trust security.
-- How tool poisoning, unsigned checkpoint loading (`SHIELD-034`), and unauthenticated SSE transports (`SHIELD-035`) can turn a benign-looking MCP server into a shell execution backdoor.
+- How tool poisoning, unsigned checkpoint loading (`SHIELD-034`), unauthenticated SSE transports (`SHIELD-035`), tool response injection (`SHIELD-036`), and agent memory poisoning (`SHIELD-037`) can turn a benign-looking MCP server into a shell execution backdoor.
 - How AgentShield runs locally without leaking code to cloud scanners.
 - How to install via `curl | sh`, `brew`, or `cargo`.
 

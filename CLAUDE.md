@@ -140,7 +140,7 @@ agentshield/
 │   │   ├── finding.rs            # Finding, Severity, Evidence structs
 │   │   ├── registry.rs           # Rule metadata registry
 │   │   ├── policy.rs             # Policy evaluation (.agentshield.toml)
-│   │   └── builtin/              # 36 built-in detectors (SHIELD-001..036)
+│   │   └── builtin/              # 37 built-in detectors (SHIELD-001..037)
 │   │       └── capability_mismatch/ # SHIELD-019 detector & eval engine (modularized)
 │   ├── risk/                     # Deterministic risk assessment model (modularized)
 │   │   ├── mod.rs                # assess(), render_experimental(), property tests
@@ -215,7 +215,7 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (594 Rust tests under the default feature set, including all targets)
+# Test (601 Rust tests under the default feature set, including all targets)
 cargo test --workspace --all-targets --locked
 
 # Benchmarks
@@ -405,4 +405,4 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 | 0.7.0 | ~195 | Egress policy operator override layering for `wrap` command |
 | 0.8.0 | 212 | `certify` command (DSSE attestation + Ed25519), 6 new detectors (SHIELD-013..018) |
 | 1.0.0 | 594 | 36 detectors (SHIELD-001..036), 11 adapters, criterion benchmarks, cargo-fuzz + proptest harnesses, Windows cross-compilation, SHIELD-034 (agent checkpoint CWE-502), SHIELD-035 (unauthenticated MCP SSE CWE-346), SHIELD-036 (tool response prompt injection CWE-1336), v1.0.0 launch kit |
-| 1.0.1 | 594 | SARIF 2.1.0 taxonomy placement fix (run.taxonomies), GitHub Action SHA pinning, gitleaks config, mcp/tests.rs build fix (`use crate::parser`), split synthetic test tokens via `concat!` to suppress secret-scanning false positives |
+| 1.0.1 | 601 | SARIF 2.1.0 taxonomy placement fix (run.taxonomies), GitHub Action SHA pinning + shell injection hardening, gitleaks config, mcp/tests.rs cfg-feature guard, SHIELD-037 (agent memory poisoning CWE-20) |
