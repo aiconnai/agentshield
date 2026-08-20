@@ -74,6 +74,13 @@ static TS_RETURN_CONCAT_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"^\s*return\s+(?:["'][^"']*["']\s*\+|\w+\s*\+\s*["'])"#).expect("valid regex")
 });
 
+// Suppresses findings when the return line contains a known sanitization call.
+// Covers: escape(, sanitize(, html.escape(, json.dumps(, int(, float(, repr(, str(int(
+static SANITIZE_GUARD_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"\b(?:escape|sanitize|sanitise|encode|strip_tags|bleach\.clean|html\.escape|markupsafe\.escape|re\.escape|shlex\.quote|json\.dumps|repr\s*\(|str\s*\(int\s*\(|int\s*\(|float\s*\()\s*\("#)
+        .expect("valid regex")
+});
+
 impl Detector for ToolResponseInjectionDetector {
     fn metadata(&self) -> RuleMetadata {
         RuleMetadata {
@@ -134,6 +141,11 @@ fn scan_python(
                 expecting_tool_def = false;
                 tool_fn_indent = current_indent;
                 continue;
+            } else if !PY_TOOL_DECORATOR_RE.is_match(line) {
+                // A non-decorator, non-def line (e.g. @staticmethod, a type annotation, or
+                // an assignment) appeared between the @tool decorator and the function def.
+                // Cancel the pending tool scope to avoid false-positives on unrelated defs.
+                expecting_tool_def = false;
             }
         }
 
@@ -153,9 +165,10 @@ fn scan_python(
         }
 
         if in_tool_fn {
-            let is_unsafe_return = PY_RETURN_FSTRING_RE.is_match(line)
+            let is_unsafe_return = (PY_RETURN_FSTRING_RE.is_match(line)
                 || PY_RETURN_CONCAT_RE.is_match(line)
-                || PY_RETURN_FORMAT_RE.is_match(line);
+                || PY_RETURN_FORMAT_RE.is_match(line))
+                && !SANITIZE_GUARD_RE.is_match(line);
 
             if is_unsafe_return {
                 let col = line.find("return").unwrap_or(0);
@@ -202,6 +215,10 @@ fn scan_ts_js(
     file: &crate::ir::SourceFile,
     findings: &mut Vec<Finding>,
 ) {
+    // Track already-reported body lines to prevent duplicate findings when
+    // multiple .tool() registrations share the same 50-line lookahead window.
+    let mut reported_lines: std::collections::HashSet<usize> = std::collections::HashSet::new();
+
     for (line_idx, &line) in lines.iter().enumerate() {
         let trimmed = line.trim();
         if trimmed.starts_with("//") || trimmed.starts_with('*') {
@@ -212,13 +229,18 @@ fn scan_ts_js(
             // Scan the next 50 lines for template-literal or concat returns
             let end_idx = (line_idx + 50).min(lines.len());
             for (body_offset, &body_line) in lines[line_idx..end_idx].iter().enumerate() {
+                let body_abs = line_idx + body_offset;
+                if reported_lines.contains(&body_abs) {
+                    continue;
+                }
                 let body_trimmed = body_line.trim();
                 if body_trimmed.starts_with("//") {
                     continue;
                 }
 
-                let is_unsafe_return = TS_RETURN_TEMPLATE_RE.is_match(body_line)
-                    || TS_RETURN_CONCAT_RE.is_match(body_line);
+                let is_unsafe_return = (TS_RETURN_TEMPLATE_RE.is_match(body_line)
+                    || TS_RETURN_CONCAT_RE.is_match(body_line))
+                    && !SANITIZE_GUARD_RE.is_match(body_line);
 
                 if is_unsafe_return {
                     let col = body_line.find("return").unwrap_or(0);
@@ -258,6 +280,7 @@ fn scan_ts_js(
                         ),
                         cwe_id: Some("CWE-1336".into()),
                     });
+                    reported_lines.insert(body_abs);
                     // One finding per tool registration block
                     break;
                 }

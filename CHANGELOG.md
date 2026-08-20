@@ -11,9 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **New Security Detectors (`SHIELD-034` .. `SHIELD-035`)**:
+- **New Security Detectors (`SHIELD-034` .. `SHIELD-036`)**:
   - `SHIELD-034`: *Insecure Agent Checkpoint / Unsigned State Deserialization* (`torch.load`, `joblib`, `dill`, `cloudpickle`, `shelve`, `PickleCheckpointSaver`).
   - `SHIELD-035`: *Unauthenticated MCP SSE Transport / Missing Origin Validation* (prevention of Cross-Site SSE Hijacking and unauthorized tool execution).
+  - `SHIELD-036`: *Tool Response Prompt Injection / Unsanitized Parameter Reflection* (`return f"{param}"`, template literals, string concatenation in tool handlers).
 - **Benchmarking & Continuous Fuzzing Infrastructure**:
   - Criterion benchmark suite in `benches/scan.rs` benchmarking parsers, rule engines, and taint analysis.
   - Generative property-based testing in `tests/proptest_parsers.rs` using `proptest`.

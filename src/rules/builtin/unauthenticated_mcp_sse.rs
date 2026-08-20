@@ -122,7 +122,9 @@ impl Detector for UnauthenticatedMcpSseDetector {
 
                         // Check for wildcard CORS — only when this file also exposes SSE transport,
                         // to avoid false-positives in unrelated REST API files.
-                        if file_has_sse && WILDCARD_CORS_RE.is_match(line) {
+                        // Skip comment lines to avoid matching `// origin: '*'` docs/examples.
+                        let is_comment = trimmed.starts_with("//") || trimmed.starts_with('*');
+                        if file_has_sse && !is_comment && WILDCARD_CORS_RE.is_match(line) {
 
                             let loc = SourceLocation {
                                 file: file.path.clone(),

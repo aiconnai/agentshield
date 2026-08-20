@@ -86,7 +86,9 @@ impl Detector for InsecureAgentCheckpointDetector {
                                 paren_balance -= 1;
                             }
                         }
-                        if paren_balance == 0 {
+                        // Clamp at 0: if trailing ) on the same line push the balance negative
+                        // (e.g. `foo(torch.load(path))`), treat that as "call closed" and stop.
+                        if paren_balance <= 0 {
                             break;
                         }
                     }

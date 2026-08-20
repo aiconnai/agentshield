@@ -1,5 +1,6 @@
 mod arbitrary_file_access;
 mod archive_traversal;
+mod agent_memory_poisoning;
 mod capability_mismatch;
 mod command_injection;
 mod composite_toxic_flow;
@@ -38,7 +39,7 @@ mod webhook_file_exfil;
 
 use super::{ContextDetector, Detector};
 
-/// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..036).
+/// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..037).
 pub fn all_detectors() -> Vec<Box<dyn Detector>> {
     vec![
         Box::new(command_injection::CommandInjectionDetector),
@@ -76,6 +77,7 @@ pub fn all_detectors() -> Vec<Box<dyn Detector>> {
         Box::new(insecure_agent_checkpoint::InsecureAgentCheckpointDetector),
         Box::new(unauthenticated_mcp_sse::UnauthenticatedMcpSseDetector),
         Box::new(tool_response_injection::ToolResponseInjectionDetector),
+        Box::new(agent_memory_poisoning::AgentMemoryPoisoningDetector),
     ]
 }
 
