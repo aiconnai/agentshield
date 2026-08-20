@@ -1,10 +1,13 @@
-# 🚀 AgentShield v1.0.0 — Launch & Go-To-Market Kit
+# 🚀 AgentShield v1.0.1 — Launch & Go-To-Market Kit
 
-This kit contains ready-to-publish launch copy, technical deep dives, and distribution material for announcing **AgentShield v1.0.0** across developer communities.
+This kit contains ready-to-publish launch copy, technical deep dives, and distribution material for announcing **AgentShield v1.0.1** across developer communities.
 
 ---
 
 ## 1. 🟠 Hacker News (Show HN)
+
+### URL to submit:
+`https://news.ycombinator.com/submit`
 
 ### Title:
 > **Show HN: AgentShield – Offline Rust security scanner for AI agent tools & MCP (<50ms)**
@@ -20,7 +23,8 @@ As frontier LLMs (Claude 5 Sonnet/Opus, GPT-5.6 Sol, Gemini 3.7 Flash, DeepSeek-
 
 Existing SAST tools (Semgrep, SonarQube) analyze traditional web apps, but miss agent-specific dataflow patterns like:
 - Tainted LLM parameters flowing into subprocess executions across nested helper functions.
-- Insecure dynamic deserializers (`yaml.load`, `pickle.loads`) in agent configuration loaders.
+- Insecure dynamic deserializers (`yaml.load`, `pickle.loads`, `torch.load` checkpoints) in agent configuration loaders.
+- Cross-Site SSE Hijacking on unauthenticated MCP Server-Sent Events transports without origin validation.
 - SQL Injection in MCP database servers (`cursor.execute(f"...")`, `prisma.$queryRawUnsafe`).
 - Cloud metadata SSRF (`169.254.169.254`) via unvalidated URL fetch tools.
 - System prompt injection tampering where untrusted parameters override system instructions.
@@ -49,7 +53,7 @@ $ cargo install agent-shield
 $ agentshield scan ./my-agent-project --explain
 
 - Live Website & Interactive Playground: https://aiconnai.github.io/agentshield/
-- Performance Benchmarks (<50ms): https://aiconnai.github.io/agentshield/benchmarks.html
+- GitHub Marketplace Action: https://github.com/marketplace/actions/agentshield-security-scanner
 - VS Code Extension: https://marketplace.visualstudio.com/items?itemName=aiconnai-vs.agentshield
 - Open VSX (Cursor / Windsurf): https://open-vsx.org/extension/aiconnai-vs/agentshield
 - GitHub: https://github.com/aiconnai/agentshield
@@ -67,7 +71,7 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 > 
 > As agents gain autonomy, one unvetted MCP tool can read your AWS secrets, execute arbitrary shell scripts, or pivot through your VPC.
 > 
-> Introducing AgentShield v1.0.0: The open-source, 100% offline security firewall for AI tools in <50ms. 🧵👇
+> Introducing AgentShield v1.0.1: The open-source, 100% offline security firewall for AI tools in <50ms. 🧵👇
 
 ### Tweet 2 (The Architecture):
 > ⚡ Powered by Rust + Interprocedural Call-Graph Taint Analysis.
@@ -94,9 +98,10 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 ### Tweet 4 (IDE & Ecosystem):
 > 🧩 Available everywhere you build:
 > 
+> 🐙 GitHub Marketplace: https://github.com/marketplace/actions/agentshield-security-scanner
 > 🔵 VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=aiconnai-vs.agentshield
 > 🟣 Open VSX (Cursor / Windsurf): https://open-vsx.org/extension/aiconnai-vs/agentshield
-> 🐙 GitHub Action: PR Security Commenter + SARIF Code Scanning
+> 🦀 Crates.io: https://crates.io/crates/agent-shield
 > 🍺 Homebrew: `brew install aiconnai/tap/agentshield`
 
 ### Tweet 5 (Call to Action):
@@ -104,7 +109,6 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 > 
 > ⚡ `curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh`
 > 🌐 Interactive Playground: https://aiconnai.github.io/agentshield/
-> 📊 Empirical Benchmarks: https://aiconnai.github.io/agentshield/benchmarks.html
 > ⭐ Star on GitHub: https://github.com/aiconnai/agentshield
 > 
 > What AI tools are you securing today? Let us know below! 👇
@@ -114,17 +118,17 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 ## 3. 🔴 Reddit Strategy
 
 ### Subreddit: `r/rust`
-**Title**: `[Media] AgentShield v1.0.0: A 100% offline AI tool security scanner written in Rust (<50ms, AST + Interprocedural Taint Graph)`
+**Title**: `[Media] AgentShield v1.0.1: A 100% offline AI tool security scanner written in Rust (<50ms, AST + Interprocedural Taint Graph)`
 **Key Talking Points**:
 - AST parsing using tree-sitter & rust-native regex heuristics.
 - Interprocedural call-graph construction with bounded recursion depth (`MAX_PROPAGATION_DEPTH = 16`).
 - Zero-allocation sensitivity classifiers (`eq_ignore_ascii_case`).
 - Continuous fuzzing with `cargo-fuzz` / `libfuzzer-sys` and `proptest` generative property suites.
-- 588 unit and integration tests, 0 clippy warnings (`-D warnings`).
+- 587 unit and integration tests, 0 clippy warnings (`-D warnings`).
 - Dual-licensed under MIT OR Apache-2.0.
 
 ### Subreddit: `r/LocalLLaMA`
-**Title**: `Securing Local Agents & MCP Servers: AgentShield v1.0.0 (Offline SAST Scanner + Runtime Guard)`
+**Title**: `Securing Local Agents & MCP Servers: AgentShield v1.0.1 (Offline SAST Scanner + Runtime Guard)`
 **Key Talking Points**:
 - Why running local models (Hermes Agent, DeepSeek-R1/V4, Qwen) with local tool access requires zero-trust security.
 - How tool poisoning, unsigned checkpoint loading (`SHIELD-034`), and unauthenticated SSE transports (`SHIELD-035`) can turn a benign-looking MCP server into a shell execution backdoor.
@@ -146,4 +150,5 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 > **The 100% offline security firewall for AI agent tools & MCP servers (<50ms)**
 
 ### Short Description:
-> Protect your autonomous AI agents and MCP servers from command injection, credential theft, and toxic data flows. Built in Rust with an interprocedural taint engine, 35 security rules, 1-click auto-fix, VS Code extension, and SARIF CI integration.
+> Protect your autonomous AI agents and MCP servers from command injection, credential theft, and toxic data flows. Built in Rust with an interprocedural taint engine, 35 security rules, 1-click auto-fix, VS Code extension, GitHub Marketplace Action, and SARIF CI integration.
+
