@@ -23,7 +23,7 @@ jobs:
           set +e
           docker run --rm \
             -v "${{ github.workspace }}:/src" \
-            returntocorp/semgrep:latest \
+            semgrep/semgrep:1.100.0 \
             semgrep --config p/ci --sarif --output /src/semgrep.sarif /src
           EXIT_CODE=$?
           set -e

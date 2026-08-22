@@ -86,7 +86,7 @@ static PY_VECTOR_WRITE_RE: Lazy<Regex> = Lazy::new(|| {
 // Examples that do NOT match (literals only → suppress):
 //   collection.add(documents=["safe text"])  ← only quoted string after `[`
 static PY_VAR_IN_ARG_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?:[=\[,(]\s*)[a-z_]\w*(?:\s*[,\])\}]|$)"#).expect("valid regex")
+    Regex::new(r#"(?:[=\[,(]\s*)[a-z_]\w*(?:\s*[,\]\)\}\(]|$)"#).expect("valid regex")
 });
 
 // ── Sanitization guard (shared, applied per-line; no (?m) flag) ───────────────
@@ -129,7 +129,7 @@ static TS_VECTOR_WRITE_RE: Lazy<Regex> = Lazy::new(|| {
 static TS_BARE_IDENTIFIER_IN_ARG_RE: Lazy<Regex> = Lazy::new(|| {
     // Matches a bare lowercase-starting identifier NOT followed by `:` (object key) that
     // appears after `[`, `(`, `,`, space, or `{` as an argument value.
-    Regex::new(r#"[\(\[,\s\{]\s*[a-z_]\w*\s*(?:[,\]\)\}]|$)"#).expect("valid regex")
+    Regex::new(r#"[\(\[,\s\{]\s*[a-z_]\w*\s*(?:[,\]\)\}\(]|$)"#).expect("valid regex")
 });
 
 // ── Detector impl ─────────────────────────────────────────────────────────────
@@ -199,10 +199,12 @@ fn scan_python(
                 expecting_tool_def = false;
                 tool_fn_indent = current_indent;
                 continue;
-            }
-            // If we see something other than a blank/comment/decorator before the def,
-            // reset — this shouldn't normally happen but be defensive.
-            if !PY_TOOL_DECORATOR_RE.is_match(line) {
+            } else if trimmed.starts_with('@') {
+                // Stacked decorator (e.g. @staticmethod, @validate, @lru_cache)
+                continue;
+            } else {
+                // If we see something other than a blank/comment/decorator before the def,
+                // reset — this shouldn't normally happen but be defensive.
                 expecting_tool_def = false;
             }
         }
@@ -560,4 +562,50 @@ server.tool("seed", async () => {
         assert_eq!(meta.owasp_mcp, Some(OwaspMcp::PromptInjection));
         assert_eq!(meta.attack_category, AttackCategory::PromptInjectionSurface);
     }
+
+    // ── Test 8: Python .add(documents=get_untrusted()) with function call fires ─
+
+    #[test]
+    fn detects_python_vector_add_with_function_call_arg() {
+        let code = r#"
+@mcp.tool
+def store_memory() -> str:
+    collection.add(documents=get_untrusted_docs(), ids=["id1"])
+    return "stored"
+"#;
+        let target = target_with_source(code, Language::Python);
+        let detector = AgentMemoryPoisoningDetector;
+        let findings = detector.run(&target);
+        assert_eq!(
+            findings.len(),
+            1,
+            "expected 1 finding for .add(documents=get_untrusted_docs()); got {}: {findings:#?}",
+            findings.len()
+        );
+        assert_eq!(findings[0].rule_id, "SHIELD-037");
+    }
+
+    // ── Test 9: Python stacked decorators detected ────────────────────────────
+
+    #[test]
+    fn detects_stacked_decorator_tool() {
+        let code = r#"
+@mcp.tool
+@validate_args
+def store_memory(param: str) -> str:
+    collection.add(documents=[param], ids=["id1"])
+    return "stored"
+"#;
+        let target = target_with_source(code, Language::Python);
+        let detector = AgentMemoryPoisoningDetector;
+        let findings = detector.run(&target);
+        assert_eq!(
+            findings.len(),
+            1,
+            "expected 1 finding for stacked decorator tool; got {}: {findings:#?}",
+            findings.len()
+        );
+        assert_eq!(findings[0].rule_id, "SHIELD-037");
+    }
 }
+

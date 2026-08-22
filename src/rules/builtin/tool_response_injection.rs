@@ -77,7 +77,7 @@ static TS_RETURN_CONCAT_RE: Lazy<Regex> = Lazy::new(|| {
 // Suppresses findings when the return line contains a known sanitization call.
 // Covers: escape(, sanitize(, html.escape(, json.dumps(, int(, float(, repr(, str(int(
 static SANITIZE_GUARD_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"\b(?:escape|sanitize|sanitise|encode|strip_tags|bleach\.clean|html\.escape|markupsafe\.escape|re\.escape|shlex\.quote|json\.dumps|repr\s*\(|str\s*\(int\s*\(|int\s*\(|float\s*\()\s*\("#)
+    Regex::new(r#"\b(?:escape|sanitize|sanitise|encode|strip_tags|bleach\.clean|html\.escape|markupsafe\.escape|re\.escape|shlex\.quote|json\.dumps|repr|str\s*\(int|int|float)\s*\("#)
         .expect("valid regex")
 });
 
@@ -141,10 +141,12 @@ fn scan_python(
                 expecting_tool_def = false;
                 tool_fn_indent = current_indent;
                 continue;
-            } else if !PY_TOOL_DECORATOR_RE.is_match(line) {
-                // A non-decorator, non-def line (e.g. @staticmethod, a type annotation, or
-                // an assignment) appeared between the @tool decorator and the function def.
-                // Cancel the pending tool scope to avoid false-positives on unrelated defs.
+            } else if trimmed.starts_with('@') {
+                // Stacked decorator (e.g. @staticmethod, @validate, @lru_cache)
+                continue;
+            } else {
+                // A non-decorator, non-def line appeared between @tool and def.
+                // Cancel pending tool scope to avoid false-positives on unrelated defs.
                 expecting_tool_def = false;
             }
         }
@@ -426,4 +428,39 @@ def format_greeting(name: str) -> str:
             "non-tool function must not trigger SHIELD-036; got: {findings:#?}"
         );
     }
+
+    #[test]
+    fn ignores_sanitized_numeric_or_repr_return() {
+        let code = r#"
+@mcp.tool
+def get_user_count(filter_id: str) -> str:
+    return "Count: " + str(int(filter_id))
+"#;
+        let target = target_with_source(code, Language::Python);
+        let detector = ToolResponseInjectionDetector;
+        let findings = detector.run(&target);
+        assert!(
+            findings.is_empty(),
+            "sanitized str(int(...)) return must not trigger SHIELD-036; got: {findings:#?}"
+        );
+    }
+
+    #[test]
+    fn detects_stacked_decorator_tool() {
+        let code = r#"
+@mcp.tool
+@validate_args
+def search(query: str) -> str:
+    return f"Result: {query}"
+"#;
+        let target = target_with_source(code, Language::Python);
+        let detector = ToolResponseInjectionDetector;
+        let findings = detector.run(&target);
+        assert_eq!(
+            findings.len(),
+            1,
+            "stacked decorator tool must trigger SHIELD-036; got: {findings:#?}"
+        );
+    }
 }
+

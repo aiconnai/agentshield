@@ -34,7 +34,7 @@ Existing SAST tools (Semgrep, SonarQube) analyze traditional web apps, but miss 
 1. Interprocedural Call-Graph Taint Engine: Builds an AST + interprocedural call-graph in native Rust to track tainted parameters from tool declarations all the way into deep execution sinks across files.
 2. 100% Offline & Private: Zero telemetry, zero cloud calls, executes in <50ms.
 3. 11 Framework Adapters: Native support for Model Context Protocol (MCP), Hermes Agent (.hermes.md / SKILL.md), OpenAI Codex / GPT Actions (OpenAPI), Cursor Rules (.cursorrules), CrewAI, LangChain/LangGraph, OpenClaw, Vercel AI SDK, AutoGen, LlamaIndex, and Semantic Kernel.
-4. 35 Built-in Security Rules: Comprehensive coverage for OWASP MCP Top 10 (2025) and CWEs (SHIELD-001..035).
+4. 37 Built-in Security Rules: Comprehensive coverage for OWASP MCP Top 10 (2025) and CWEs (SHIELD-001..037).
 5. 1-Click Auto-Remediation: Safely patches vulnerable code (e.g. `yaml.load` -> `yaml.safe_load`, pinning unpinned dependencies).
 6. Continuous Fuzzing & Criterion Benchmarks: Fuzz-tested with cargo-fuzz (libfuzzer-sys) and proptest property-based generative testing.
 7. Native IDE & CI Integration: Official VS Code Extension (Marketplace & Open VSX) with lightbulb code actions, and GitHub Action for automated SARIF Code Scanning.
@@ -124,7 +124,7 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 - Interprocedural call-graph construction with bounded recursion depth (`MAX_PROPAGATION_DEPTH = 16`).
 - Zero-allocation sensitivity classifiers (`eq_ignore_ascii_case`).
 - Continuous fuzzing with `cargo-fuzz` / `libfuzzer-sys` and `proptest` generative property suites.
-- 601 unit and integration tests, 0 clippy warnings (`-D warnings`).
+- 605 unit and integration tests, 0 clippy warnings (`-D warnings`).
 - Dual-licensed under MIT OR Apache-2.0.
 
 ### Subreddit: `r/LocalLLaMA`
@@ -150,5 +150,6 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 > **The 100% offline security firewall for AI agent tools & MCP servers (<50ms)**
 
 ### Short Description:
-> Protect your autonomous AI agents and MCP servers from command injection, credential theft, and toxic data flows. Built in Rust with an interprocedural taint engine, 35 security rules, 1-click auto-fix, VS Code extension, GitHub Marketplace Action, and SARIF CI integration.
+> Protect your autonomous AI agents and MCP servers from command injection, credential theft, and toxic data flows. Built in Rust with an interprocedural taint engine, 37 security rules, 1-click auto-fix, VS Code extension, GitHub Marketplace Action, and SARIF CI integration.
+
 

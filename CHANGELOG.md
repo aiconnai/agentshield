@@ -11,10 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **New Security Detectors (`SHIELD-034` .. `SHIELD-036`)**:
+- **New Security Detectors (`SHIELD-034` .. `SHIELD-037`)**:
   - `SHIELD-034`: *Insecure Agent Checkpoint / Unsigned State Deserialization* (`torch.load`, `joblib`, `dill`, `cloudpickle`, `shelve`, `PickleCheckpointSaver`).
   - `SHIELD-035`: *Unauthenticated MCP SSE Transport / Missing Origin Validation* (prevention of Cross-Site SSE Hijacking and unauthorized tool execution).
   - `SHIELD-036`: *Tool Response Prompt Injection / Unsanitized Parameter Reflection* (`return f"{param}"`, template literals, string concatenation in tool handlers).
+  - `SHIELD-037`: *Agent Memory Poisoning / Unsanitized Vector Store Write* (`.add(documents=)`, `.add_texts()`, `.upsert()`, `.saveContext()`, `.addDocuments()`).
 - **Benchmarking & Continuous Fuzzing Infrastructure**:
   - Criterion benchmark suite in `benches/scan.rs` benchmarking parsers, rule engines, and taint analysis.
   - Generative property-based testing in `tests/proptest_parsers.rs` using `proptest`.
@@ -376,9 +377,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Typosquat detection via Levenshtein distance against popular packages
   - Unpinned dependency version detection
 
+[1.0.1]: https://github.com/aiconnai/agentshield/releases/tag/v1.0.1
+[1.0.0]: https://github.com/aiconnai/agentshield/releases/tag/v1.0.0
+[0.9.3]: https://github.com/aiconnai/agentshield/releases/tag/v0.9.3
+[0.9.2]: https://github.com/aiconnai/agentshield/releases/tag/v0.9.2
+[0.9.1]: https://github.com/aiconnai/agentshield/releases/tag/v0.9.1
+[0.9.0]: https://github.com/aiconnai/agentshield/releases/tag/v0.9.0
+[0.8.8]: https://github.com/aiconnai/agentshield/releases/tag/v0.8.8
+[0.8.7]: https://github.com/aiconnai/agentshield/releases/tag/v0.8.7
+[0.8.6]: https://github.com/aiconnai/agentshield/releases/tag/v0.8.6
+[0.8.5]: https://github.com/aiconnai/agentshield/releases/tag/v0.8.5
+[0.8.0]: https://github.com/aiconnai/agentshield/releases/tag/v0.8.0
 [0.2.4]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.4
 [0.2.3]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.3
 [0.2.2]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.2
 [0.2.1]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.1
 [0.2.0]: https://github.com/aiconnai/agentshield/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aiconnai/agentshield/releases/tag/v0.1.0
+
