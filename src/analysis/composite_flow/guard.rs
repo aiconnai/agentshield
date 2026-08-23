@@ -76,13 +76,11 @@ pub(crate) fn global_name_shadowed(unit: &ParsedUnit<'_>, name: &str) -> bool {
             return;
         }
         if node.kind() == "variable_declarator"
-            && node
-                .child_by_field_name("name")
-                .is_some_and(|candidate| {
-                    binding_names(candidate, unit.content)
-                        .iter()
-                        .any(|b| b == name)
-                })
+            && node.child_by_field_name("name").is_some_and(|candidate| {
+                binding_names(candidate, unit.content)
+                    .iter()
+                    .any(|b| b == name)
+            })
         {
             shadowed = true;
         }

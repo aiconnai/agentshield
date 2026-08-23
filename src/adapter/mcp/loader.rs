@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use sha2::Digest;
+use std::path::{Path, PathBuf};
 
 use crate::analysis::AnalysisBundle;
 use crate::analysis::composite_flow::{SourceUnit, ToolFlowInput, build_composite_flow_candidates};
@@ -27,7 +27,10 @@ pub(crate) struct ToolDeclForComposite {
     pub(crate) handler_location: Option<SourceLocation>,
 }
 
-pub(crate) fn load_mcp_analysis(root: &Path, filter: &ScanPathFilter) -> Result<Vec<AnalysisBundle>> {
+pub(crate) fn load_mcp_analysis(
+    root: &Path,
+    filter: &ScanPathFilter,
+) -> Result<Vec<AnalysisBundle>> {
     let (target, composite_tools) = load_mcp_target(root, filter)?;
 
     let source_for_composite = target
@@ -73,8 +76,8 @@ pub(crate) fn load_mcp_target(
     root: &Path,
     filter: &ScanPathFilter,
 ) -> Result<(ScanTarget, Vec<ToolDeclForComposite>)> {
-    let metadata_root =
-        crate::adapter::mcp_metadata::metadata_root_for_scan(root).unwrap_or_else(|| root.to_path_buf());
+    let metadata_root = crate::adapter::mcp_metadata::metadata_root_for_scan(root)
+        .unwrap_or_else(|| root.to_path_buf());
     let name = root
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -172,17 +175,18 @@ pub(crate) fn load_mcp_target(
         project_declared_description(tool);
     }
 
-    let (dependencies, provenance) = if crate::adapter::mcp_metadata::same_path(root, &metadata_root) {
-        (
-            parse_dependencies(root, filter),
-            parse_provenance(root, filter),
-        )
-    } else {
-        (
-            parse_dependencies(&metadata_root, filter),
-            parse_provenance(&metadata_root, filter),
-        )
-    };
+    let (dependencies, provenance) =
+        if crate::adapter::mcp_metadata::same_path(root, &metadata_root) {
+            (
+                parse_dependencies(root, filter),
+                parse_provenance(root, filter),
+            )
+        } else {
+            (
+                parse_dependencies(&metadata_root, filter),
+                parse_provenance(&metadata_root, filter),
+            )
+        };
 
     let data = build_data_surface(&tools, &execution);
 

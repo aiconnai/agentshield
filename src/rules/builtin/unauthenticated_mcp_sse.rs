@@ -13,9 +13,8 @@ use crate::rules::{
 pub struct UnauthenticatedMcpSseDetector;
 
 // Matches SSEServerTransport instantiation or import in TypeScript/JavaScript
-static TS_SSE_TRANSPORT_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"\bnew\s+SSEServerTransport\s*\("#).expect("valid regex")
-});
+static TS_SSE_TRANSPORT_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"\bnew\s+SSEServerTransport\s*\("#).expect("valid regex"));
 
 // Matches wildcard CORS in MCP transport files (applied to multi-line context windows).
 // Three forms are covered:
@@ -125,7 +124,6 @@ impl Detector for UnauthenticatedMcpSseDetector {
                         // Skip comment lines to avoid matching `// origin: '*'` docs/examples.
                         let is_comment = trimmed.starts_with("//") || trimmed.starts_with('*');
                         if file_has_sse && !is_comment && WILDCARD_CORS_RE.is_match(line) {
-
                             let loc = SourceLocation {
                                 file: file.path.clone(),
                                 line: line_idx + 1,
@@ -172,7 +170,8 @@ impl Detector for UnauthenticatedMcpSseDetector {
                                 let end_idx = (line_idx + 35).min(lines.len());
                                 let context_window = lines[start_idx..end_idx].join("\n");
 
-                                let has_origin_guard = ORIGIN_AUTH_GUARD_RE.is_match(&context_window);
+                                let has_origin_guard =
+                                    ORIGIN_AUTH_GUARD_RE.is_match(&context_window);
 
                                 if !has_origin_guard {
                                     let loc = SourceLocation {

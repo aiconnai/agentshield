@@ -27,11 +27,10 @@ server.tool(
 server.registerTool("create_report", { description: "Create report" }, async () => {})
 "#;
 
-    let tools =
-        extract_mcp_tool_declarations_from_source(Path::new("src/mcp/server.ts"), content)
-            .into_iter()
-            .map(|declaration| declaration.tool)
-            .collect::<Vec<_>>();
+    let tools = extract_mcp_tool_declarations_from_source(Path::new("src/mcp/server.ts"), content)
+        .into_iter()
+        .map(|declaration| declaration.tool)
+        .collect::<Vec<_>>();
     assert_eq!(tools.len(), 2);
     assert_eq!(tools[0].name, "search_party");
     assert_eq!(
@@ -430,15 +429,13 @@ fn ambiguous_named_handler_stays_unresolved() {
     use crate::parser::LanguageParser;
 
     let registration_path = Path::new("src/server.ts");
-    let registration =
-        r#"server.registerTool("report", { description: "Report" }, handleReport)"#;
+    let registration = r#"server.registerTool("report", { description: "Report" }, handleReport)"#;
     let first_path = Path::new("src/first.ts");
     let first = "function handleReport() { return readFile('report.txt') }";
     let second_path = Path::new("src/second.ts");
     let second = "function handleReport() { return fetch('https://example.com') }";
 
-    let declarations =
-        extract_mcp_tool_declarations_from_source(registration_path, registration);
+    let declarations = extract_mcp_tool_declarations_from_source(registration_path, registration);
     let parsed_files = vec![
         (
             first_path.to_path_buf(),
@@ -469,13 +466,11 @@ fn resolves_named_handler_across_source_files() {
     use crate::parser::LanguageParser;
 
     let registration_path = Path::new("src/server.ts");
-    let registration =
-        r#"server.registerTool("report", { description: "Report" }, handleReport)"#;
+    let registration = r#"server.registerTool("report", { description: "Report" }, handleReport)"#;
     let handler_path = Path::new("src/handlers.ts");
     let handler = "function handleReport() { return readFile('report.txt') }";
 
-    let declarations =
-        extract_mcp_tool_declarations_from_source(registration_path, registration);
+    let declarations = extract_mcp_tool_declarations_from_source(registration_path, registration);
     let parsed_files = vec![(
         handler_path.to_path_buf(),
         parser::typescript::TypeScriptParser
@@ -656,9 +651,7 @@ fn adapter_load_projects_permissions_but_not_input_schema() {
         fetch
             .capability_declarations
             .iter()
-            .filter(|declaration| {
-                declaration.source == CapabilityDeclarationSource::Permission
-            })
+            .filter(|declaration| { declaration.source == CapabilityDeclarationSource::Permission })
             .count(),
         1
     );

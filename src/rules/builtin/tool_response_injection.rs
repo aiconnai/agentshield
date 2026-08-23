@@ -24,9 +24,8 @@ pub struct ToolResponseInjectionDetector;
 // ── Python statics (applied per-line; no (?m) flag) ───────────────────────────
 
 // Matches @mcp.tool, @tool, @server.tool, @app.tool decorator lines
-static PY_TOOL_DECORATOR_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"^\s*@(?:\w+\.)*tool\b"#).expect("valid regex")
-});
+static PY_TOOL_DECORATOR_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"^\s*@(?:\w+\.)*tool\b"#).expect("valid regex"));
 
 // Matches `def <name>(` where <name> contains a tool-related keyword
 static PY_TOOL_DEF_RE: Lazy<Regex> = Lazy::new(|| {
@@ -37,9 +36,8 @@ static PY_TOOL_DEF_RE: Lazy<Regex> = Lazy::new(|| {
 });
 
 // Matches any `def <name>(` — used to detect the function start after a decorator
-static PY_DEF_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"^\s*(?:async\s+)?def\s+\w+\s*\("#).expect("valid regex")
-});
+static PY_DEF_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"^\s*(?:async\s+)?def\s+\w+\s*\("#).expect("valid regex"));
 
 // Matches `return f"...{var}..."` or `return f'...'` (f-string with at least one interpolation)
 static PY_RETURN_FSTRING_RE: Lazy<Regex> = Lazy::new(|| {
@@ -65,9 +63,8 @@ static TS_TOOL_REGISTRATION_RE: Lazy<Regex> = Lazy::new(|| {
 });
 
 // Matches template literal return with interpolation: return `...${...}...`
-static TS_RETURN_TEMPLATE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"^\s*return\s+`[^`]*\$\{[^}]+\}"#).expect("valid regex")
-});
+static TS_RETURN_TEMPLATE_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"^\s*return\s+`[^`]*\$\{[^}]+\}"#).expect("valid regex"));
 
 // Matches string concatenation in return: return "..." + var or return var + "..."
 static TS_RETURN_CONCAT_RE: Lazy<Regex> = Lazy::new(|| {
@@ -118,11 +115,7 @@ impl Detector for ToolResponseInjectionDetector {
     }
 }
 
-fn scan_python(
-    lines: &[&str],
-    file: &crate::ir::SourceFile,
-    findings: &mut Vec<Finding>,
-) {
+fn scan_python(lines: &[&str], file: &crate::ir::SourceFile, findings: &mut Vec<Finding>) {
     let mut in_tool_fn = false;
     let mut expecting_tool_def = false;
     let mut tool_fn_indent: usize = 0;
@@ -212,11 +205,7 @@ fn scan_python(
     }
 }
 
-fn scan_ts_js(
-    lines: &[&str],
-    file: &crate::ir::SourceFile,
-    findings: &mut Vec<Finding>,
-) {
+fn scan_ts_js(lines: &[&str], file: &crate::ir::SourceFile, findings: &mut Vec<Finding>) {
     // Track already-reported body lines to prevent duplicate findings when
     // multiple .tool() registrations share the same 50-line lookahead window.
     let mut reported_lines: std::collections::HashSet<usize> = std::collections::HashSet::new();
@@ -463,4 +452,3 @@ def search(query: str) -> str:
         );
     }
 }
-

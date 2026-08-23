@@ -9,9 +9,7 @@ use super::super::ast::{
 use super::super::guard::{
     contains_opaque_control_flow, has_ambiguous_shadowing, top_level_return_count,
 };
-use super::super::types::{
-    DefinitionId, FlowEdge, FlowEdgeKind, ScopeId, ValueId,
-};
+use super::super::types::{DefinitionId, FlowEdge, FlowEdgeKind, ScopeId, ValueId};
 use super::resolve::{assign, resolve_lineage, resolved_file_read_api};
 use super::types::{AnchorKey, AnchorSeed, Lineage, ParsedUnit};
 
@@ -76,8 +74,10 @@ pub(crate) fn analyze_helper_return(
             }
             "return_statement" => {
                 let returned = named_children(event).into_iter().next()?;
-                let mut lineage = resolve_lineage(returned, unit.content, &variables)
-                    .or_else(|| evaluate_helper_expression(unit, returned, &variables, &helper_scope))?;
+                let mut lineage =
+                    resolve_lineage(returned, unit.content, &variables).or_else(|| {
+                        evaluate_helper_expression(unit, returned, &variables, &helper_scope)
+                    })?;
                 let returned_value = ValueId {
                     definition: DefinitionId {
                         scope: caller_scope.clone(),

@@ -31,9 +31,8 @@ pub struct AgentMemoryPoisoningDetector;
 // ── Python statics (applied per-line; no (?m) flag) ───────────────────────────
 
 // Matches @mcp.tool, @tool, @server.tool, @app.tool decorator lines.
-static PY_TOOL_DECORATOR_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"^\s*@(?:\w+\.)*tool\b"#).expect("valid regex")
-});
+static PY_TOOL_DECORATOR_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"^\s*@(?:\w+\.)*tool\b"#).expect("valid regex"));
 
 // Matches `def <name>(` where <name> contains a tool-related keyword.
 static PY_TOOL_DEF_RE: Lazy<Regex> = Lazy::new(|| {
@@ -44,9 +43,8 @@ static PY_TOOL_DEF_RE: Lazy<Regex> = Lazy::new(|| {
 });
 
 // Matches any `def <name>(` — used to detect function boundaries after a decorator.
-static PY_DEF_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"^\s*(?:async\s+)?def\s+\w+\s*\("#).expect("valid regex")
-});
+static PY_DEF_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"^\s*(?:async\s+)?def\s+\w+\s*\("#).expect("valid regex"));
 
 // Matches vector store write calls that receive a variable argument (not a plain string literal).
 //
@@ -93,10 +91,8 @@ static PY_VAR_IN_ARG_RE: Lazy<Regex> = Lazy::new(|| {
 
 // Matches calls to common sanitization / validation helpers.
 static SANITIZER_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r#"\b(?:sanitize|escape|validate|strip_tags|bleach\.clean|clean_input)\s*\("#,
-    )
-    .expect("valid regex")
+    Regex::new(r#"\b(?:sanitize|escape|validate|strip_tags|bleach\.clean|clean_input)\s*\("#)
+        .expect("valid regex")
 });
 
 // ── TypeScript / JavaScript statics (applied per-line; no (?m) flag) ──────────
@@ -175,11 +171,7 @@ impl Detector for AgentMemoryPoisoningDetector {
 
 // ── Python scanner ─────────────────────────────────────────────────────────────
 
-fn scan_python(
-    lines: &[&str],
-    file: &crate::ir::SourceFile,
-    findings: &mut Vec<Finding>,
-) {
+fn scan_python(lines: &[&str], file: &crate::ir::SourceFile, findings: &mut Vec<Finding>) {
     let mut in_tool_fn = false;
     let mut expecting_tool_def = false;
     let mut tool_fn_indent: usize = 0;
@@ -252,11 +244,7 @@ fn scan_python(
 
 // ── TypeScript / JavaScript scanner ───────────────────────────────────────────
 
-fn scan_ts_js(
-    lines: &[&str],
-    file: &crate::ir::SourceFile,
-    findings: &mut Vec<Finding>,
-) {
+fn scan_ts_js(lines: &[&str], file: &crate::ir::SourceFile, findings: &mut Vec<Finding>) {
     for (line_idx, &line) in lines.iter().enumerate() {
         let trimmed = line.trim();
         if trimmed.starts_with("//") || trimmed.starts_with('*') {
@@ -608,4 +596,3 @@ def store_memory(param: str) -> str:
         assert_eq!(findings[0].rule_id, "SHIELD-037");
     }
 }
-

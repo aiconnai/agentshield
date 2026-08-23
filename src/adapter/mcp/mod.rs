@@ -28,9 +28,7 @@ pub(crate) use loader::{
 #[cfg(test)]
 use binding::bind_mcp_tool_operations;
 #[cfg(test)]
-use tools::{
-    McpToolHandler, extract_mcp_tool_declarations_from_source, parse_mcp_tool_handler,
-};
+use tools::{McpToolHandler, extract_mcp_tool_declarations_from_source, parse_mcp_tool_handler};
 
 /// MCP Server adapter.
 ///

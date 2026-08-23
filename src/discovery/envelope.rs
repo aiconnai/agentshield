@@ -1,6 +1,6 @@
 use super::types::{
-    DiagnosticCode, DiscoveryEnvelope, DiscoverySummary, ParsedDiscoverySource, SourceStatus,
-    MAX_ENTRIES_PER_INVOCATION, REGISTRY_VERSION,
+    DiagnosticCode, DiscoveryEnvelope, DiscoverySummary, MAX_ENTRIES_PER_INVOCATION,
+    ParsedDiscoverySource, REGISTRY_VERSION, SourceStatus,
 };
 
 pub(crate) fn build_envelope(mut parsed_sources: Vec<ParsedDiscoverySource>) -> DiscoveryEnvelope {

@@ -14,9 +14,8 @@ use crate::rules::{
 pub struct InsecureAgentCheckpointDetector;
 
 // Matches torch.load( invocation start
-static TORCH_LOAD_START_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"\btorch\.load\s*\("#).expect("valid regex")
-});
+static TORCH_LOAD_START_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"\btorch\.load\s*\("#).expect("valid regex"));
 
 // Matches joblib, dill, cloudpickle, shelve deserializers
 static UNSAFE_STATE_LOADERS_RE: Lazy<Regex> = Lazy::new(|| {
@@ -31,9 +30,8 @@ static INSECURE_CHECKPOINT_SAVER_RE: Lazy<Regex> = Lazy::new(|| {
 });
 
 // Matches weights_only=True pattern
-static WEIGHTS_ONLY_TRUE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"\bweights_only\s*=\s*True\b"#).expect("valid regex")
-});
+static WEIGHTS_ONLY_TRUE_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"\bweights_only\s*=\s*True\b"#).expect("valid regex"));
 
 impl Detector for InsecureAgentCheckpointDetector {
     fn metadata(&self) -> RuleMetadata {
@@ -329,7 +327,11 @@ checkpointer = PickleCheckpointSaver()
             1,
             "expected exactly 1 finding (usage line only, import line must be skipped); got {}:\n{}",
             findings.len(),
-            findings.iter().map(|f| format!("  [{:?}] {}", f.location, f.message)).collect::<Vec<_>>().join("\n")
+            findings
+                .iter()
+                .map(|f| format!("  [{:?}] {}", f.location, f.message))
+                .collect::<Vec<_>>()
+                .join("\n")
         );
         assert_eq!(findings[0].severity, Severity::Medium);
     }

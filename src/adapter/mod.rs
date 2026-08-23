@@ -113,9 +113,9 @@ impl AdapterSpec {
             Self::VercelAi => Box::new(legacy_analysis_adapter(vercel_ai::VercelAiAdapter)),
             Self::AutoGen => Box::new(legacy_analysis_adapter(autogen::AutoGenAdapter)),
             Self::LlamaIndex => Box::new(legacy_analysis_adapter(llama_index::LlamaIndexAdapter)),
-            Self::SemanticKernel => {
-                Box::new(legacy_analysis_adapter(semantic_kernel::SemanticKernelAdapter))
-            }
+            Self::SemanticKernel => Box::new(legacy_analysis_adapter(
+                semantic_kernel::SemanticKernelAdapter,
+            )),
         }
     }
 }

@@ -127,7 +127,10 @@ pub(crate) fn extract_autogen_tools_from_source(path: &Path, content: &str) -> V
     }
 
     for cap in AUTOGEN_REGISTER_FN_RE.captures_iter(content) {
-        let func_name = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+        let func_name = cap
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
         if func_name.is_empty() {
             continue;
         }

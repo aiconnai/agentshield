@@ -9,7 +9,7 @@ pub(crate) mod registry;
 pub(crate) mod types;
 
 pub(crate) use envelope::build_envelope;
-pub(crate) use filesystem::{discover, DiscoveryRequest};
+pub(crate) use filesystem::{DiscoveryRequest, discover};
 pub(crate) use parser::parse_source;
 pub(crate) use registry::registry;
 pub(crate) use types::*;

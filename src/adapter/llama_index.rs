@@ -119,7 +119,10 @@ impl super::Adapter for LlamaIndexAdapter {
     }
 }
 
-pub(crate) fn extract_llama_index_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
+pub(crate) fn extract_llama_index_tools_from_source(
+    path: &Path,
+    content: &str,
+) -> Vec<ToolSurface> {
     let mut tools = Vec::new();
     let mut doc_map = std::collections::HashMap::new();
 
@@ -130,7 +133,10 @@ pub(crate) fn extract_llama_index_tools_from_source(path: &Path, content: &str) 
     }
 
     for cap in LLAMA_FUNCTION_TOOL_RE.captures_iter(content) {
-        let fn_ident = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+        let fn_ident = cap
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
         let explicit_name = cap.get(2).map(|m| m.as_str().to_string());
         let tool_name = explicit_name.unwrap_or_else(|| fn_ident.clone());
 
@@ -166,7 +172,10 @@ pub(crate) fn extract_llama_index_tools_from_source(path: &Path, content: &str) 
     }
 
     for cap in LLAMA_TOOL_METADATA_RE.captures_iter(content) {
-        let name = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_else(|| "query_tool".into());
+        let name = cap
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_else(|| "query_tool".into());
         let description = cap.get(2).map(|m| m.as_str().to_string());
 
         let match_start = cap.get(0).map(|m| m.start()).unwrap_or(0);

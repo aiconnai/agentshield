@@ -1,8 +1,8 @@
-use crate::discovery::{DiscoveryDescriptor, RedactedPathRef};
 #[cfg(unix)]
 use crate::discovery::{
     DiagnosticCode, DiscoveryMethod, ParsedDiscoverySource, SourceStatus, parse_source,
 };
+use crate::discovery::{DiscoveryDescriptor, RedactedPathRef};
 
 #[cfg(unix)]
 use rustix::fs::{Mode, openat};

@@ -106,11 +106,8 @@ pub(super) fn parse_file_fallback(path: &Path, content: &str) -> Result<ParsedFi
         for cap in CALL_RE.captures_iter(line) {
             let func_name = &cap[1];
             let args_str = &cap[2];
-            let arg_source = classify_argument_with_sanitizers(
-                args_str,
-                &param_names,
-                &parsed.sanitized_vars,
-            );
+            let arg_source =
+                classify_argument_with_sanitizers(args_str, &param_names, &parsed.sanitized_vars);
 
             // Record CallSite
             let all_args = args_str

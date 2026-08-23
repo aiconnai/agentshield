@@ -62,7 +62,10 @@ impl super::Adapter for VercelAiAdapter {
                 continue;
             }
 
-            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default();
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or_default();
             if !matches!(ext, "ts" | "tsx" | "js" | "jsx" | "mjs") {
                 continue;
             }
@@ -95,12 +98,8 @@ impl super::Adapter for VercelAiAdapter {
         let mut source_files = Vec::new();
         super::mcp::collect_source_files_with_filter(root, filter, &mut source_files)?;
 
-        source_files.retain(|sf| {
-            matches!(
-                sf.language,
-                Language::TypeScript | Language::JavaScript
-            )
-        });
+        source_files
+            .retain(|sf| matches!(sf.language, Language::TypeScript | Language::JavaScript));
 
         let mut tools = Vec::new();
         for sf in &source_files {
@@ -232,8 +231,20 @@ export const getWeather = tool({
         let tools = extract_vercel_ai_tools_from_source(Path::new("tools.ts"), content);
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "getWeather");
-        assert!(tools[0].description.as_deref().unwrap().contains("weather for a city"));
-        assert!(tools[0].description.as_deref().unwrap().contains("The target city name"));
+        assert!(
+            tools[0]
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("weather for a city")
+        );
+        assert!(
+            tools[0]
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("The target city name")
+        );
         assert_eq!(tools[0].defined_at.as_ref().unwrap().line, 5);
     }
 
@@ -262,6 +273,12 @@ export const analyzeData = tool({{
         let tools = extract_vercel_ai_tools_from_source(Path::new("tools.ts"), &content);
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "analyzeData");
-        assert!(tools[0].description.as_deref().unwrap().contains("Consulta SQL"));
+        assert!(
+            tools[0]
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("Consulta SQL")
+        );
     }
 }

@@ -7,7 +7,7 @@ use crate::ir::tool_surface::PermissionType;
 use super::domain::{self, DomainPolicy};
 use super::merge::{AuditPolicy, RateLimitPolicy};
 use super::network::NetworkPolicy;
-use super::types::{EgressPolicy, CURRENT_SCHEMA_VERSION};
+use super::types::{CURRENT_SCHEMA_VERSION, EgressPolicy};
 
 /// Build a starter egress policy by analyzing all `ScanTarget`s.
 ///

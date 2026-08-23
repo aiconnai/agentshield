@@ -9,7 +9,7 @@ pub(crate) mod engine;
 mod sanitizer;
 mod sink_policy;
 
-pub use engine::{apply_cross_file_sanitization, CrossFileResult};
+pub use engine::{CrossFileResult, apply_cross_file_sanitization};
 #[allow(unused_imports)]
 pub(crate) use sanitizer::{
     SanitizerCategory, is_redaction_sanitizer, is_sanitizer, sanitizer_category, sanitizer_label,
@@ -19,15 +19,15 @@ pub use sink_policy::sanitizer_allows_sink;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use crate::ir::{ArgumentSource, SinkClass};
-    use crate::parser::ParsedFile;
     use crate::adapter::auto_detect_and_load;
     use crate::analysis::cross_file::sanitizer::{is_redaction_sanitizer, is_sanitizer};
     use crate::ir::SourceLocation;
     use crate::ir::execution_surface::{FileOpType, FileOperation};
+    use crate::ir::{ArgumentSource, SinkClass};
+    use crate::parser::ParsedFile;
     use crate::parser::{CallSite, FunctionDef};
     use crate::rules::{Finding, RuleEngine};
+    use std::path::PathBuf;
 
     fn loc(file: &str, line: usize) -> SourceLocation {
         SourceLocation {

@@ -1,6 +1,6 @@
+mod agent_memory_poisoning;
 mod arbitrary_file_access;
 mod archive_traversal;
-mod agent_memory_poisoning;
 mod capability_mismatch;
 mod command_injection;
 mod composite_toxic_flow;

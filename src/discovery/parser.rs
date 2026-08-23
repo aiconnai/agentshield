@@ -3,9 +3,9 @@ use sha2::{Digest, Sha256};
 
 use super::types::{
     ConfigFormat, DiagnosticCode, DiscoveryBase, DiscoveryDescriptor, DiscoveryEntry,
-    DiscoveryMethod, DiscoverySource, EntryState, ParsedDiscoverySource, ProvenanceObservation,
-    RedactedPathRef, SourceStatus, SupportStatus, MAX_CONFIG_BYTES, MAX_DECLARED_NAME_BYTES,
-    MAX_ENTRIES_PER_INVOCATION,
+    DiscoveryMethod, DiscoverySource, EntryState, MAX_CONFIG_BYTES, MAX_DECLARED_NAME_BYTES,
+    MAX_ENTRIES_PER_INVOCATION, ParsedDiscoverySource, ProvenanceObservation, RedactedPathRef,
+    SourceStatus, SupportStatus,
 };
 
 pub(crate) fn parse_source(

@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use super::{LanguageParser, ParsedFile};
 use crate::error::Result;
-use crate::ir::Language;
 #[cfg(test)]
 use crate::ir::ArgumentSource;
+use crate::ir::Language;
 
 pub struct PythonParser;
 

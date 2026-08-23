@@ -41,8 +41,7 @@ impl super::Adapter for SemanticKernelAdapter {
             if let Some(content) = super::read_file_capped(&requirements) {
                 if content.lines().any(|l| {
                     let trimmed = l.trim();
-                    trimmed.starts_with("semantic-kernel")
-                        || trimmed.starts_with("semantic_kernel")
+                    trimmed.starts_with("semantic-kernel") || trimmed.starts_with("semantic_kernel")
                 }) {
                     return true;
                 }
@@ -81,7 +80,10 @@ impl super::Adapter for SemanticKernelAdapter {
 
         let mut tools = Vec::new();
         for sf in &source_files {
-            tools.extend(extract_semantic_kernel_tools_from_source(&sf.path, &sf.content));
+            tools.extend(extract_semantic_kernel_tools_from_source(
+                &sf.path,
+                &sf.content,
+            ));
         }
 
         for tool in &mut tools {
@@ -108,7 +110,10 @@ impl super::Adapter for SemanticKernelAdapter {
     }
 }
 
-pub(crate) fn extract_semantic_kernel_tools_from_source(path: &Path, content: &str) -> Vec<ToolSurface> {
+pub(crate) fn extract_semantic_kernel_tools_from_source(
+    path: &Path,
+    content: &str,
+) -> Vec<ToolSurface> {
     let mut tools = Vec::new();
 
     for cap in SK_KERNEL_FN_RE.captures_iter(content) {
@@ -166,7 +171,11 @@ mod tests {
     fn detects_semantic_kernel_import() {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("plugin.py");
-        std::fs::write(&src, "from semantic_kernel.functions import kernel_function\n").unwrap();
+        std::fs::write(
+            &src,
+            "from semantic_kernel.functions import kernel_function\n",
+        )
+        .unwrap();
 
         let adapter = SemanticKernelAdapter;
         assert!(adapter.detect(dir.path()));

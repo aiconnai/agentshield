@@ -2,7 +2,7 @@ use tree_sitter::Node;
 
 use super::super::ast::normalized_subtree_hash;
 use super::super::types::SemanticAnchor;
-use super::types::{AnchorKey, AnchorSeed, Analyzer};
+use super::types::{Analyzer, AnchorKey, AnchorSeed};
 
 impl Analyzer<'_> {
     pub(crate) fn anchor(

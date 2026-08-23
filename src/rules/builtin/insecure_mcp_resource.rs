@@ -62,7 +62,10 @@ impl Detector for InsecureMcpResourceDetector {
         for source in &target.source_files {
             match source.language {
                 Language::Python => {
-                    findings.extend(scan_python_resources(source.path.as_path(), &source.content));
+                    findings.extend(scan_python_resources(
+                        source.path.as_path(),
+                        &source.content,
+                    ));
                 }
                 Language::TypeScript | Language::JavaScript => {
                     findings.extend(scan_ts_resources(source.path.as_path(), &source.content));
@@ -268,7 +271,11 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
         let target = target_with_source(Language::TypeScript, ts_code);
         let detector = InsecureMcpResourceDetector;
         let findings = detector.run(&target);
-        assert_eq!(findings.len(), 1, "uri.startsWith('file://') should NOT suppress unconfined path access");
+        assert_eq!(
+            findings.len(),
+            1,
+            "uri.startsWith('file://') should NOT suppress unconfined path access"
+        );
         assert_eq!(findings[0].rule_id, "SHIELD-032");
     }
 }

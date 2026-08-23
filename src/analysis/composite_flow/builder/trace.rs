@@ -17,7 +17,7 @@ use super::resolve::{
     assign, first_parameter_names, resolve_lineage, resolved_file_read_api,
     resolved_network_payload,
 };
-use super::types::{AnchorKey, AnchorSeed, Analyzer, Lineage};
+use super::types::{Analyzer, AnchorKey, AnchorSeed, Lineage};
 
 impl Analyzer<'_> {
     pub(crate) fn analyze_function(
