@@ -215,13 +215,7 @@ runs:
 
         # Count findings from SARIF if available
         if [ -n "$SARIF_FILE" ] && [ -f "$SARIF_FILE" ]; then
-          COUNT=$(python3 - "$SARIF_FILE" <<'COUNT_PY' 2>/dev/null || echo "0"
-import json, sys
-with open(sys.argv[1]) as f:
-    d = json.load(f)
-print(len(d.get("runs", [{}])[0].get("results", [])))
-COUNT_PY
-)
+          COUNT=$(python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(len(d.get('runs',[{}])[0].get('results',[])))" "$SARIF_FILE" 2>/dev/null || echo "0")
           echo "finding-count=$COUNT" >> $GITHUB_OUTPUT
           if [ "$EXIT_CODE" = "1" ]; then
             echo "::group::AgentShield findings"
