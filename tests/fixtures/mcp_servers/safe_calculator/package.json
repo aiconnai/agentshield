@@ -2,7 +2,5 @@
   "name": "safe-calculator-mcp",
   "version": "1.0.0",
   "description": "A safe calculator MCP server — no dangerous operations",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
-  }
+  "dependencies": {}
 }

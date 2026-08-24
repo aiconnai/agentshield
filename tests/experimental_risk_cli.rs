@@ -65,7 +65,10 @@ fn opt_in_console_keeps_verdict_primary_and_labels_risk_informational() {
     assert!(output.status.success());
 
     let rendered = String::from_utf8_lossy(&output.stdout);
-    let verdict_position = rendered.find("PASS").expect("console verdict");
+    let verdict_position = rendered
+        .find("No security findings detected.")
+        .or_else(|| rendered.find("PASS"))
+        .expect("console verdict");
     let risk_position = rendered
         .find("Experimental risk assessment (informational)")
         .expect("experimental risk heading");

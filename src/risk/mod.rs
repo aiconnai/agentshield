@@ -239,10 +239,9 @@ mod tests {
         let vulnerable_assessment = assess(&vulnerable.findings, &vulnerable.scan_root, &coverage)
             .expect("assess vulnerable fixture");
 
-        // The historically named safe fixture still carries supply-chain
-        // hygiene findings; the vulnerable fixture adds two critical command
-        // injection findings.
-        assert_eq!(safe_assessment.score, 33);
+        // The safe fixture produces zero findings (risk score 0); the vulnerable
+        // fixture adds two critical command injection findings.
+        assert_eq!(safe_assessment.score, 0);
         assert_eq!(vulnerable_assessment.score, 82);
         assert!(vulnerable_assessment.score > safe_assessment.score);
     }
