@@ -3,7 +3,10 @@ import json
 import sys
 import time
 
-for line in sys.stdin:
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
     line = line.strip()
     if not line:
         continue

@@ -9,7 +9,10 @@ those itself), so its output is the ground truth for "what was forwarded".
 import json
 import sys
 
-for line in sys.stdin:
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
     line = line.strip()
     if not line:
         continue
