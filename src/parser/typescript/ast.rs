@@ -41,18 +41,17 @@ pub(super) fn collect_params(
         let mut func_params = Vec::new();
 
         if let Some(params_node) = node.child_by_field_name("parameters") {
-            for i in 0..params_node.named_child_count() {
-                if let Some(param) = params_node.named_child(i) {
-                    for name in extract_param_names(param, source) {
-                        if name != "this" {
-                            param_names.insert(name.clone());
-                            func_params.push(name.clone());
-                            parsed.function_params.push(FunctionParam {
-                                function_name: func_name.clone(),
-                                param_name: name,
-                                location: loc(file_path, param),
-                            });
-                        }
+            let mut cursor = params_node.walk();
+            for param in params_node.named_children(&mut cursor) {
+                for name in extract_param_names(param, source) {
+                    if name != "this" {
+                        param_names.insert(name.clone());
+                        func_params.push(name.clone());
+                        parsed.function_params.push(FunctionParam {
+                            function_name: func_name.clone(),
+                            param_name: name,
+                            location: loc(file_path, param),
+                        });
                     }
                 }
             }
@@ -71,10 +70,9 @@ pub(super) fn collect_params(
     }
 
     // Recurse
-    for i in 0..node.named_child_count() {
-        if let Some(child) = node.named_child(i) {
-            collect_params(child, source, file_path, param_names, parsed);
-        }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_params(child, source, file_path, param_names, parsed);
     }
 }
 
@@ -152,11 +150,10 @@ pub(super) fn extract_param_names(node: tree_sitter::Node, source: &[u8]) -> Vec
         }
         // Rest parameter: ...args
         "rest_pattern" => {
-            for i in 0..node.named_child_count() {
-                if let Some(child) = node.named_child(i) {
-                    if child.kind() == "identifier" {
-                        return vec![node_text(child, source).to_string()];
-                    }
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                if child.kind() == "identifier" {
+                    return vec![node_text(child, source).to_string()];
                 }
             }
             vec![]
@@ -171,23 +168,22 @@ pub(super) fn extract_param_names(node: tree_sitter::Node, source: &[u8]) -> Vec
 #[cfg(feature = "typescript")]
 pub(super) fn extract_object_pattern_names(node: tree_sitter::Node, source: &[u8]) -> Vec<String> {
     let mut names = Vec::new();
-    for i in 0..node.named_child_count() {
-        if let Some(child) = node.named_child(i) {
-            match child.kind() {
-                // shorthand_property_identifier_pattern: { url } => "url"
-                "shorthand_property_identifier_pattern" => {
-                    names.push(node_text(child, source).to_string());
-                }
-                // pair_pattern: { url: myUrl } => "myUrl"
-                "pair_pattern" => {
-                    if let Some(value) = child.child_by_field_name("value") {
-                        if value.kind() == "identifier" {
-                            names.push(node_text(value, source).to_string());
-                        }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        match child.kind() {
+            // shorthand_property_identifier_pattern: { url } => "url"
+            "shorthand_property_identifier_pattern" => {
+                names.push(node_text(child, source).to_string());
+            }
+            // pair_pattern: { url: myUrl } => "myUrl"
+            "pair_pattern" => {
+                if let Some(value) = child.child_by_field_name("value") {
+                    if value.kind() == "identifier" {
+                        names.push(node_text(value, source).to_string());
                     }
                 }
-                _ => {}
             }
+            _ => {}
         }
     }
     names
@@ -197,11 +193,10 @@ pub(super) fn extract_object_pattern_names(node: tree_sitter::Node, source: &[u8
 #[cfg(feature = "typescript")]
 pub(super) fn extract_array_pattern_names(node: tree_sitter::Node, source: &[u8]) -> Vec<String> {
     let mut names = Vec::new();
-    for i in 0..node.named_child_count() {
-        if let Some(child) = node.named_child(i) {
-            if child.kind() == "identifier" {
-                names.push(node_text(child, source).to_string());
-            }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        if child.kind() == "identifier" {
+            names.push(node_text(child, source).to_string());
         }
     }
     names
@@ -360,10 +355,9 @@ pub(super) fn walk_node(
     }
 
     // Recurse into children (skip already-processed subtrees)
-    for i in 0..node.named_child_count() {
-        if let Some(child) = node.named_child(i) {
-            walk_node(child, source, file_path, param_names, parsed);
-        }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        walk_node(child, source, file_path, param_names, parsed);
     }
 }
 

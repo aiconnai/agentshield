@@ -15,15 +15,14 @@ pub(super) fn classify_all_arguments(
         return Vec::new();
     };
     let mut result = Vec::new();
-    for i in 0..args.named_child_count() {
-        if let Some(arg) = args.named_child(i) {
-            let arg_text = super::ast::node_text(arg, source).to_string();
-            result.push(classify_argument_with_sanitizers(
-                &arg_text,
-                param_names,
-                sanitized_vars,
-            ));
-        }
+    let mut cursor = args.walk();
+    for arg in args.named_children(&mut cursor) {
+        let arg_text = super::ast::node_text(arg, source);
+        result.push(classify_argument_with_sanitizers(
+            arg_text,
+            param_names,
+            sanitized_vars,
+        ));
     }
     result
 }

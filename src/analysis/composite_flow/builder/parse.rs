@@ -14,20 +14,27 @@ use super::types::{FunctionMatch, Imports, ParsedUnit, RelativeImport};
 
 #[cfg(feature = "typescript")]
 pub(crate) fn parse_units<'a>(sources: &[SourceUnit<'a>]) -> Vec<ParsedUnit<'a>> {
+    let mut parser = Parser::new();
+    let mut current_lang: Option<tree_sitter::Language> = None;
+
     sources
         .iter()
         .filter_map(|source| {
-            let mut parser = Parser::new();
-            let language = if source
+            let is_tsx = source
                 .path
                 .extension()
-                .is_some_and(|extension| extension == "tsx")
-            {
-                tree_sitter_typescript::LANGUAGE_TSX
+                .is_some_and(|extension| extension == "tsx");
+            let target_lang: tree_sitter::Language = if is_tsx {
+                tree_sitter_typescript::LANGUAGE_TSX.into()
             } else {
-                tree_sitter_typescript::LANGUAGE_TYPESCRIPT
+                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
             };
-            parser.set_language(&language.into()).ok()?;
+
+            if current_lang.as_ref() != Some(&target_lang) {
+                parser.set_language(&target_lang).ok()?;
+                current_lang = Some(target_lang);
+            }
+
             let tree = parser.parse(source.content, None)?;
             Some(ParsedUnit {
                 path: source.path,

@@ -10,16 +10,17 @@ pub(crate) fn normalized_subtree_hash(node: Node<'_>, source: &str) -> String {
     fn append(node: Node<'_>, source: &str, output: &mut String) {
         output.push_str(node.kind());
         output.push('(');
-        let children = named_children(node);
-        if children.is_empty() {
+        let mut cursor = node.walk();
+        let mut has_children = false;
+        for child in node.named_children(&mut cursor) {
+            has_children = true;
+            append(child, source, output);
+        }
+        if !has_children {
             if node.kind() == "identifier" {
                 output.push_str("<identifier>");
             } else {
                 output.push_str(text(node, source).trim());
-            }
-        } else {
-            for child in children {
-                append(child, source, output);
             }
         }
         output.push(')');
@@ -31,7 +32,8 @@ pub(crate) fn normalized_subtree_hash(node: Node<'_>, source: &str) -> String {
 
 pub(crate) fn walk<'tree>(node: Node<'tree>, callback: &mut impl FnMut(Node<'tree>)) {
     callback(node);
-    for child in named_children(node) {
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
         walk(child, callback);
     }
 }
@@ -72,7 +74,8 @@ pub(crate) fn location_for_node(node: Node<'_>) -> (usize, usize) {
 pub(crate) fn unwrap_expression(mut node: Node<'_>) -> Node<'_> {
     loop {
         if matches!(node.kind(), "await_expression" | "parenthesized_expression") {
-            if let Some(child) = named_children(node).into_iter().next() {
+            let mut cursor = node.walk();
+            if let Some(child) = node.named_children(&mut cursor).next() {
                 node = child;
                 continue;
             }
@@ -186,7 +189,8 @@ pub(crate) fn collect_bindings(
             output.extend(binding_names(name, source));
         }
     }
-    for child in named_children(node) {
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
         collect_bindings(child, root, source, output);
     }
 }
@@ -209,7 +213,8 @@ pub(crate) fn collect_events<'tree>(
     ) {
         output.push(node);
     }
-    for child in named_children(node) {
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
         collect_events(child, root, output);
     }
 }
@@ -223,15 +228,17 @@ pub(crate) fn object_property<'tree>(
     if object.kind() != "object" {
         return None;
     }
-    named_children(object).into_iter().find_map(|pair| {
+    let mut cursor = object.walk();
+    for pair in object.named_children(&mut cursor) {
         if pair.kind() != "pair" {
-            return None;
+            continue;
         }
         let key = pair.child_by_field_name("key")?;
-        (text(key, source).trim_matches(['\'', '"']) == property)
-            .then(|| pair.child_by_field_name("value"))
-            .flatten()
-    })
+        if text(key, source).trim_matches(['\'', '"']) == property {
+            return pair.child_by_field_name("value");
+        }
+    }
+    None
 }
 
 pub(crate) fn relative_import_targets(caller: &Path, module: &str, target: &Path) -> bool {
