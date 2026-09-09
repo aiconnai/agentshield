@@ -1,6 +1,6 @@
-# 📊 AgentShield Security & Performance Benchmarks (v1.0.0 GA)
+# 📊 AgentShield Security & Performance Benchmarks (v1.0.1 GA)
 
-This document provides empirical scan latency, memory efficiency, and detection accuracy benchmarks for **AgentShield v1.0.0** across major AI agent frameworks and Model Context Protocol (MCP) server implementations.
+This document provides empirical scan latency, memory efficiency, and detection accuracy benchmarks for **AgentShield v1.0.1** across major AI agent frameworks and Model Context Protocol (MCP) server implementations.
 
 ---
 
@@ -26,7 +26,7 @@ Evaluated on Apple Silicon (M-series) / Linux x86_64, release build:
 
 Comparison of AgentShield vs Traditional General-Purpose Linters & SAST tools when analyzing AI Agent Extensions:
 
-| Threat Category & Attack Vector | OWASP LLM / CWE | Semgrep (Generic) | SonarQube | Snyk OpenSource | AgentShield v1.0.0 |
+| Threat Category & Attack Vector | OWASP LLM / CWE | Semgrep (Generic) | SonarQube | Snyk OpenSource | AgentShield v1.0.1 |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Tainted LLM Tool Parameter $\to$ Subprocess** | CWE-78 | ⚠️ Partial (File-local) | ❌ Missed | ❌ Missed | ✅ **Detected (Call-Graph)** |
 | **Cloud Metadata SSRF (`169.254.169.254`)** | CWE-918 | ❌ Missed | ⚠️ Regex only | ❌ Missed | ✅ **Detected (Taint Path)** |

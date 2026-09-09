@@ -1,0 +1,26 @@
+# AgentShield Governance Exceptions Manifest
+# Governed by Rust Repository Engineering Standard v5 [R-0.6, R-0.7, R-0.8] and Control C-GOV-02.
+#
+# Every policy waiver in code or configuration must cite an active EXC-XXXX identifier.
+# Required fields for each entry:
+#   id                   = "EXC-0001" (unique, format EXC-XXXX)
+#   rule                 = "R-X.Y.Z" (stable rule identifier from standard)
+#   owner                = "team or individual"
+#   rationale            = "explanation of necessity"
+#   scope                = "path, crate, or module affected"
+#   compensating_control = "controls mitigating risk"
+#   record               = "ADR-XXXX or ISSUE-XXXX tracking record"
+#   expires              = "YYYY-MM-DD" (must be in the future; expired entries fail closed)
+
+# Currently, AgentShield maintains zero active exceptions.
+# When registering an exception, append an [[exception]] block below:
+#
+# [[exception]]
+# id = "EXC-0001"
+# rule = "R-2.1.3"
+# owner = "core-team"
+# rationale = "Temporary isolation of legacy TLS host"
+# scope = "crates/legacy-client"
+# compensating_control = "cargo-deny advisories check covers both versions"
+# record = "ISSUE-101"
+# expires = "2026-12-31"

@@ -138,7 +138,7 @@ cargo install agent-shield
 
 # 2. Or build from GitHub with all features
 cargo install --git https://github.com/aiconnai/agentshield \\
-  --tag v1.0.0 --features full --force
+  --tag v1.0.1 --features full --force
 
 # 3. Verify installation
 agentshield --version`,

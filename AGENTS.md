@@ -64,3 +64,14 @@ Rules:
 - Do not rely on filtered output to make security-critical decisions.
 - If a test, parser, detector, or policy check fails, rerun the specific
   command raw before making code changes based on the failure.
+
+## Build Velocity & Measurement Discipline
+
+- **Destructive Measurement Rule (Warn Before Any `clean`):** `cargo clean` or
+  `cargo clean -p <crate>` vaporizes warm incremental build artifacts and compiler
+  caches. Never run `cargo clean` without explicit user confirmation.
+- **Toolchain Pinning:** `rust-toolchain.toml` pins the canonical stable channel,
+  `clippy`, and `rustfmt`.
+- **High-Performance Linkers:** See `.cargo/config.toml.example` to opt into `mold`
+  (Linux) or fast linkers locally for maximum iteration velocity.
+

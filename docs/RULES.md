@@ -1,6 +1,6 @@
 # Detection Rules
 
-AgentShield ships with 20 built-in detectors targeting the most common security
+AgentShield ships with 37 built-in detectors (SHIELD-001 through SHIELD-037) targeting the most common security
 issues in AI agent extensions. Each rule has an ID, severity, confidence level,
 and CWE mapping where applicable.
 

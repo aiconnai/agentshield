@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Runtime Guard — AgentShield</title>
+  <title>Runtime Guard: AgentShield</title>
   <meta name="description" content="AgentShield Runtime Guard: Real-time MCP proxy for stdio and HTTP/SSE streams inspecting tool calls and redacting leaked credentials.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,6 +16,23 @@
     .guard-section h3 { font-size: 1.4rem; margin-bottom: 14px; color: var(--text-primary); }
     .guard-code { background: #0d1117; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 18px; font-family: var(--font-mono); font-size: 0.9rem; overflow-x: auto; margin-top: 12px; }
   </style>
+  <!-- Meta Pixel Code (Pixel ConnectAD) -->
+  <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '3053812864921317');
+    fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=3053812864921317&ev=PageView&noscript=1"
+  /></noscript>
+  <!-- End Meta Pixel Code -->
 </head>
 <body>
   <div class="ambient-glow"></div>
@@ -29,7 +46,7 @@
           <path d="m9 12 2 2 4-4"/>
         </svg>
         <span>AgentShield</span>
-        <span class="badge-version">v1.0.0 GA</span>
+        <span class="badge-version">v1.0.1 GA</span>
       </a>
       <nav>
         <ul class="nav-links">

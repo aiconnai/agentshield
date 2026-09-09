@@ -6,9 +6,9 @@
 | Active program | Scanner hardening and release-surface parity |
 | Started | 2026-06-05 |
 | Owner | AgentShield Contributors |
-| Current version in `Cargo.toml` | `0.8.0` |
-| Current adapters | MCP, OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules |
-| Current detectors | 20 built-in rules, `SHIELD-001` through `SHIELD-020` |
+| Current version in `Cargo.toml` | `1.0.1` |
+| Current adapters | 11 framework/client families: MCP, OpenClaw, Hermes Agent, CrewAI, LangChain/LangGraph, GPT Actions, Cursor Rules, Vercel AI SDK, AutoGen, LlamaIndex, Semantic Kernel |
+| Current detectors | 37 built-in rules, `SHIELD-001` through `SHIELD-037` |
 
 ## Goal
 

@@ -277,7 +277,7 @@ enum Commands {
         #[arg(default_value = ".")]
         path: PathBuf,
 
-        /// Path to Ed25519 private key file (32 bytes, raw binary)
+        /// Path to Ed25519 private key file (32 bytes raw or 64 hex chars), or '-' for stdin
         #[arg(long)]
         sign_key: Option<PathBuf>,
 

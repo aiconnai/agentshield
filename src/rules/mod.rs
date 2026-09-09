@@ -119,6 +119,7 @@ const OVERLAPPING_RULE_PAIRS: &[(&str, &str)] = &[
     ("SHIELD-013", "SHIELD-003"), // Metadata/private SSRF suppresses generic SSRF
     ("SHIELD-002", "SHIELD-018"), // Credential exfil suppresses generic secret leakage
     ("SHIELD-004", "SHIELD-015"), // Arbitrary file access suppresses overbroad filesystem scope
+    ("SHIELD-004", "SHIELD-006"), // Arbitrary file access suppresses self-modification overlap on parameter-driven writes
     ("SHIELD-011", "SHIELD-016"), // Dynamic eval/import suppression suppresses unsafe deserialization overlap
 ];
 
@@ -366,6 +367,40 @@ mod tests {
         assert!(!ids.contains(&"SHIELD-018"));
         assert!(ids.contains(&"SHIELD-011"));
         assert!(!ids.contains(&"SHIELD-016"));
+    }
+
+    #[test]
+    fn suppresses_self_modification_overlap_with_arbitrary_file_access() {
+        // Parameter-driven writes fire both SHIELD-004 and SHIELD-006 at the
+        // same location; only the dominant SHIELD-004 should survive.
+        let overlap_loc = loc();
+        let findings = vec![
+            simple_finding("SHIELD-004", Some(overlap_loc.clone())),
+            simple_finding("SHIELD-006", Some(overlap_loc)),
+        ];
+        let filtered = apply_overlapping_rule_suppression(findings);
+        let ids: Vec<_> = filtered.iter().map(|f| f.rule_id.as_str()).collect();
+        assert!(ids.contains(&"SHIELD-004"));
+        assert!(!ids.contains(&"SHIELD-006"));
+    }
+
+    #[test]
+    fn engine_suppresses_self_modification_for_parameter_driven_writes() {
+        let mut target = empty_target();
+        target.execution.file_operations.push(FileOperation {
+            operation: FileOpType::Write,
+            path_arg: ArgumentSource::Parameter {
+                name: "file_path".into(),
+            },
+            location: loc(),
+        });
+
+        let findings = RuleEngine::new().run(&target);
+        assert!(findings.iter().any(|f| f.rule_id == "SHIELD-004"));
+        assert!(
+            !findings.iter().any(|f| f.rule_id == "SHIELD-006"),
+            "SHIELD-006 should be suppressed when SHIELD-004 fires at the same location"
+        );
     }
 
     #[test]
