@@ -19,7 +19,7 @@ Hey HN,
 We built AgentShield (https://github.com/aiconnai/agentshield), an offline-first, sub-50ms security analyzer written in Rust specifically designed for AI agent extensions, Model Context Protocol (MCP) servers, and multi-agent tools.
 
 ### Why we built this:
-As frontier LLMs (Claude 5 Sonnet/Opus, GPT-5.6 Sol, Gemini 3.7 Flash, DeepSeek-V4, Grok 4.6, Qwen3.8, GLM-5.3, Codex, Antigravity) gain autonomous tool execution, they are being connected to production databases, shells, cloud APIs, and local file systems. A single malicious or unvetted tool can read AWS secrets, execute arbitrary shell commands, drop reverse shells, or exfiltrate private files via webhooks.
+As frontier LLMs (Claude 5 Sonnet/Opus, GPT-5.6 Sol, Gemini 3.8 Flash, DeepSeek-V4, Grok 4.6, Qwen3.8, GLM-5.3, Codex, Antigravity) gain autonomous tool execution, they are being connected to production databases, shells, cloud APIs, and local file systems. A single malicious or unvetted tool can read AWS secrets, execute arbitrary shell commands, drop reverse shells, or exfiltrate private files via webhooks.
 
 Existing SAST tools (Semgrep, SonarQube) analyze traditional web apps, but miss agent-specific dataflow patterns like:
 - Tainted LLM parameters flowing into subprocess executions across nested helper functions.

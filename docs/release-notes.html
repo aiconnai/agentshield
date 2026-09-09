@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Release Notes — AgentShield</title>
+  <title>Release Notes: AgentShield</title>
   <meta name="description" content="Release notes and version history for AgentShield security scanner.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,6 +16,23 @@
     .rel-card ul { margin-left: 20px; color: var(--text-secondary); margin-bottom: 16px; }
     .rel-card li { margin-bottom: 8px; }
   </style>
+  <!-- Meta Pixel Code (Pixel ConnectAD) -->
+  <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '3053812864921317');
+    fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=3053812864921317&ev=PageView&noscript=1"
+  /></noscript>
+  <!-- End Meta Pixel Code -->
 </head>
 <body>
   <div class="ambient-glow"></div>
@@ -29,7 +46,7 @@
           <path d="m9 12 2 2 4-4"/>
         </svg>
         <span>AgentShield</span>
-        <span class="badge-version">v1.0.0 GA</span>
+        <span class="badge-version">v1.0.1 GA</span>
       </a>
       <nav>
         <ul class="nav-links">
@@ -55,8 +72,21 @@
 
     <div class="rel-card">
       <h2>
-        v1.0.0 — General Availability (GA)
+        v1.0.1: Security Detectors & Hardening
         <span class="badge-version">Latest</span>
+      </h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Released August 2026</p>
+      <ul>
+        <li><strong>New Security Detectors (37 Total Rules)</strong>: Added SHIELD-034 (Insecure Agent Checkpoints), SHIELD-035 (Unauthenticated MCP SSE Transports), SHIELD-036 (Tool Response Prompt Injection), and SHIELD-037 (Agent Memory Poisoning).</li>
+        <li><strong>Fuzzing & Property Testing</strong>: Continuous fuzz targets with <code>cargo-fuzz</code> and generative property testing via <code>proptest</code>.</li>
+        <li><strong>Benchmarking Suite</strong>: Micro-benchmarks powered by <code>criterion</code> for sub-50ms deterministic scan verification.</li>
+        <li><strong>Strict Standards Compliance</strong>: Validated SARIF 2.1.0 output schema and zero-defect security auditing.</li>
+      </ul>
+    </div>
+
+    <div class="rel-card">
+      <h2>
+        v1.0.0: General Availability (GA)
       </h2>
       <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Released August 2026</p>
       <ul>

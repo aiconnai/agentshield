@@ -243,6 +243,7 @@ cargo run -- suppress SHIELD-001 src/tools.py:42 --reason "accepted risk"
 cargo run -- list-suppressions
 cargo run -- certify . --output attestation.json
 cargo run -- certify . --sign-key key.bin --output attestation.json
+echo -n "$KEY" | cargo run -- certify . --sign-key - --output attestation.json
 
 # VS Code extension
 cd vscode
@@ -384,7 +385,7 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 - Findings include stable fingerprints (SHA-256 hash of rule+file+line+snippet) for baseline diffing and suppression
 - `--baseline` / `--write-baseline` for CI noise reduction — only report new findings
 - `suppress` / `list-suppressions` CLI commands manage `.agentshield.toml` suppressions
-- `certify` command generates DSSE attestation envelopes with optional Ed25519 signing
+- `certify` command generates DSSE attestation envelopes with optional Ed25519 signing (supports `--sign-key -` for stdin streaming)
 - `--emit-egress-policy` analyzes scan results and generates a starter egress policy
 - PR inline annotations verified via [agentshield-test PR #1](https://github.com/aiconnai/agentshield-test/pull/1) (IBVI-488)
 

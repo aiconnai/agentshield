@@ -1,5 +1,24 @@
 use serde::{Deserialize, Serialize};
 
+/// Category of secret matched by the redaction engine.
+///
+/// Each variant covers a specific token family:
+///
+/// - `OpenAiApiKey`: OpenAI API keys (`sk-...`, `sk-proj-...`).
+/// - `GitHubToken`: GitHub personal access / OAuth tokens (`ghp_...`, `gho_...`, etc.).
+/// - `AwsAccessKeyId` / `AwsSecretAccessKey`: AWS access key ID and secret access key pair.
+/// - `BearerToken`: generic `Authorization: Bearer ...` credentials. This is also
+///   the fallback family for API tokens from other AI providers (e.g. Anthropic
+///   `sk-ant-...`) that carry no provider-specific prefix pattern.
+/// - `JwtToken`: JSON Web Tokens (header.payload.signature).
+/// - `PemPrivateKey`: PEM-encoded private key blocks.
+/// - `BasicAuthUrl`: credentials embedded in a URL (`https://user:pass@host`).
+/// - `SlackToken`: Slack tokens (`xox[baprs]-...`).
+/// - `GoogleApiKey`: Google API keys (`AIza...`).
+/// - `StripeSecretKey`: Stripe secret keys (`sk_live_...`, `sk_test_...`).
+/// - `GenericSecret`: last-resort `key = value`-shaped secrets with no
+///   provider-specific pattern. Together with `BearerToken`, this catches
+///   unclassified third-party tokens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RedactionKind {

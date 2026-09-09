@@ -1,9 +1,9 @@
-# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
- 
-* @aiconnai
- 
-/.github/ @aiconnai
-/docs/ @aiconnai
-/src/ @aiconnai
-/vscode/ @aiconnai
-/.github/workflows/ @aiconnai
+# Repository Code Owners
+# Primary maintainer and creator: Ronaldo Lima (@limaronaldo)
+* @limaronaldo @aiconnai
+
+/.github/ @limaronaldo @aiconnai
+/docs/ @limaronaldo @aiconnai
+/src/ @limaronaldo @aiconnai
+/vscode/ @limaronaldo @aiconnai
+/.github/workflows/ @limaronaldo @aiconnai

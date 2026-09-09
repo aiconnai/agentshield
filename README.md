@@ -142,6 +142,10 @@ jobs:
 
 Findings appear as PR annotations and in the repository's **Security > Code scanning** tab when SARIF upload is enabled.
 
+> [!IMPORTANT]
+> **Shipping fast without a security team?**  
+> Give us a ⭐ **star** to bookmark AgentShield. Run a 50ms scan before your next deploy so you never push rogue tools or leaked credentials to production.
+
 ### CLI
 
 ```bash
@@ -151,7 +155,10 @@ curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
 # 🍺 Or install via Homebrew (macOS & Linux)
 brew tap aiconnai/tap && brew install agentshield
 
-# 🦀 Or install from source with Cargo
+# 🦀 Or install via crates.io
+cargo install agent-shield --features full
+
+# Or install from source with Cargo
 cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.1 --features full --force
 
 # First-run setup: config + explained first scan
@@ -498,6 +505,12 @@ Adapters translate framework-specific files into a unified intermediate represen
 ## Security Policy
 
 Please report vulnerabilities privately. See [`SECURITY.md`](SECURITY.md) for supported versions, reporting guidance, and disclosure scope.
+
+---
+
+## Maintainers
+
+AgentShield is an open-source project created and maintained by [Ronaldo Lima](https://github.com/limaronaldo) (`@limaronaldo`) under the [aiconnai](https://github.com/aiconnai) organization.
 
 ---
 

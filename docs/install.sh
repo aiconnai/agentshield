@@ -3,13 +3,13 @@
 # Usage: curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
 #
 # Environment variables:
-#   VERSION      - Specify target version (e.g. "v1.0.0"). Defaults to latest.
+#   VERSION      - Specify target version (e.g. "v1.0.1"). Defaults to latest.
 #   INSTALL_DIR  - Target installation directory. Defaults to ~/.local/bin or /usr/local/bin.
 
 set -e
 
 REPO="aiconnai/agentshield"
-DEFAULT_VERSION="v1.0.0"
+DEFAULT_VERSION="v1.0.1"
 
 # Text styling
 if [ -t 1 ]; then

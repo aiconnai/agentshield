@@ -9,3 +9,12 @@ allow = [
     "Unicode-3.0",
     "BSD-3-Clause",
 ]
+
+[bans]
+multiple-versions = "deny"
+wildcards = "allow"
+
+[[bans.features]]
+name = "tokio"
+deny = ["full"]
+

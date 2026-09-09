@@ -62,6 +62,17 @@ pub struct AuditEntry {
     pub reason: Option<String>,
 }
 
+/// Outcome of resolving and verifying an upstream host.
+enum Upstream {
+    /// Every resolved IP passed the network policy; connect to these
+    /// addresses directly.
+    Verified(Vec<SocketAddr>),
+    /// A resolved IP hit the network policy; reject with 403.
+    Blocked(ProxyDecision),
+    /// DNS resolution failed; fail with 502.
+    Unresolvable,
+}
+
 /// Per-domain rate tracking window.
 #[derive(Debug, Clone)]
 struct RateWindow {
@@ -157,33 +168,40 @@ impl EgressProxy {
     /// Handle an HTTP CONNECT tunnel request (used for HTTPS).
     async fn handle_connect(&self, mut client: TcpStream, host: &str, port: u16) {
         let decision = self.check_request(host, port);
+        let addrs = match &decision {
+            ProxyDecision::Allow => match self.resolve_upstream(host, port).await {
+                Upstream::Verified(addrs) => addrs,
+                Upstream::Blocked(blocked) => {
+                    self.write_audit(host, port, &blocked);
+                    self.send_forbidden(&mut client, host, port, &blocked).await;
+                    return;
+                }
+                Upstream::Unresolvable => {
+                    self.write_audit(host, port, &decision);
+                    let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
+                    return;
+                }
+            },
+            blocked => {
+                self.write_audit(host, port, blocked);
+                self.send_forbidden(&mut client, host, port, blocked).await;
+                return;
+            }
+        };
         self.write_audit(host, port, &decision);
 
-        match decision {
-            ProxyDecision::Allow => {
-                // Try to connect to the upstream
-                let upstream_addr = format!("{}:{}", host, port);
-                match TcpStream::connect(&upstream_addr).await {
-                    Ok(mut upstream) => {
-                        let _ = client
-                            .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-                            .await;
-                        // Bidirectional copy
-                        let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
-                    }
-                    Err(_) => {
-                        let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
-                    }
-                }
+        // Connect to the verified addresses directly so no second,
+        // unverified DNS resolution can steer us to a blocked IP.
+        match TcpStream::connect(&addrs[..]).await {
+            Ok(mut upstream) => {
+                let _ = client
+                    .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                    .await;
+                // Bidirectional copy
+                let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
             }
-            _ => {
-                let body = rejection_body(host, port, &decision);
-                let response = format!(
-                    "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = client.write_all(response.as_bytes()).await;
+            Err(_) => {
+                let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
             }
         }
     }
@@ -197,29 +215,37 @@ impl EgressProxy {
         original_request: &[u8],
     ) {
         let decision = self.check_request(host, port);
+        let addrs = match &decision {
+            ProxyDecision::Allow => match self.resolve_upstream(host, port).await {
+                Upstream::Verified(addrs) => addrs,
+                Upstream::Blocked(blocked) => {
+                    self.write_audit(host, port, &blocked);
+                    self.send_forbidden(&mut client, host, port, &blocked).await;
+                    return;
+                }
+                Upstream::Unresolvable => {
+                    self.write_audit(host, port, &decision);
+                    let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
+                    return;
+                }
+            },
+            blocked => {
+                self.write_audit(host, port, blocked);
+                self.send_forbidden(&mut client, host, port, blocked).await;
+                return;
+            }
+        };
         self.write_audit(host, port, &decision);
 
-        match decision {
-            ProxyDecision::Allow => {
-                let upstream_addr = format!("{}:{}", host, port);
-                match TcpStream::connect(&upstream_addr).await {
-                    Ok(mut upstream) => {
-                        let _ = upstream.write_all(original_request).await;
-                        let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
-                    }
-                    Err(_) => {
-                        let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
-                    }
-                }
+        // Connect to the verified addresses directly so no second,
+        // unverified DNS resolution can steer us to a blocked IP.
+        match TcpStream::connect(&addrs[..]).await {
+            Ok(mut upstream) => {
+                let _ = upstream.write_all(original_request).await;
+                let _ = tokio::io::copy_bidirectional(&mut client, &mut upstream).await;
             }
-            _ => {
-                let body = rejection_body(host, port, &decision);
-                let response = format!(
-                    "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = client.write_all(response.as_bytes()).await;
+            Err(_) => {
+                let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
             }
         }
     }
@@ -266,6 +292,43 @@ impl EgressProxy {
         }
 
         ProxyDecision::Allow
+    }
+
+    /// Resolve `host:port` and verify every resolved IP against the network
+    /// policy.
+    ///
+    /// The returned addresses must be used directly for `TcpStream::connect`
+    /// so no second, unverified DNS resolution can steer the connection to
+    /// a blocked internal IP (DNS rebinding TOCTOU).
+    async fn resolve_upstream(&self, host: &str, port: u16) -> Upstream {
+        let addrs: Vec<SocketAddr> =
+            match tokio::net::lookup_host(format!("{}:{}", host, port)).await {
+                Ok(addrs) => addrs.collect(),
+                Err(_) => return Upstream::Unresolvable,
+            };
+        for addr in &addrs {
+            if self.policy.is_ip_blocked(&addr.ip().to_string()) {
+                return Upstream::Blocked(ProxyDecision::BlockedByNetwork(addr.ip().to_string()));
+            }
+        }
+        Upstream::Verified(addrs)
+    }
+
+    /// Send a 403 Forbidden JSON rejection for a blocked request.
+    async fn send_forbidden(
+        &self,
+        client: &mut TcpStream,
+        host: &str,
+        port: u16,
+        decision: &ProxyDecision,
+    ) {
+        let body = rejection_body(host, port, decision);
+        let response = format!(
+            "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = client.write_all(response.as_bytes()).await;
     }
 
     /// Write an audit entry to the log file (if configured).
@@ -440,6 +503,35 @@ mod tests {
 
         let decision = proxy.check_request("169.254.169.254", 80);
         assert!(matches!(decision, ProxyDecision::BlockedByNetwork(_)));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_upstream_blocks_rebinding_to_loopback() {
+        let proxy = EgressProxy::new(test_policy()).unwrap();
+
+        // IP literals need no DNS, so these are deterministic: a domain that
+        // passed the domain check but resolves here must still be blocked.
+        assert!(matches!(
+            proxy.resolve_upstream("127.0.0.1", 80).await,
+            Upstream::Blocked(ProxyDecision::BlockedByNetwork(_))
+        ));
+        assert!(matches!(
+            proxy.resolve_upstream("169.254.169.254", 80).await,
+            Upstream::Blocked(ProxyDecision::BlockedByNetwork(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_upstream_allows_public_ip() {
+        let proxy = EgressProxy::new(test_policy()).unwrap();
+
+        match proxy.resolve_upstream("8.8.8.8", 53).await {
+            Upstream::Verified(addrs) => {
+                assert_eq!(addrs, vec!["8.8.8.8:53".parse().unwrap()]);
+            }
+            Upstream::Blocked(_) => panic!("public IP must not be blocked"),
+            Upstream::Unresolvable => panic!("IP literal must resolve"),
+        }
     }
 
     #[test]

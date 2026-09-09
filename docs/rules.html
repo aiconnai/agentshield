@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detection Rules — AgentShield</title>
-  <meta name="description" content="Complete reference for AgentShield's 20 built-in security detection rules for AI agent extensions and MCP servers.">
+  <title>Detection Rules: AgentShield</title>
+  <meta name="description" content="Complete reference for AgentShield's 37 built-in security detection rules (SHIELD-001..037) for AI agent extensions and MCP servers.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -40,6 +40,23 @@
     .search-input { width: 100%; padding: 14px 20px; border-radius: var(--radius-full); background: var(--bg-surface); border: 1px solid var(--border-active); color: var(--text-primary); font-size: 1rem; font-family: var(--font-sans); outline: none; }
     .search-input:focus { border-color: var(--color-emerald); box-shadow: 0 0 15px rgba(16, 185, 129, 0.2); }
   </style>
+  <!-- Meta Pixel Code (Pixel ConnectAD) -->
+  <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '3053812864921317');
+    fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=3053812864921317&ev=PageView&noscript=1"
+  /></noscript>
+  <!-- End Meta Pixel Code -->
 </head>
 <body>
   <div class="ambient-glow"></div>
@@ -53,7 +70,7 @@
           <path d="m9 12 2 2 4-4"/>
         </svg>
         <span>AgentShield</span>
-        <span class="badge-version">v1.0.0 GA</span>
+        <span class="badge-version">v1.0.1 GA</span>
       </a>
       <nav>
         <ul class="nav-links">
@@ -75,7 +92,7 @@
     <div class="rules-header">
       <h1>Detection Rules Catalog</h1>
       <p style="color: var(--text-secondary); max-width: 680px; margin: 0 auto 24px;">
-        AgentShield ships 20 built-in rules mapping to CWE and OWASP MCP Top 10 categories, catching toxic data flows, command execution, and prompt surfaces.
+        AgentShield ships 37 built-in rules (SHIELD-001..037) mapping to CWE and OWASP MCP Top 10 categories, catching toxic data flows, command execution, and prompt surfaces.
       </p>
       <div class="search-bar">
         <input type="text" id="rule-search" class="search-input" placeholder="Search rules (e.g. SSRF, command, deserialization, CWE-78)...">

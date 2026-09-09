@@ -1,0 +1,9 @@
+# Repository Code Owners
+# Primary maintainer and creator: Ronaldo Lima (@limaronaldo)
+* @limaronaldo @aiconnai
+
+/.github/ @limaronaldo @aiconnai
+/docs/ @limaronaldo @aiconnai
+/src/ @limaronaldo @aiconnai
+/vscode/ @limaronaldo @aiconnai
+/.github/workflows/ @limaronaldo @aiconnai

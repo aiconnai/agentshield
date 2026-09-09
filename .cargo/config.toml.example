@@ -1,0 +1,21 @@
+# AgentShield - High-Performance Linker Configuration Example
+# Copy this file to `.cargo/config.toml` to enable modern, fast linkers locally.
+# Refer to `rust-repository-engineering-standard-v5.md` Section 1.4 (R-1.4.1, R-1.4.2).
+
+# --- Linux ---
+# Note: On `x86_64-unknown-linux-gnu`, Rust 1.90+ defaults to bundled LLD.
+# To opt into `mold` (requires `clang` and `mold` installed):
+# [target.x86_64-unknown-linux-gnu]
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+# --- macOS ---
+# macOS uses Xcode ld64/ld-prime by default. If using llvm/lld via Homebrew:
+# [target.aarch64-apple-darwin]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+# [target.x86_64-apple-darwin]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# --- Windows ---
+# [target.x86_64-pc-windows-msvc]
+# linker = "lld-link"
