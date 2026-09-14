@@ -22,3 +22,15 @@ docs/harness/reviews/*.md
 docs/harness/reviews/*.raw
 !docs/harness/audits/.gitkeep
 !docs/harness/reviews/.gitkeep
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+*.egg-info/
+dist/
+build/
+uv.lock
+
