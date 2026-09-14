@@ -13,6 +13,7 @@ keywords = ["security", "ai", "mcp", "static-analysis", "sarif"]
 categories = ["development-tools", "command-line-utilities"]
 readme = "README.md"
 exclude = [
+    "python/**",
     "vscode/**",
     "docs/**",
     ".github/**",

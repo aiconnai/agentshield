@@ -7,6 +7,7 @@
 [![Website](https://img.shields.io/badge/Website-aiconnai.github.io%2Fagentshield-emerald.svg)](https://aiconnai.github.io/agentshield/)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
+[![PyPI](https://img.shields.io/pypi/v/agentshield.svg)](https://pypi.org/project/agentshield/)
 [![VS Code](https://img.shields.io/badge/VS%20Code-v1.0.1-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=aiconnai-vs.agentshield)
 [![Open VSX](https://img.shields.io/badge/Open%20VSX-v1.0.1-purple?logo=eclipseide)](https://open-vsx.org/extension/aiconnai-vs/agentshield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
@@ -149,6 +150,10 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 ### CLI
 
 ```bash
+# 🐍 Install via PyPI (Python & uv)
+pip install agentshield
+# or: uv add --dev agentshield
+
 # ⚡ 1-Line Universal Installer (macOS & Linux: Apple Silicon, Intel, ARM64, x86_64)
 curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
 
@@ -195,6 +200,37 @@ agentshield scan ./my-agent-extension --format html --output report.html
 
 # List all built-in and custom rules
 agentshield list-rules
+```
+
+### Pre-commit Hook
+
+Add AgentShield to `.pre-commit-config.yaml` to block vulnerable tools before each commit:
+
+```yaml
+repos:
+  - repo: https://github.com/aiconnai/agentshield
+    rev: v1.0.1
+    hooks:
+      - id: agentshield
+```
+
+### Python SDK
+
+Integrate AgentShield directly into test suites or tool definitions:
+
+```python
+import agentshield
+from agentshield import shield
+
+# Programmatic scan in pytest or build pipelines
+report = agentshield.scan(".", fail_on="high")
+if not report.passed:
+    print(f"Violations detected: {report.summary.total}")
+
+# Protect agent tool functions at runtime against SSRF and credential leaks
+@shield(block_ssrf=True, redact_secrets=True)
+def query_external_api(target_url: str) -> str:
+    ...
 ```
 
 If you only need static scanning in a published crates.io version, `cargo

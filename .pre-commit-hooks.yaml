@@ -1,0 +1,9 @@
+- id: agentshield
+  name: AgentShield Security Scan
+  description: Sub-50ms security firewall for MCP and AI agent extensions
+  entry: agentshield scan
+  language: python
+  types: [text]
+  files: \.(py|ya?ml|toml|json|ts|js)$
+  pass_filenames: false
+  args: ["--fail-on", "high", "--ignore-tests"]

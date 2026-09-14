@@ -1,0 +1,34 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "agentshield"
+dynamic = ["version"]
+description = "Security scanner for AI agent extensions - offline-first, multi-framework, SARIF output"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT OR Apache-2.0" }
+authors = [{ name = "Ronaldo Lima", email = "ron@ldinho.com.br" }]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Security",
+]
+
+[project.urls]
+Homepage = "https://aiconnai.github.io/agentshield"
+Repository = "https://github.com/aiconnai/agentshield"
+Documentation = "https://aiconnai.github.io/agentshield"
+
+[tool.maturin]
+bindings = "bin"
+strip = true
+python-source = "python"
+features = ["full"]
