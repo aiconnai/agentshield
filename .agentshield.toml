@@ -4,6 +4,7 @@ ignore_tests = true
 
 # docs/ contains prose that documents detector patterns and harness scripts.
 # vscode/ is a VS Code client extension (UI prompts).
+# python/ is the PyPI CLI wrapper that invokes the agentshield binary.
 # skills/ and install.sh are installation and agent guidance scripts.
-exclude = ["docs/**", "vscode/**", "skills/**", "install.sh"]
+exclude = ["docs/**", "vscode/**", "skills/**", "python/**", "install.sh"]
 

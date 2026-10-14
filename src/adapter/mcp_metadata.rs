@@ -80,7 +80,7 @@ fn contains_mcp_source(root: &Path, mode: SourceDetectionMode) -> bool {
 
     for entry in walker.flatten() {
         let path = entry.path();
-        if !path.is_file() {
+        if !path.is_file() || super::mcp::is_test_file_in(root, path) {
             continue;
         }
         if !is_mcp_source_candidate(path) {

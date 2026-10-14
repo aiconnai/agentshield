@@ -46,7 +46,7 @@
           <path d="m9 12 2 2 4-4"/>
         </svg>
         <span>AgentShield</span>
-        <span class="badge-version">v1.0.1 GA</span>
+        <span class="badge-version">v1.0.2 GA</span>
       </a>
       <nav>
         <ul class="nav-links">
@@ -72,8 +72,22 @@
 
     <div class="rel-card">
       <h2>
-        v1.0.1: Security Detectors & Hardening
+        v1.0.2: Composite Flow Wiring & Supply-Chain Hardening
         <span class="badge-version">Latest</span>
+      </h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Released October 2026</p>
+      <ul>
+        <li><strong>End-to-End Composite Flow Wiring (<code>SHIELD-020</code>)</strong>: Wired composite read-transform-exfiltrate flow detection across <code>RuleEngine::run()</code> and all framework adapters.</li>
+        <li><strong>Scan-Root Prefix Fix for <code>--ignore-tests</code></strong>: Fixed test directory filtering to evaluate paths relative to the scan root rather than parent host directories.</li>
+        <li><strong>Safe-Rust YAML Parser Migration</strong>: Migrated YAML parsing to memory-safe <code>serde-saphyr</code>, eliminating legacy unsafe C/libyaml bindings.</li>
+        <li><strong>VS Code Extension Supply-Chain Audit</strong>: Hardened extension dependencies with a 0-vulnerability lockfile.</li>
+        <li><strong>Expanded Verification Suite</strong>: <code>704</code> unit, integration, and property tests passing with zero warnings.</li>
+      </ul>
+    </div>
+
+    <div class="rel-card">
+      <h2>
+        v1.0.1: Security Detectors & Hardening
       </h2>
       <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Released August 2026</p>
       <ul>

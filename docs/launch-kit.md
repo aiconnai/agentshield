@@ -1,6 +1,6 @@
-# 🚀 AgentShield v1.0.1 — Launch & Go-To-Market Kit
+# 🚀 AgentShield v1.0.2 — Launch & Go-To-Market Kit
 
-This kit contains ready-to-publish launch copy, technical deep dives, and distribution material for announcing **AgentShield v1.0.1** across developer communities.
+This kit contains ready-to-publish launch copy, technical deep dives, and distribution material for announcing **AgentShield v1.0.2** across developer communities.
 
 ---
 
@@ -71,7 +71,7 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 > 
 > As agents gain autonomy, one unvetted MCP tool can read your AWS secrets, execute arbitrary shell scripts, or pivot through your VPC.
 > 
-> Introducing AgentShield v1.0.1: The open-source, 100% offline security firewall for AI tools in <50ms. 🧵👇
+> Introducing AgentShield v1.0.2: The open-source, 100% offline security firewall for AI tools in <50ms. 🧵👇
 
 ### Tweet 2 (The Architecture):
 > ⚡ Powered by Rust + Interprocedural Call-Graph Taint Analysis.
@@ -118,17 +118,17 @@ We’d love your feedback on the taint engine, custom rule engine (declarative Y
 ## 3. 🔴 Reddit Strategy
 
 ### Subreddit: `r/rust`
-**Title**: `[Media] AgentShield v1.0.1: A 100% offline AI tool security scanner written in Rust (<50ms, AST + Interprocedural Taint Graph)`
+**Title**: `[Media] AgentShield v1.0.2: A 100% offline AI tool security scanner written in Rust (<50ms, AST + Interprocedural Taint Graph)`
 **Key Talking Points**:
 - AST parsing using tree-sitter & rust-native regex heuristics.
 - Interprocedural call-graph construction with bounded recursion depth (`MAX_PROPAGATION_DEPTH = 16`).
 - Zero-allocation sensitivity classifiers (`eq_ignore_ascii_case`).
 - Continuous fuzzing with `cargo-fuzz` / `libfuzzer-sys` and `proptest` generative property suites.
-- 605 unit and integration tests, 0 clippy warnings (`-D warnings`).
+- 704 unit and integration tests, 0 clippy warnings (`-D warnings`).
 - Dual-licensed under MIT OR Apache-2.0.
 
 ### Subreddit: `r/LocalLLaMA`
-**Title**: `Securing Local Agents & MCP Servers: AgentShield v1.0.1 (Offline SAST Scanner + Runtime Guard)`
+**Title**: `Securing Local Agents & MCP Servers: AgentShield v1.0.2 (Offline SAST Scanner + Runtime Guard)`
 **Key Talking Points**:
 - Why running local models (Hermes Agent, DeepSeek-R1/V4, Qwen) with local tool access requires zero-trust security.
 - How tool poisoning, unsigned checkpoint loading (`SHIELD-034`), unauthenticated SSE transports (`SHIELD-035`), tool response injection (`SHIELD-036`), and agent memory poisoning (`SHIELD-037`) can turn a benign-looking MCP server into a shell execution backdoor.

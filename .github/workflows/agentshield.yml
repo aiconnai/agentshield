@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
 
       - name: Run AgentShield
-        uses: aiconnai/agentshield@19516de2c69b45eaca558f321019e8d14d31e591 # v1.0.1
+        uses: aiconnai/agentshield@7aa2839be842e11417da9679e4a04055d9e452ce # v1.0.2
         with:
           path: .
           config: .agentshield.toml

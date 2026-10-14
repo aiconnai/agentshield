@@ -26,6 +26,20 @@ fn test_file_detection_strips_scan_root_prefix() {
 }
 
 #[test]
+fn has_recursive_python_import_skips_nested_test_dirs() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    assert!(
+        !has_recursive_python_import(repo_root, &["from crewai", "import crewai"]),
+        "scanning repo root must not match crewai imports inside tests/fixtures/"
+    );
+    let crewai_fixture = repo_root.join("tests/fixtures/crewai_project");
+    assert!(
+        has_recursive_python_import(&crewai_fixture, &["from crewai", "import crewai"]),
+        "scanning crewai_project fixture directly must match its Python files"
+    );
+}
+
+#[test]
 fn extracts_typescript_mcp_server_tool_declarations() {
     let content = r#"
 const server = new McpServer({ name: "demo" })

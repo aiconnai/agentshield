@@ -1,6 +1,6 @@
-# 📊 AgentShield Security & Performance Benchmarks (v1.0.1 GA)
+# 📊 AgentShield Security & Performance Benchmarks (v1.0.2 GA)
 
-This document provides empirical scan latency, memory efficiency, and detection accuracy benchmarks for **AgentShield v1.0.1** across major AI agent frameworks and Model Context Protocol (MCP) server implementations.
+This document provides empirical scan latency, memory efficiency, and detection accuracy benchmarks for **AgentShield v1.0.2** across major AI agent frameworks and Model Context Protocol (MCP) server implementations.
 
 ---
 
@@ -9,7 +9,7 @@ This document provides empirical scan latency, memory efficiency, and detection 
 Evaluated on Apple Silicon (M-series) / Linux x86_64, release build:
 
 | Target Framework | Project Type | Files Analyzed | Detection Engine | Scan Latency | Memory (RSS) | Verdict |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
 | **MCP Python Server** | `vuln_cmd_inject` | 2 | AST + Taint Flow | **14.2 ms** | < 18 MB | **FAIL (Critical)** |
 | **MCP TypeScript Server** | `safe_calculator` | 3 | AST + TypeScript Parser | **9.8 ms** | < 16 MB | **PASS (Clean)** |
 | **Hermes Agent** | `hermes_agent` | 4 | Config + HTTP Flow | **11.5 ms** | < 17 MB | **FAIL (Critical)** |
@@ -26,7 +26,7 @@ Evaluated on Apple Silicon (M-series) / Linux x86_64, release build:
 
 Comparison of AgentShield vs Traditional General-Purpose Linters & SAST tools when analyzing AI Agent Extensions:
 
-| Threat Category & Attack Vector | OWASP LLM / CWE | Semgrep (Generic) | SonarQube | Snyk OpenSource | AgentShield v1.0.1 |
+| Threat Category & Attack Vector | OWASP LLM / CWE | Semgrep (Generic) | SonarQube | Snyk OpenSource | AgentShield v1.0.2 |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Tainted LLM Tool Parameter $\to$ Subprocess** | CWE-78 | ⚠️ Partial (File-local) | ❌ Missed | ❌ Missed | ✅ **Detected (Call-Graph)** |
 | **Cloud Metadata SSRF (`169.254.169.254`)** | CWE-918 | ❌ Missed | ⚠️ Regex only | ❌ Missed | ✅ **Detected (Taint Path)** |

@@ -245,7 +245,10 @@ pub(crate) fn has_recursive_python_import(root: &Path, needles: &[&str]) -> bool
 
     for entry in walker.flatten() {
         let path = entry.path();
-        if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("py") {
+        if !path.is_file()
+            || path.extension().and_then(|ext| ext.to_str()) != Some("py")
+            || is_test_file_in(root, path)
+        {
             continue;
         }
 
