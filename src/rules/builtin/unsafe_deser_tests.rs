@@ -1,42 +1,10 @@
+use super::super::test_helpers::{empty_target, loc, make_target_with_source};
 use super::*;
 use crate::ir::execution_surface::*;
 use crate::ir::*;
-use std::path::PathBuf;
-
-fn loc() -> SourceLocation {
-    SourceLocation {
-        file: PathBuf::from("test.py"),
-        line: 5,
-        column: 0,
-        end_line: None,
-        end_column: None,
-    }
-}
-
-fn empty_target() -> ScanTarget {
-    ScanTarget {
-        name: "test".into(),
-        framework: Framework::Mcp,
-        root_path: PathBuf::from("."),
-        tools: vec![],
-        execution: ExecutionSurface::default(),
-        data: DataSurface::default(),
-        dependencies: Default::default(),
-        provenance: Default::default(),
-        source_files: vec![],
-    }
-}
 
 fn target_with_source(language: Language, content: &str) -> ScanTarget {
-    let mut target = empty_target();
-    target.source_files.push(SourceFile {
-        path: PathBuf::from("loader.py"),
-        language,
-        content: content.into(),
-        size_bytes: content.len() as u64,
-        content_hash: "abc123".into(),
-    });
-    target
+    make_target_with_source("loader.py", content, language)
 }
 
 #[test]

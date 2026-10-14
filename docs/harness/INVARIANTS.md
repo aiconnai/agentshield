@@ -34,10 +34,10 @@ Rules in this file do not change without explicit owner decision or an approved 
 | SHIELD-005 | ⚠️ inline unit tests only (runtime command-invocation analysis) | ⚠️ inline unit tests only (`run` fallback path and non-install commands) |
 | SHIELD-006 | ⚠️ inline unit tests only (`fixture tests::` in `src/rules/builtin/self_modification.rs`) | ⚠️ inline unit tests only |
 | SHIELD-007 | `tests/fixtures/gpt_actions` | `tests/fixtures/mcp_servers/safe_calculator` |
-| SHIELD-008 | `tests/fixtures/mcp_servers/vuln_ts_cmd_inject` (`eval`) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-008 | ⚠️ inline unit tests only (`excessive_permissions` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
 | SHIELD-009 | `tests/fixtures/mcp_servers/vuln_unpinned_deps` | `tests/fixtures/mcp_servers/safe_calculator` |
 | SHIELD-010 | ⚠️ inline unit tests only | ⚠️ inline unit tests only |
-| SHIELD-011 | `tests/fixtures/mcp_servers/vuln_coercion_eval` | `tests/fixtures/mcp_servers/safe_redacted_logging` |
+| SHIELD-011 | `tests/fixtures/mcp_servers/vuln_coercion_eval`, `tests/fixtures/mcp_servers/vuln_ts_cmd_inject` (`eval`) | `tests/fixtures/mcp_servers/safe_redacted_logging` |
 | SHIELD-012 | `tests/fixtures/mcp_servers/vuln_unpinned_deps` (no lockfile for manifest+deps) | `tests/fixtures/mcp_servers/safe_calculator` (no deps declared) |
 | SHIELD-013 | `tests/fixtures/mcp_servers/vuln_metadata_ssrf` | `tests/fixtures/mcp_servers/safe_filesystem` |
 | SHIELD-014 | ⚠️ inline unit tests only (`download_exec` rule tests) | ⚠️ inline unit tests only |
@@ -47,6 +47,23 @@ Rules in this file do not change without explicit owner decision or an approved 
 | SHIELD-018 | `tests/fixtures/mcp_servers/vuln_cred_exfil`, `tests/fixtures/mcp_servers/vuln_cred_exfil/index.ts` | `tests/fixtures/mcp_servers/safe_redacted_logging` |
 | SHIELD-019 | `tests/fixtures/mcp_servers/vuln_read_exfil_chain` | `tests/fixtures/mcp_servers/safe_calculator`, `tests/fixtures/mcp_servers/safe_filesystem`, `tests/fixtures/mcp_servers/safe_redacted_logging` |
 | SHIELD-020 | `tests/fixtures/mcp_servers/vuln_read_exfil_chain` | `tests/fixtures/mcp_servers/safe_filesystem` |
+| SHIELD-021 | ⚠️ inline unit tests (`sql_injection` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-022 | `tests/fixtures/mcp_servers/vuln_ts_cmd_inject`, `tests/fixtures/mcp_servers/vuln_read_exfil_chain` | `tests/fixtures/mcp_servers/safe_filesystem` |
+| SHIELD-023 | ⚠️ inline unit tests (`system_prompt_tampering` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-024 | ⚠️ inline unit tests (`insecure_bind` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-025 | ⚠️ inline unit tests (`insecure_temp_file` rule tests) | `tests/fixtures/mcp_servers/safe_filesystem` |
+| SHIELD-026 | ⚠️ inline unit tests (`insecure_prompt_concat` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-027 | ⚠️ inline unit tests (`hardcoded_secrets` rule tests) | `tests/fixtures/mcp_servers/safe_redacted_logging` |
+| SHIELD-028 | `tests/fixtures/mcp_servers/vuln_ts_cmd_inject` | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-029 | ⚠️ inline unit tests (`cross_session_state_bleed` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-030 | ⚠️ inline unit tests (`tool_description_injection` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-031 | ⚠️ inline unit tests (`insecure_subagent_delegation` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-032 | ⚠️ inline unit tests (`insecure_mcp_resource` rule tests) | `tests/fixtures/mcp_servers/safe_filesystem` |
+| SHIELD-033 | `tests/fixtures/mcp_servers/vuln_ts_cmd_inject` | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-034 | ⚠️ inline unit tests (`insecure_agent_checkpoint` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-035 | ⚠️ inline unit tests (`unauthenticated_mcp_sse` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-036 | ⚠️ inline unit tests (`tool_response_injection` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
+| SHIELD-037 | ⚠️ inline unit tests (`agent_memory_poisoning` rule tests) | `tests/fixtures/mcp_servers/safe_calculator` |
 
 ## Required follow-up (for PR2 completion)
 

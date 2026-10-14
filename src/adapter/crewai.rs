@@ -2,7 +2,6 @@ use std::path::Path;
 
 use crate::config::ScanPathFilter;
 use crate::error::Result;
-use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
 
 /// CrewAI framework adapter.
@@ -19,49 +18,25 @@ impl super::Adapter for CrewAiAdapter {
     }
 
     fn detect(&self, root: &Path) -> bool {
-        // Check pyproject.toml for crewai dependency or [tool.crewai] section
-        let pyproject = root.join("pyproject.toml");
-        if pyproject.exists() {
-            if let Some(content) = super::read_file_capped(&pyproject) {
-                if content.contains("crewai") {
-                    return true;
-                }
-            }
-        }
-
-        // Check requirements.txt for crewai
-        let requirements = root.join("requirements.txt");
-        if requirements.exists() {
-            if let Some(content) = super::read_file_capped(&requirements) {
-                if content.lines().any(|l| {
-                    let trimmed = l.trim();
-                    trimmed == "crewai"
-                        || trimmed.starts_with("crewai==")
-                        || trimmed.starts_with("crewai>=")
-                        || trimmed.starts_with("crewai[")
-                        || trimmed == "crewai-tools"
-                        || trimmed.starts_with("crewai-tools==")
-                        || trimmed.starts_with("crewai-tools>=")
-                }) {
-                    return true;
-                }
-            }
-        }
-
-        // Check Python files for crewai imports (only top-level, not recursive)
-        if super::mcp::has_recursive_python_import(
+        super::pipeline::detect_python_framework(
             root,
+            &["crewai"],
+            |trimmed| {
+                trimmed == "crewai"
+                    || trimmed.starts_with("crewai==")
+                    || trimmed.starts_with("crewai>=")
+                    || trimmed.starts_with("crewai[")
+                    || trimmed == "crewai-tools"
+                    || trimmed.starts_with("crewai-tools==")
+                    || trimmed.starts_with("crewai-tools>=")
+            },
             &[
                 "from crewai",
                 "import crewai",
                 "from crewai_tools",
                 "import crewai_tools",
             ],
-        ) {
-            return true;
-        }
-
-        false
+        )
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
@@ -70,40 +45,14 @@ impl super::Adapter for CrewAiAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
-        let name = root
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "crewai-project".into());
-
-        let mut source_files = Vec::new();
-        // Phase 0: Collect source files (reuses MCP adapter's walker)
-        super::mcp::collect_source_files_with_filter(root, filter, &mut source_files)?;
-
-        // Filter to Python-only (CrewAI is a Python framework)
-        source_files.retain(|sf| matches!(sf.language, Language::Python));
-
-        let execution = super::pipeline::build_execution_surface(&source_files);
-
-        // Parse dependencies from pyproject.toml / requirements.txt
-        let dependencies = super::mcp::parse_dependencies(root, filter);
-
-        // Parse provenance from pyproject.toml
-        let provenance = super::mcp::parse_provenance(root, filter);
-
-        let tools = vec![];
-        let data = build_data_surface(&tools, &execution);
-
-        Ok(vec![ScanTarget {
-            name,
-            framework: Framework::CrewAi,
-            root_path: root.to_path_buf(),
-            tools,
-            execution,
-            data,
-            dependencies,
-            provenance,
-            source_files,
-        }])
+        super::pipeline::load_framework_target(
+            root,
+            filter,
+            Framework::CrewAi,
+            "crewai-project",
+            |lang| matches!(lang, Language::Python),
+            None,
+        )
     }
 }
 

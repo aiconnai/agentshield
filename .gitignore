@@ -1,6 +1,5 @@
 target/
 **/target/
-Cargo.lock
 *.swp
 *.swo
 .DS_Store
@@ -11,6 +10,25 @@ Cargo.lock
 .env
 .worktrees/
 .superpowers/
+.zed/
+.zed-state/
+
+# Harness & audit dumps
+*.raw
+*.md.raw
+manual-qa/
+*.lhr.json
+*.lhr.html
+*.lighthouse.*
+.lighthouseci/
+test-results/
+coverage/
+
+# Fuzzing runtime artifacts
+fuzz/Cargo.lock
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/coverage/
 
 docs/harness/progress/
 docs/superpowers/plans/*.md

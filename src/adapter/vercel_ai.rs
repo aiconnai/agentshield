@@ -5,8 +5,6 @@ use regex::Regex;
 
 use crate::config::ScanPathFilter;
 use crate::error::Result;
-use crate::ir::capability::{project_declared_description, project_declared_permissions};
-use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
 
 static VERCEL_TOOL_RE: Lazy<Regex> = Lazy::new(|| {
@@ -90,43 +88,14 @@ impl super::Adapter for VercelAiAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
-        let name = root
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "vercel-ai-project".into());
-
-        let mut source_files = Vec::new();
-        super::mcp::collect_source_files_with_filter(root, filter, &mut source_files)?;
-
-        source_files
-            .retain(|sf| matches!(sf.language, Language::TypeScript | Language::JavaScript));
-
-        let mut tools = Vec::new();
-        for sf in &source_files {
-            tools.extend(extract_vercel_ai_tools_from_source(&sf.path, &sf.content));
-        }
-
-        for tool in &mut tools {
-            project_declared_permissions(tool);
-            project_declared_description(tool);
-        }
-
-        let execution = super::pipeline::build_execution_surface(&source_files);
-        let data = build_data_surface(&tools, &execution);
-        let dependencies = super::mcp::parse_dependencies(root, filter);
-        let provenance = super::mcp::parse_provenance(root, filter);
-
-        Ok(vec![ScanTarget {
-            name,
-            framework: Framework::VercelAi,
-            root_path: root.to_path_buf(),
-            tools,
-            execution,
-            data,
-            dependencies,
-            provenance,
-            source_files,
-        }])
+        super::pipeline::load_framework_target(
+            root,
+            filter,
+            Framework::VercelAi,
+            "vercel-ai-project",
+            |lang| matches!(lang, Language::TypeScript | Language::JavaScript),
+            Some(extract_vercel_ai_tools_from_source),
+        )
     }
 }
 
@@ -163,25 +132,12 @@ pub(crate) fn extract_vercel_ai_tools_from_source(path: &Path, content: &str) ->
             description
         };
 
-        tools.push(ToolSurface {
-            name: tool_name,
-            description: combined_desc,
-            input_schema: None,
-            output_schema: None,
-            declared_permissions: Vec::new(),
-            declared_capabilities: std::collections::BTreeSet::new(),
-            capability_declarations: Vec::new(),
-            observed_capabilities: std::collections::BTreeSet::new(),
-            capability_evidence: Vec::new(),
-            capability_observation_complete: false,
-            defined_at: Some(SourceLocation {
-                file: path.to_path_buf(),
-                line,
-                column: 0,
-                end_line: Some(line),
-                end_column: None,
-            }),
-        });
+        tools.push(super::pipeline::build_extracted_tool(
+            tool_name,
+            combined_desc,
+            path,
+            line,
+        ));
     }
 
     tools

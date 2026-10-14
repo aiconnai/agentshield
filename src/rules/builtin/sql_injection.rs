@@ -169,34 +169,8 @@ impl Detector for SqlInjectionDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::make_target_from_files as make_target;
     use super::*;
-    use crate::ir::{
-        DataSurface, DependencySurface, ExecutionSurface, Framework, ProvenanceSurface, SourceFile,
-    };
-    use std::path::PathBuf;
-
-    fn make_target(files: Vec<(&str, Language, &str)>) -> ScanTarget {
-        ScanTarget {
-            name: "test_sql_target".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("/test"),
-            tools: Vec::new(),
-            execution: ExecutionSurface::default(),
-            data: DataSurface::default(),
-            dependencies: DependencySurface::default(),
-            provenance: ProvenanceSurface::default(),
-            source_files: files
-                .into_iter()
-                .map(|(path, lang, content)| SourceFile {
-                    path: PathBuf::from(path),
-                    language: lang,
-                    content: content.into(),
-                    size_bytes: content.len() as u64,
-                    content_hash: "hash".into(),
-                })
-                .collect(),
-        }
-    }
 
     #[test]
     fn detects_python_sql_injection_fstring() {

@@ -27,6 +27,38 @@ pub(crate) struct ToolDeclForComposite {
     pub(crate) handler_location: Option<SourceLocation>,
 }
 
+pub(crate) fn compute_composite_flows_for_target(
+    target: &ScanTarget,
+) -> Vec<crate::analysis::composite_flow::CompositeFlowCandidate> {
+    let source_for_composite = target
+        .source_files
+        .iter()
+        .filter_map(|source_file| match source_file.language {
+            Language::TypeScript | Language::JavaScript => Some(SourceUnit {
+                path: &source_file.path,
+                content: &source_file.content,
+            }),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    if source_for_composite.is_empty() {
+        return Vec::new();
+    }
+
+    let mut tool_flow_inputs = Vec::new();
+    for tool in &target.tools {
+        if let Some(location) = &tool.defined_at {
+            tool_flow_inputs.push(ToolFlowInput {
+                tool_name: tool.name.clone(),
+                handler: location.clone(),
+            });
+        }
+    }
+
+    build_composite_flow_candidates(&tool_flow_inputs, &source_for_composite)
+}
+
 pub(crate) fn load_mcp_analysis(
     root: &Path,
     filter: &ScanPathFilter,

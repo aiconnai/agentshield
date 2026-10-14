@@ -248,35 +248,11 @@ impl Detector for DownloadExecDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::{empty_target, loc};
     use super::*;
     use crate::ir::data_surface::*;
     use crate::ir::execution_surface::*;
     use crate::ir::*;
-    use std::path::PathBuf;
-
-    fn loc() -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from("test.py"),
-            line: 5,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
-    }
-
-    fn empty_target() -> ScanTarget {
-        ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: ExecutionSurface::default(),
-            data: DataSurface::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![],
-        }
-    }
 
     #[test]
     fn detects_download_write_exec_via_taint_paths() {

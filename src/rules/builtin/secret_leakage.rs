@@ -186,49 +186,12 @@ impl Detector for SecretLeakageDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::{empty_target, fixture_findings, loc};
     use super::*;
-    use crate::adapter::auto_detect_and_load;
     use crate::analysis::cross_file::is_redaction_sanitizer;
     use crate::ir::data_surface::*;
     use crate::ir::execution_surface::*;
     use crate::ir::*;
-    use crate::rules::RuleEngine;
-    use std::path::PathBuf;
-
-    fn loc() -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from("test.py"),
-            line: 5,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
-    }
-
-    fn empty_target() -> ScanTarget {
-        ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: ExecutionSurface::default(),
-            data: DataSurface::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![],
-        }
-    }
-
-    fn fixture_findings(name: &str) -> Vec<Finding> {
-        let fixture_path = PathBuf::from("tests/fixtures/mcp_servers").join(name);
-        let engine = RuleEngine::new();
-
-        auto_detect_and_load(&fixture_path, false)
-            .unwrap_or_else(|err| panic!("failed to load fixture {name}: {err}"))
-            .iter()
-            .flat_map(|target| engine.run(target))
-            .collect()
-    }
 
     #[test]
     fn detects_secret_to_log() {

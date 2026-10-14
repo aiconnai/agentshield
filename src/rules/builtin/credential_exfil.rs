@@ -224,22 +224,13 @@ impl CredentialExfilDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::loc_at;
     use super::*;
     use crate::adapter::auto_detect_and_load;
     use crate::ir::data_surface::*;
     use crate::ir::execution_surface::*;
     use crate::ir::*;
     use std::path::PathBuf;
-
-    fn loc_at(file: &str, line: usize) -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from(file),
-            line,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
-    }
 
     fn fixture_findings(name: &str) -> Vec<Finding> {
         let fixture_path = PathBuf::from("tests/fixtures/mcp_servers").join(name);

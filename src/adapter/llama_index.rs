@@ -5,8 +5,6 @@ use regex::Regex;
 
 use crate::config::ScanPathFilter;
 use crate::error::Result;
-use crate::ir::capability::{project_declared_description, project_declared_permissions};
-use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
 
 static LLAMA_FUNCTION_TOOL_RE: Lazy<Regex> = Lazy::new(|| {
@@ -37,41 +35,20 @@ impl super::Adapter for LlamaIndexAdapter {
     }
 
     fn detect(&self, root: &Path) -> bool {
-        let pyproject = root.join("pyproject.toml");
-        if pyproject.exists() {
-            if let Some(content) = super::read_file_capped(&pyproject) {
-                if content.contains("llama-index") || content.contains("llama_index") {
-                    return true;
-                }
-            }
-        }
-
-        let requirements = root.join("requirements.txt");
-        if requirements.exists() {
-            if let Some(content) = super::read_file_capped(&requirements) {
-                if content.lines().any(|l| {
-                    let trimmed = l.trim();
-                    trimmed.starts_with("llama-index")
-                        || trimmed.starts_with("llama_index")
-                        || trimmed.starts_with("llama-index-core")
-                }) {
-                    return true;
-                }
-            }
-        }
-
-        if super::mcp::has_recursive_python_import(
+        super::pipeline::detect_python_framework(
             root,
+            &["llama-index", "llama_index"],
+            |trimmed| {
+                trimmed.starts_with("llama-index")
+                    || trimmed.starts_with("llama_index")
+                    || trimmed.starts_with("llama-index-core")
+            },
             &[
                 "from llama_index",
                 "import llama_index",
                 "from llama_index.core",
             ],
-        ) {
-            return true;
-        }
-
-        false
+        )
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
@@ -80,42 +57,14 @@ impl super::Adapter for LlamaIndexAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
-        let name = root
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "llama-index-project".into());
-
-        let mut source_files = Vec::new();
-        super::mcp::collect_source_files_with_filter(root, filter, &mut source_files)?;
-
-        source_files.retain(|sf| sf.language == Language::Python);
-
-        let mut tools = Vec::new();
-        for sf in &source_files {
-            tools.extend(extract_llama_index_tools_from_source(&sf.path, &sf.content));
-        }
-
-        for tool in &mut tools {
-            project_declared_permissions(tool);
-            project_declared_description(tool);
-        }
-
-        let execution = super::pipeline::build_execution_surface(&source_files);
-        let data = build_data_surface(&tools, &execution);
-        let dependencies = super::mcp::parse_dependencies(root, filter);
-        let provenance = super::mcp::parse_provenance(root, filter);
-
-        Ok(vec![ScanTarget {
-            name,
-            framework: Framework::LlamaIndex,
-            root_path: root.to_path_buf(),
-            tools,
-            execution,
-            data,
-            dependencies,
-            provenance,
-            source_files,
-        }])
+        super::pipeline::load_framework_target(
+            root,
+            filter,
+            Framework::LlamaIndex,
+            "llama-index-project",
+            |lang| lang == Language::Python,
+            Some(extract_llama_index_tools_from_source),
+        )
     }
 }
 
@@ -150,25 +99,12 @@ pub(crate) fn extract_llama_index_tools_from_source(
         let match_start = cap.get(0).map(|m| m.start()).unwrap_or(0);
         let line = content[..match_start].lines().count() + 1;
 
-        tools.push(ToolSurface {
-            name: tool_name,
+        tools.push(super::pipeline::build_extracted_tool(
+            tool_name,
             description,
-            input_schema: None,
-            output_schema: None,
-            declared_permissions: Vec::new(),
-            declared_capabilities: std::collections::BTreeSet::new(),
-            capability_declarations: Vec::new(),
-            observed_capabilities: std::collections::BTreeSet::new(),
-            capability_evidence: Vec::new(),
-            capability_observation_complete: false,
-            defined_at: Some(SourceLocation {
-                file: path.to_path_buf(),
-                line,
-                column: 0,
-                end_line: Some(line),
-                end_column: None,
-            }),
-        });
+            path,
+            line,
+        ));
     }
 
     for cap in LLAMA_TOOL_METADATA_RE.captures_iter(content) {
@@ -181,25 +117,12 @@ pub(crate) fn extract_llama_index_tools_from_source(
         let match_start = cap.get(0).map(|m| m.start()).unwrap_or(0);
         let line = content[..match_start].lines().count() + 1;
 
-        tools.push(ToolSurface {
+        tools.push(super::pipeline::build_extracted_tool(
             name,
             description,
-            input_schema: None,
-            output_schema: None,
-            declared_permissions: Vec::new(),
-            declared_capabilities: std::collections::BTreeSet::new(),
-            capability_declarations: Vec::new(),
-            observed_capabilities: std::collections::BTreeSet::new(),
-            capability_evidence: Vec::new(),
-            capability_observation_complete: false,
-            defined_at: Some(SourceLocation {
-                file: path.to_path_buf(),
-                line,
-                column: 0,
-                end_line: Some(line),
-                end_column: None,
-            }),
-        });
+            path,
+            line,
+        ));
     }
 
     tools

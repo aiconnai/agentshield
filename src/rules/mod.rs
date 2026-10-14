@@ -62,10 +62,13 @@ impl RuleEngine {
 
     /// Run all detectors against a scan target.
     pub fn run(&self, target: &ScanTarget) -> Vec<Finding> {
-        let mut findings: Vec<Finding> =
-            self.detectors.iter().flat_map(|d| d.run(target)).collect();
-        findings.extend(self.custom_detectors.iter().flat_map(|d| d.run(target)));
-        apply_overlapping_rule_suppression(findings)
+        let composite_flows =
+            crate::adapter::mcp::loader::compute_composite_flows_for_target(target);
+        let input = DetectionInput {
+            target,
+            composite_flows: &composite_flows,
+        };
+        self.run_with_context(&input)
     }
 
     /// Run all built-in detectors, including contextual and custom detectors.
@@ -88,14 +91,15 @@ impl RuleEngine {
         apply_overlapping_rule_suppression(findings)
     }
 
-    /// List metadata for all registered rules, including custom rules.
+    /// List metadata for target-only and custom rules.
+    /// Use `list_scanner_rules()` to include contextual rules such as `SHIELD-020`.
     pub fn list_rules(&self) -> Vec<RuleMetadata> {
         let mut rules: Vec<RuleMetadata> = self.detectors.iter().map(|d| d.metadata()).collect();
         rules.extend(self.custom_detectors.iter().map(|d| d.metadata()));
         rules
     }
 
-    /// List metadata for all scanner rules, including future contextual detectors.
+    /// List metadata for all scanner rules, including contextual and custom detectors.
     pub fn list_scanner_rules(&self) -> Vec<RuleMetadata> {
         let mut rules = self
             .detectors

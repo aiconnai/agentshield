@@ -1,4 +1,3 @@
-use crate::analysis::cross_file::SanitizerCategory;
 use crate::ir::ArgumentSource;
 use crate::ir::SourceLocation;
 use std::path::Path;
@@ -60,33 +59,7 @@ pub(crate) fn strip_python_string_literal(arg: &str) -> Option<&str> {
         })
 }
 
-pub(crate) fn sanitized_var_marker(var_name: &str, sanitizer_label: &str) -> String {
-    format!("{var_name}::{sanitizer_label}")
-}
-
-pub(crate) fn sanitized_label_for_var(
-    ident: &str,
-    sanitized_vars: &std::collections::HashSet<String>,
-) -> Option<String> {
-    for category in [
-        SanitizerCategory::Path,
-        SanitizerCategory::Network,
-        SanitizerCategory::TypeCoercion,
-    ] {
-        let prefix = format!("{ident}::{}:", category.as_str());
-        let mut matches: Vec<&str> = sanitized_vars
-            .iter()
-            .filter(|value| value.starts_with(&prefix))
-            .map(|s| s.as_str())
-            .collect();
-        matches.sort();
-        if let Some(marker) = matches.first() {
-            return marker.split_once("::").map(|(_, label)| label.to_string());
-        }
-    }
-
-    sanitized_vars.contains(ident).then(|| ident.to_string())
-}
+pub(crate) use crate::parser::common::{sanitized_label_for_var, sanitized_var_marker};
 
 pub(crate) fn loc(file: &Path, line: usize) -> SourceLocation {
     SourceLocation {

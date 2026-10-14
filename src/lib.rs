@@ -140,18 +140,28 @@ pub fn scan_with_path_filter_overrides(
     // Run detectors on all targets (built-in + custom)
     let mut engine = RuleEngine::new();
     if let Some(ref dir) = options.custom_rules_dir {
-        let _ = engine.load_custom_rules_from(dir);
+        if let Err(err) = engine.load_custom_rules_from(dir) {
+            tracing::warn!(dir = %dir.display(), error = %err, "Failed to load custom rules");
+        }
     } else if let Some(ref dir) = config.rules.custom_dir {
         let abs_dir = if dir.is_absolute() {
             dir.clone()
         } else {
             path.join(dir)
         };
-        let _ = engine.load_custom_rules_from(&abs_dir);
+        if let Err(err) = engine.load_custom_rules_from(&abs_dir) {
+            tracing::warn!(dir = %abs_dir.display(), error = %err, "Failed to load custom rules");
+        }
     } else {
         let default_rules_dir = path.join(".agentshield").join("rules");
         if default_rules_dir.is_dir() {
-            let _ = engine.load_custom_rules_from(&default_rules_dir);
+            if let Err(err) = engine.load_custom_rules_from(&default_rules_dir) {
+                tracing::warn!(
+                    dir = %default_rules_dir.display(),
+                    error = %err,
+                    "Failed to load default custom rules"
+                );
+            }
         }
     }
     let mut all_findings: Vec<Finding> = Vec::new();

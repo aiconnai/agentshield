@@ -161,9 +161,12 @@ impl<A: Adapter> AnalysisAdapter for LegacyAnalysisAdapter<A> {
         let targets = self.0.load_with_filter(root, filter)?;
         Ok(targets
             .into_iter()
-            .map(|target| AnalysisBundle {
-                target,
-                composite_flows: Vec::new(),
+            .map(|target| {
+                let composite_flows = mcp::loader::compute_composite_flows_for_target(&target);
+                AnalysisBundle {
+                    target,
+                    composite_flows,
+                }
             })
             .collect())
     }

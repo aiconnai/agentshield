@@ -5,8 +5,6 @@ use regex::Regex;
 
 use crate::config::ScanPathFilter;
 use crate::error::Result;
-use crate::ir::capability::{project_declared_description, project_declared_permissions};
-use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
 
 static AUTOGEN_REGISTER_FN_RE: Lazy<Regex> = Lazy::new(|| {
@@ -32,43 +30,22 @@ impl super::Adapter for AutoGenAdapter {
     }
 
     fn detect(&self, root: &Path) -> bool {
-        let pyproject = root.join("pyproject.toml");
-        if pyproject.exists() {
-            if let Some(content) = super::read_file_capped(&pyproject) {
-                if content.contains("autogen") || content.contains("pyautogen") {
-                    return true;
-                }
-            }
-        }
-
-        let requirements = root.join("requirements.txt");
-        if requirements.exists() {
-            if let Some(content) = super::read_file_capped(&requirements) {
-                if content.lines().any(|l| {
-                    let trimmed = l.trim();
-                    trimmed.starts_with("autogen")
-                        || trimmed.starts_with("pyautogen")
-                        || trimmed.starts_with("autogen-agentchat")
-                        || trimmed.starts_with("autogen-ext")
-                }) {
-                    return true;
-                }
-            }
-        }
-
-        if super::mcp::has_recursive_python_import(
+        super::pipeline::detect_python_framework(
             root,
+            &["autogen", "pyautogen"],
+            |trimmed| {
+                trimmed.starts_with("autogen")
+                    || trimmed.starts_with("pyautogen")
+                    || trimmed.starts_with("autogen-agentchat")
+                    || trimmed.starts_with("autogen-ext")
+            },
             &[
                 "from autogen",
                 "import autogen",
                 "from autogen.agentchat",
                 "from autogen_agentchat",
             ],
-        ) {
-            return true;
-        }
-
-        false
+        )
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
@@ -77,42 +54,14 @@ impl super::Adapter for AutoGenAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
-        let name = root
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "autogen-project".into());
-
-        let mut source_files = Vec::new();
-        super::mcp::collect_source_files_with_filter(root, filter, &mut source_files)?;
-
-        source_files.retain(|sf| sf.language == Language::Python);
-
-        let mut tools = Vec::new();
-        for sf in &source_files {
-            tools.extend(extract_autogen_tools_from_source(&sf.path, &sf.content));
-        }
-
-        for tool in &mut tools {
-            project_declared_permissions(tool);
-            project_declared_description(tool);
-        }
-
-        let execution = super::pipeline::build_execution_surface(&source_files);
-        let data = build_data_surface(&tools, &execution);
-        let dependencies = super::mcp::parse_dependencies(root, filter);
-        let provenance = super::mcp::parse_provenance(root, filter);
-
-        Ok(vec![ScanTarget {
-            name,
-            framework: Framework::AutoGen,
-            root_path: root.to_path_buf(),
-            tools,
-            execution,
-            data,
-            dependencies,
-            provenance,
-            source_files,
-        }])
+        super::pipeline::load_framework_target(
+            root,
+            filter,
+            Framework::AutoGen,
+            "autogen-project",
+            |lang| lang == Language::Python,
+            Some(extract_autogen_tools_from_source),
+        )
     }
 }
 
@@ -141,25 +90,12 @@ pub(crate) fn extract_autogen_tools_from_source(path: &Path, content: &str) -> V
         let match_start = cap.get(0).map(|m| m.start()).unwrap_or(0);
         let line = content[..match_start].lines().count() + 1;
 
-        tools.push(ToolSurface {
-            name: func_name,
+        tools.push(super::pipeline::build_extracted_tool(
+            func_name,
             description,
-            input_schema: None,
-            output_schema: None,
-            declared_permissions: Vec::new(),
-            declared_capabilities: std::collections::BTreeSet::new(),
-            capability_declarations: Vec::new(),
-            observed_capabilities: std::collections::BTreeSet::new(),
-            capability_evidence: Vec::new(),
-            capability_observation_complete: false,
-            defined_at: Some(SourceLocation {
-                file: path.to_path_buf(),
-                line,
-                column: 0,
-                end_line: Some(line),
-                end_column: None,
-            }),
-        });
+            path,
+            line,
+        ));
     }
 
     tools

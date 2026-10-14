@@ -37,6 +37,9 @@ mod unsafe_deser;
 mod unsafe_deser_patterns;
 mod webhook_file_exfil;
 
+#[cfg(test)]
+pub(crate) mod test_helpers;
+
 use super::{ContextDetector, Detector};
 
 /// Returns all built-in target-only detectors (SHIELD-001..019, SHIELD-021..037).

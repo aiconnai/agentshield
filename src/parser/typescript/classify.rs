@@ -44,30 +44,7 @@ pub(super) fn detect_sanitizer_assignments(content: &str, sanitized_vars: &mut H
     }
 }
 
-pub(super) fn sanitized_var_marker(var_name: &str, sanitizer_label: &str) -> String {
-    format!("{var_name}::{sanitizer_label}")
-}
-
-pub(super) fn sanitized_label_for_var(
-    ident: &str,
-    sanitized_vars: &HashSet<String>,
-) -> Option<String> {
-    for category in [
-        SanitizerCategory::Path,
-        SanitizerCategory::Network,
-        SanitizerCategory::TypeCoercion,
-    ] {
-        let prefix = format!("{}:", category.as_str());
-        if let Some(marker) = sanitized_vars
-            .iter()
-            .find(|value| value.starts_with(&format!("{ident}::{prefix}")))
-        {
-            return marker.split_once("::").map(|(_, label)| label.to_string());
-        }
-    }
-
-    sanitized_vars.contains(ident).then(|| ident.to_string())
-}
+pub(super) use crate::parser::common::{sanitized_label_for_var, sanitized_var_marker};
 
 /// Classify an argument, considering sanitized variables.
 pub(super) fn classify_argument_with_sanitizers(

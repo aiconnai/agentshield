@@ -40,6 +40,7 @@ agentshield/
 │   │       └── paths.rs          # 1-hop taint paths and source resolution
 │   ├── adapter/                  # Framework → IR (3-phase pipeline)
 │   │   ├── mod.rs                # Adapter trait, auto_detect_and_load(root, ignore_tests)
+│   │   ├── pipeline.rs           # Shared framework detection, tool & target loading pipeline
 │   │   ├── mcp/                   # MCP server adapter (modularized)
 │   │   │   ├── mod.rs             # Adapter trait impl, lifecycle, test helpers
 │   │   │   ├── loader.rs          # Target loading, file collection, composite analysis
@@ -71,6 +72,7 @@ agentshield/
 │   │       └── discovery.rs      # Skill tree, catalog & profile discovery
 │   ├── parser/                   # Language parsers
 │   │   ├── mod.rs                # Parser trait, ParsedFile, FunctionDef, CallSite
+│   │   ├── common.rs             # Shared sanitizer variable & marker classification helpers
 │   │   ├── python/               # Python parser (modularized)
 │   │   │   ├── mod.rs            # PythonParser struct, LanguageParser impl
 │   │   │   ├── defs.rs           # Function definition & context manager extractors
@@ -368,10 +370,10 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 2. Implement `Adapter` trait (`framework()`, `detect()`, `load()`)
 3. Register in `src/adapter/mod.rs` → `all_adapters()`
 4. `detect()` checks for framework-specific files
-5. `load()` uses the 3-phase pipeline (parse → cross-file analysis → merge)
-6. Reuse shared helpers from the `mcp` module submodules: `collect_source_files()`, `parse_dependencies()`, `parse_provenance()`
+5. `load_with_filter()` uses the shared 3-phase pipeline via `pipeline::load_framework_target()` (parse → cross-file analysis → merge)
+6. Reuse shared helpers from `pipeline.rs` (`detect_python_framework`, `build_extracted_tool`, `load_framework_target`) and the `mcp` submodules (`collect_source_files_with_filter`, `parse_dependencies`, `parse_provenance`)
 
-**Existing adapters:** MCP (`mcp/`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), GPT Actions (`gpt_actions/`), Cursor Rules (`cursor_rules.rs`), Hermes Agent (`hermes/`)
+**Existing adapters (11):** MCP (`mcp/`), OpenClaw (`openclaw.rs`), CrewAI (`crewai.rs`), LangChain (`langchain.rs`), Vercel AI SDK (`vercel_ai.rs`), AutoGen (`autogen.rs`), LlamaIndex (`llama_index.rs`), Semantic Kernel (`semantic_kernel.rs`), GPT Actions (`gpt_actions/`), Cursor Rules (`cursor_rules.rs`), Hermes Agent (`hermes/`)
 
 ## Conventions
 

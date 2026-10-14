@@ -108,10 +108,15 @@ impl Policy {
         let mut active = HashSet::new();
         for s in &self.suppressions {
             if s.is_expired() {
+                let expires = s.expires.as_deref().unwrap_or("unknown");
+                tracing::warn!(
+                    fingerprint = %s.fingerprint,
+                    expires = %expires,
+                    "suppression for fingerprint has expired"
+                );
                 eprintln!(
                     "warning: suppression for fingerprint {} has expired (expires: {})",
-                    s.fingerprint,
-                    s.expires.as_deref().unwrap_or("unknown"),
+                    s.fingerprint, expires,
                 );
             } else {
                 active.insert(s.fingerprint.as_str());

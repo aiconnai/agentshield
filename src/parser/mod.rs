@@ -1,3 +1,4 @@
+pub(crate) mod common;
 pub mod json_schema;
 pub mod python;
 pub mod shell;

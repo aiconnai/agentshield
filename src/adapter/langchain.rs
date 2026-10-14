@@ -2,7 +2,6 @@ use std::path::Path;
 
 use crate::config::ScanPathFilter;
 use crate::error::Result;
-use crate::ir::taint_builder::build_data_surface;
 use crate::ir::*;
 
 /// LangChain framework adapter.
@@ -20,29 +19,6 @@ impl super::Adapter for LangChainAdapter {
     }
 
     fn detect(&self, root: &Path) -> bool {
-        // Check pyproject.toml for langchain dependency
-        let pyproject = root.join("pyproject.toml");
-        if pyproject.exists() {
-            if let Some(content) = super::read_file_capped(&pyproject) {
-                if content.contains("langchain") || content.contains("langgraph") {
-                    return true;
-                }
-            }
-        }
-
-        // Check requirements.txt for langchain/langgraph
-        let requirements = root.join("requirements.txt");
-        if requirements.exists() {
-            if let Some(content) = super::read_file_capped(&requirements) {
-                if content.lines().any(|l| {
-                    let trimmed = l.trim();
-                    trimmed.starts_with("langchain") || trimmed.starts_with("langgraph")
-                }) {
-                    return true;
-                }
-            }
-        }
-
         // Check for langgraph.json configuration file
         if root.join("langgraph.json").exists() {
             return true;
@@ -61,19 +37,17 @@ impl super::Adapter for LangChainAdapter {
             }
         }
 
-        if super::mcp::has_recursive_python_import(
+        super::pipeline::detect_python_framework(
             root,
+            &["langchain", "langgraph"],
+            |trimmed| trimmed.starts_with("langchain") || trimmed.starts_with("langgraph"),
             &[
                 "from langchain",
                 "import langchain",
                 "from langgraph",
                 "import langgraph",
             ],
-        ) {
-            return true;
-        }
-
-        false
+        )
     }
 
     fn load(&self, root: &Path, ignore_tests: bool) -> Result<Vec<ScanTarget>> {
@@ -82,45 +56,19 @@ impl super::Adapter for LangChainAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
-        let name = root
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "langchain-project".into());
-
-        let mut source_files = Vec::new();
-        // Phase 0: Collect source files (reuses MCP adapter's walker)
-        super::mcp::collect_source_files_with_filter(root, filter, &mut source_files)?;
-
-        // Retain Python and TypeScript/JavaScript source files for LangChain
-        source_files.retain(|sf| {
-            matches!(
-                sf.language,
-                Language::Python | Language::TypeScript | Language::JavaScript
-            )
-        });
-
-        let execution = super::pipeline::build_execution_surface(&source_files);
-
-        // Parse dependencies from pyproject.toml / requirements.txt / package.json
-        let dependencies = super::mcp::parse_dependencies(root, filter);
-
-        // Parse provenance from pyproject.toml / package.json
-        let provenance = super::mcp::parse_provenance(root, filter);
-
-        let tools = vec![];
-        let data = build_data_surface(&tools, &execution);
-
-        Ok(vec![ScanTarget {
-            name,
-            framework: Framework::LangChain,
-            root_path: root.to_path_buf(),
-            tools,
-            execution,
-            data,
-            dependencies,
-            provenance,
-            source_files,
-        }])
+        super::pipeline::load_framework_target(
+            root,
+            filter,
+            Framework::LangChain,
+            "langchain-project",
+            |lang| {
+                matches!(
+                    lang,
+                    Language::Python | Language::TypeScript | Language::JavaScript
+                )
+            },
+            None,
+        )
     }
 }
 

@@ -148,29 +148,8 @@ impl Detector for CrossSessionStateBleedDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::make_target_with_source;
     use super::*;
-    use crate::ir::{ExecutionSurface, Framework, Language, ScanTarget, SourceFile};
-    use std::path::PathBuf;
-
-    fn make_target_with_source(filename: &str, content: &str, lang: Language) -> ScanTarget {
-        ScanTarget {
-            name: "test-target".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("/test"),
-            tools: Vec::new(),
-            execution: ExecutionSurface::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![SourceFile {
-                path: PathBuf::from(filename),
-                language: lang,
-                size_bytes: content.len() as u64,
-                content_hash: "dummy".into(),
-                content: content.into(),
-            }],
-        }
-    }
 
     #[test]
     fn test_flags_python_global_session_accumulator() {

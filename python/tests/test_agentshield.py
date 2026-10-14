@@ -31,10 +31,15 @@ def test_shield_decorator_blocks_cloud_metadata():
     # Benign call passes
     assert fetch_url("https://api.github.com") == "Fetched https://api.github.com"
 
-    # Cloud metadata SSRF is blocked
-    with pytest.raises(SecurityBlockError) as exc_info:
-        fetch_url("http://169.254.169.254/latest/meta-data/")
-    assert "169.254.169.254" in str(exc_info.value)
+    # Cloud metadata SSRF is blocked across AWS, GCP, and Alibaba endpoints
+    for endpoint in (
+        "http://169.254.169.254/latest/meta-data/",
+        "http://metadata.google.internal/computeMetadata/v1/",
+        "http://100.100.100.200/latest/meta-data/",
+    ):
+        with pytest.raises(SecurityBlockError) as exc_info:
+            fetch_url(endpoint)
+        assert "prohibited cloud metadata endpoint" in str(exc_info.value)
 
 
 def test_shield_decorator_return_error_mode():
@@ -49,8 +54,13 @@ def test_shield_decorator_return_error_mode():
 def test_shield_decorator_redacts_secrets():
     @shield(redact_secrets=True)
     def get_api_response() -> str:
-        return "User authenticated. token = 'sk-abcdef1234567890abcdef123456789012345678'"
+        return (
+            "User authenticated. token = 'sk-abcdef1234567890abcdef123456789012345678' "
+            "ghp_1234567890abcdef1234567890abcdef1234"
+        )
 
     res = get_api_response()
     assert "sk-abcdef1234567890" not in res
+    assert "ghp_1234567890abcdef" not in res
     assert "[REDACTED_BY_AGENTSHIELD]" in res
+
