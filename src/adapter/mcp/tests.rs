@@ -13,6 +13,19 @@ fn test_file_detection_covers_shell_and_suffix_python_tests() {
 }
 
 #[test]
+fn test_file_detection_strips_scan_root_prefix() {
+    let root = Path::new("tests/fixtures/mcp_servers/safe_calculator");
+    assert!(
+        !is_test_file_in(root, &root.join("server.py")),
+        "ancestor 'tests/' component in scan root must not mark regular source files as tests"
+    );
+    assert!(
+        is_test_file_in(root, &root.join("tests/test_server.py")),
+        "nested 'tests/' directory inside scan root must still be treated as test file"
+    );
+}
+
+#[test]
 fn extracts_typescript_mcp_server_tool_declarations() {
     let content = r#"
 const server = new McpServer({ name: "demo" })

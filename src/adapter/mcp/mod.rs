@@ -16,7 +16,7 @@ use crate::error::Result;
 use crate::ir::*;
 
 pub use dependencies::parse_dependencies;
-pub use filter::is_test_file;
+pub use filter::{is_test_file, is_test_file_in};
 pub use provenance::parse_provenance;
 pub use tools::extract_mcp_tools_from_source;
 

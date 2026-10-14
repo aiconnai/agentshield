@@ -75,7 +75,7 @@ fn collect_skill_source_files(
     for entry in walker.flatten() {
         let path = entry.path();
         if !path.is_file()
-            || (filter.ignore_tests() && super::mcp::is_test_file(path))
+            || (filter.ignore_tests() && super::mcp::is_test_file_in(scan_root, path))
             || !filter.allows_path(scan_root, path)
         {
             continue;

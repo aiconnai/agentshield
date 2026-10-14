@@ -1,5 +1,16 @@
 use std::path::Path;
 
+/// Check if a file path relative to `root` belongs to a test file or test directory.
+///
+/// Strips `root` from `path` before inspecting directory components so that
+/// scanning a target directory located under a parent `test/` or `tests/` path
+/// (such as `tests/fixtures/...`) does not falsely classify every file inside
+/// the target as a test file.
+pub fn is_test_file_in(root: &Path, path: &Path) -> bool {
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    is_test_file(relative)
+}
+
 /// Check if a file path belongs to a test file or test directory.
 ///
 /// Matches common conventions across Python, TypeScript, and JavaScript:

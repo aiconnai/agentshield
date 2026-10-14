@@ -1,5 +1,7 @@
 [advisories]
-ignore = []
+ignore = [
+    { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml is an archived transitive dependency of serde_yaml; all YAML inputs are size-capped at 1 MiB before parsing" },
+]
 
 [licenses]
 confidence-threshold = 0.95

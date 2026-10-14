@@ -404,7 +404,9 @@ fixture_smoke() {
     "$bin" scan tests/fixtures/langchain_project --ignore-tests --format json || return 1
   run_scan_allow_findings "GPT Actions adapter smoke" \
     "$bin" scan tests/fixtures/gpt_actions --ignore-tests --format json || return 1
-  assert_scan_rules "SHIELD-007 fires in gpt_actions" 0 "SHIELD-007" "" \
+  assert_scan_rules "SHIELD-007 fires in vuln_ssrf" 1 "SHIELD-007" "" \
+    "$bin" scan tests/fixtures/mcp_servers/vuln_ssrf || return 1
+  assert_scan_rules "SHIELD-007 is suppressed in gpt_actions" 0 "" "SHIELD-007" \
     "$bin" scan tests/fixtures/gpt_actions --ignore-tests || return 1
   assert_scan_rules "SHIELD-007 is suppressed in safe calculator" 0 "" "SHIELD-007" \
     "$bin" scan tests/fixtures/mcp_servers/safe_calculator --ignore-tests || return 1

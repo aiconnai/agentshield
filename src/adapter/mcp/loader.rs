@@ -16,7 +16,7 @@ use crate::parser;
 
 use super::binding::bind_mcp_tool_operations;
 use super::dependencies::parse_dependencies;
-use super::filter::is_test_file;
+use super::filter::is_test_file_in;
 use super::provenance::parse_provenance;
 use super::tools::{
     dedupe_tools_by_name, extract_mcp_tool_declarations_from_source, extract_mcp_tools_from_source,
@@ -282,7 +282,7 @@ pub(crate) fn collect_source_files_with_filter(
             continue;
         }
 
-        if filter.ignore_tests() && is_test_file(path) {
+        if filter.ignore_tests() && is_test_file_in(root, path) {
             continue;
         }
 

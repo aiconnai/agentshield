@@ -77,7 +77,7 @@ pub(crate) fn collect_artifact_tree(
             continue;
         }
 
-        if filter.ignore_tests() && super::super::mcp::is_test_file(path) {
+        if filter.ignore_tests() && super::super::mcp::is_test_file_in(root, path) {
             continue;
         }
 
