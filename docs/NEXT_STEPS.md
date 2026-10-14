@@ -1,46 +1,43 @@
-# Next Steps — Post v0.1.0
+# Next Steps — Post v1.0.2 GA
 
-Status: post-v0.8.7 development. 7 framework/client adapters (MCP,
-OpenClaw, Hermes Agent, CrewAI, LangChain, GPT Actions, Cursor Rules), 20
-detectors (SHIELD-001..020), and the VS Code extension. Fingerprints,
-suppressions, baseline diffing, taint path analysis, composite toxic-flow
-analysis, egress policy generation, DSSE attestation (`certify`), local client
-discovery, explainable/versioned experimental risk assessment, operator
-override layering, scan include/exclude filters, MCP subdirectory scans,
-OpenClaw `.agents/skills/<skill>/SKILL.md` discovery, explain hotspot summaries,
-experimental `guard --stdin`, and experimental bidirectional
-`guard --mcp-proxy` transport are implemented.
+Status: `v1.0.2` GA state.
+
+- **11 framework/client adapters** (`MCP`, `OpenClaw`, `Hermes Agent`, `CrewAI`, `LangChain`, `AutoGen`, `LlamaIndex`, `Semantic Kernel`, `Vercel AI SDK`, `GPT Actions`, `Cursor Rules`) consolidated via shared pipeline helpers (`src/adapter/pipeline.rs`).
+- **37 security detectors** (`SHIELD-001` through `SHIELD-037`) with complete TP/FP invariant matrix coverage (`docs/harness/INVARIANTS.md`).
+- **Interprocedural call-graph taint analysis** (`src/analysis/interprocedural.rs`) and **composite toxic-flow analysis** (`SHIELD-020`) wired across both `RuleEngine::run()` and all framework adapters.
+- **Custom declarative YAML/JSON rule engine** (`.agentshield/rules/`), **automated remediation** (`agentshield fix`), and **Runtime Guard MCP stdio + HTTP/SSE proxy** (`agentshield guard`).
+- **Criterion benchmarks** (`benches/scan.rs`), **`proptest` generative parser properties** (`tests/proptest_parsers.rs`), and **`cargo-fuzz` targets** (`fuzz/`).
+- **VS Code extension (`v1.0.2`)** with Quick-Fix code actions and 0 `npm audit` vulnerabilities.
+- Fingerprints, suppressions, baseline diffing, egress policy generation, DSSE attestation (`certify`), local client discovery, explainable/versioned experimental risk assessment, operator override layering, scan include/exclude filters, MCP subdirectory scans, OpenClaw `.agents/skills/<skill>/SKILL.md` discovery, and explain hotspot summaries are implemented.
 
 ---
 
 ## Runtime guard roadmap
 
-Runtime guard work is planned as an experimental extension to AgentShield's current offline static scanner and policy evaluation contract. The staged roadmap is:
+Runtime guard provides live policy evaluation and interception alongside AgentShield's offline static scanner:
 
 - **Shared policy event model:** done.
 - **Secret redaction helpers:** done.
-- **Experimental `agentshield guard --stdin`:** done.
-- **MCP proxy guard mode:** experimental line-protocol and bidirectional stdio transport implementations done.
-- **Production hardening:** broaden MCP client/server compatibility tests and runtime compatibility guarantees before runtime mode is considered stable.
+- **`agentshield guard --stdin`:** done.
+- **MCP proxy guard mode:** line-protocol, bidirectional stdio, and HTTP/SSE (`--listen`, `--upstream-url`) transport implementations done.
+- **Production hardening:** broaden MCP client/server compatibility tests and runtime compatibility guarantees across ecosystem transports.
 
 ---
 
-## Post-v0.8.7 development
+## Post-v1.0.2 development
 
-Release `v0.8.7` was published on June 15, 2026. The following increments have
-landed on `main` since that release:
+Release `v1.0.2` consolidates the `v1.0` GA platform milestone:
 
-- SHIELD-020 composite arbitrary-read exfiltration chains with crate-private,
-  contextual value-flow transport;
-- read-only, allowlisted local client discovery through `agentshield discover`;
-- deterministic `agentshield-risk-v1` assessment with explicit
-  `scan --experimental-risk` console/JSON opt-in;
-- isolated OpenClaw targets for direct
-  `.agents/skills/<skill>/SKILL.md` layouts.
+- 11 framework/client adapters sharing unified pipeline orchestration (`src/adapter/pipeline.rs`);
+- 37 detectors (`SHIELD-001`..`SHIELD-037`) backed by the complete TP/FP invariant matrix (`docs/harness/INVARIANTS.md`);
+- interprocedural call-graph taint analysis (`src/analysis/interprocedural.rs`) and composite toxic-flow chains (`SHIELD-020`) wired across both `RuleEngine::run()` and all framework adapters;
+- custom declarative YAML/JSON rules (`.agentshield/rules/`), `agentshield fix` automated remediation, and `agentshield guard` stdio + HTTP/SSE proxy;
+- Criterion benchmarks (`benches/scan.rs`), `proptest` generative parser tests (`tests/proptest_parsers.rs`), and `cargo-fuzz` targets (`fuzz/`);
+- VS Code extension (`v1.0.2`) with Quick-Fix code actions and 0 `npm audit` vulnerabilities.
 
 Next release work:
 
-- choose the next version from the accumulated post-v0.8.7 changes;
+- choose the next version from accumulated post-v1.0.2 changes;
 - run the full release checklist and compatibility gates;
 - update release notes, version, tag, crates.io/Homebrew artifacts, and GitHub
   release only when publication is explicitly authorized.

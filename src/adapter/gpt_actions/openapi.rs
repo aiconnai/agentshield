@@ -122,14 +122,9 @@ pub(crate) fn parse_openapi_spec(spec_path: &Path) -> Result<serde_json::Value> 
         .to_ascii_lowercase();
 
     if OPENAPI_EXTENSIONS.contains(&extension.as_str()) && extension != "json" {
-        let yaml: serde_yaml::Value =
-            serde_yaml::from_str(&content).map_err(|err| crate::error::ShieldError::Parse {
-                file: spec_path.display().to_string(),
-                message: format!("Failed to parse OpenAPI YAML: {err}"),
-            })?;
-        return serde_json::to_value(yaml).map_err(|err| crate::error::ShieldError::Parse {
+        return serde_saphyr::from_str(&content).map_err(|err| crate::error::ShieldError::Parse {
             file: spec_path.display().to_string(),
-            message: format!("Failed to convert OpenAPI YAML AST: {err}"),
+            message: format!("Failed to parse OpenAPI YAML: {err}"),
         });
     }
 

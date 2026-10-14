@@ -117,7 +117,7 @@ impl super::Adapter for GptActionsAdapter {
                 if let Ok(content) = std::fs::read_to_string(&tool_path) {
                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
                         extract_openai_tools_json(&val, &tool_path, &mut tools);
-                    } else if let Ok(val) = serde_yaml::from_str::<serde_json::Value>(&content) {
+                    } else if let Ok(val) = serde_saphyr::from_str::<serde_json::Value>(&content) {
                         extract_openai_tools_json(&val, &tool_path, &mut tools);
                     }
                 }

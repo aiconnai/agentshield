@@ -1,6 +1,6 @@
 [package]
 name = "agent-shield"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 resolver = "3"
 authors = ["Ronaldo Lima <https://github.com/limaronaldo>", "AgentShield Contributors"]
@@ -59,7 +59,7 @@ clap = { version = "4.4", features = ["derive", "env", "color"] }
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_yaml = "0.9"
+serde-saphyr = { version = "2.0", default-features = false, features = ["deserialize"] }
 
 # Error handling
 thiserror = "1.0"

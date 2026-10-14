@@ -390,7 +390,7 @@ pub(crate) fn detect_npm_lock_confidence(content: &str) -> (bool, bool) {
 }
 
 pub(crate) fn detect_pnpm_lock_confidence(content: &str) -> (bool, bool) {
-    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(content) else {
+    let Ok(value) = serde_saphyr::from_str::<serde_json::Value>(content) else {
         return (false, false);
     };
 
@@ -399,15 +399,15 @@ pub(crate) fn detect_pnpm_lock_confidence(content: &str) -> (bool, bool) {
     let mut packages_seen = 0usize;
 
     let Some(packages) = value
-        .as_mapping()
+        .as_object()
         .and_then(|m| m.get("packages"))
-        .and_then(|v| v.as_mapping())
+        .and_then(|v| v.as_object())
     else {
         return (false, false);
     };
 
     for (_key, package_value) in packages {
-        let Some(package_obj) = package_value.as_mapping() else {
+        let Some(package_obj) = package_value.as_object() else {
             continue;
         };
         packages_seen += 1;
@@ -423,7 +423,7 @@ pub(crate) fn detect_pnpm_lock_confidence(content: &str) -> (bool, bool) {
 
         let has_integrity = package_obj
             .get("resolution")
-            .and_then(|v| v.as_mapping())
+            .and_then(|v| v.as_object())
             .and_then(|r| r.get("integrity"))
             .and_then(|v| v.as_str())
             .is_some_and(|v| !v.trim().is_empty())

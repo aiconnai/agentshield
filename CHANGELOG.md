@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-14
+
+### Fixed
+
+- **Composite Flow Engine Wiring (`SHIELD-020`)**:
+  - Wired `compute_composite_flows_for_target` into `RuleEngine::run()` (`src/rules/mod.rs`) and `LegacyAnalysisAdapter::load_analysis_with_filter()` (`src/adapter/mod.rs`) so direct library callers and non-MCP adapters (CrewAI, LangChain, Vercel AI SDK, AutoGen, LlamaIndex, Semantic Kernel) evaluate `SHIELD-020` composite toxic flows.
+- **Scan-Root-Relative `--ignore-tests` Filtering**:
+  - Introduced `is_test_file_in(root, path)` in `src/adapter/mcp/filter.rs` to strip the scan root prefix before checking for `test`/`tests`/`__tests__` directory components, preventing false exclusion when the target directory itself resides under a test-named ancestor path.
+- **Supply Chain & Advisory Hygiene (`RUSTSEC-2024-0449` + `npm audit`)**:
+  - Replaced deprecated `serde_yaml` (`unsafe-libyaml`) with safe-Rust `serde-saphyr`, leaving `deny.toml` with zero advisory exceptions (`ignore = []`).
+  - Upgraded `@vscode/vsce` to `^4.0.0` in `vscode/` to resolve all 12 transitive `npm audit` advisories (`0` vulnerabilities, `-57.5%` package count from `287` to `122`).
+
+### Changed
+
+- **Adapter, Parser & Detector Test Deduplication**:
+  - Unified Python/TypeScript framework detection, tool extraction, and 3-phase target loading in `src/adapter/pipeline.rs`.
+  - Consolidated shared sanitizer call and variable classification helpers in `src/parser/common.rs`.
+  - Extracted shared detector test builders (`loc`, `loc_at`, `empty_target`, `make_target_from_files`, `make_target_with_source`, `fixture_findings`) into `src/rules/builtin/test_helpers.rs` and completed the `SHIELD-001..037` TP/FP invariant matrix (`704` all-feature tests).
+- **Repository Packfile Optimization**:
+  - Cleaned historical build artifact blobs from Git pack storage (`73.17 MiB -> 1.54 MiB`).
+
 ## [1.0.1] - 2026-08-19
 
 ### Added
@@ -377,6 +398,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Typosquat detection via Levenshtein distance against popular packages
   - Unpinned dependency version detection
 
+[1.0.2]: https://github.com/aiconnai/agentshield/releases/tag/v1.0.2
 [1.0.1]: https://github.com/aiconnai/agentshield/releases/tag/v1.0.1
 [1.0.0]: https://github.com/aiconnai/agentshield/releases/tag/v1.0.0
 [0.9.3]: https://github.com/aiconnai/agentshield/releases/tag/v0.9.3

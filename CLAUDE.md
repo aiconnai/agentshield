@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents when working with this repositor
 
 ## Project Overview
 
-**AgentShield** is a Rust-based, offline-first security scanner and runtime guard for AI agent extensions
+**AgentShield** (`v1.0.2`) is a Rust-based, offline-first security scanner and runtime guard for AI agent extensions
 (MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, GPT Actions, Cursor Rules,
 Hermes Agent projects, Vercel AI SDK, AutoGen, LlamaIndex, and Semantic Kernel).
 Official Website: https://aiconnai.github.io/agentshield/
@@ -143,6 +143,7 @@ agentshield/
 │   │   ├── registry.rs           # Rule metadata registry
 │   │   ├── policy.rs             # Policy evaluation (.agentshield.toml)
 │   │   └── builtin/              # 37 built-in detectors (SHIELD-001..037)
+│   │       ├── test_helpers.rs   # Shared detector unit test target builders
 │   │       └── capability_mismatch/ # SHIELD-019 detector & eval engine (modularized)
 │   ├── risk/                     # Deterministic risk assessment model (modularized)
 │   │   ├── mod.rs                # assess(), render_experimental(), property tests
@@ -194,7 +195,7 @@ agentshield/
 │       ├── fuzz_py_parser.rs     # Python parser fuzzing
 │       ├── fuzz_mcp_tools.rs     # MCP tools extractor fuzzing
 │       └── fuzz_composite_flow.rs # Composite flow engine fuzzing
-├── vscode/                       # VS Code extension (v0.1.0)
+├── vscode/                       # VS Code extension (v1.0.2)
 │   ├── package.json              # Extension manifest
 │   ├── tsconfig.json             # TypeScript config
 │   └── src/                      # Extension source (TypeScript)
@@ -217,7 +218,7 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (605 Rust tests under the default feature set, including all targets)
+# Test (704 Rust tests under --all-features, including all targets)
 cargo test --workspace --all-targets --locked
 
 # Benchmarks
@@ -349,7 +350,7 @@ The `--ignore-tests` flag skips test files at the file-walking stage (before par
 
 CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 
-`is_test_file()` in `src/adapter/mcp.rs` matches:
+`is_test_file_in(root, path)` (and `is_test_file(path)`) in `src/adapter/mcp/filter.rs` strips the scan root prefix before matching:
 - Directories: `test/`, `tests/`, `__tests__/`, `__pycache__/`
 - Suffixes: `.test.{ts,js,tsx,jsx,py}`, `.spec.{ts,js,tsx,jsx}`
 - Prefixes: `test_*.py` (pytest)
@@ -408,4 +409,5 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 | 0.7.0 | ~195 | Egress policy operator override layering for `wrap` command |
 | 0.8.0 | 212 | `certify` command (DSSE attestation + Ed25519), 6 new detectors (SHIELD-013..018) |
 | 1.0.0 | 594 | 36 detectors (SHIELD-001..036), 11 adapters, criterion benchmarks, cargo-fuzz + proptest harnesses, Windows cross-compilation, SHIELD-034 (agent checkpoint CWE-502), SHIELD-035 (unauthenticated MCP SSE CWE-346), SHIELD-036 (tool response prompt injection CWE-1336), v1.0.0 launch kit |
-| 1.0.1 | 605 | SARIF 2.1.0 taxonomy placement fix (run.taxonomies), GitHub Action SHA pinning + shell injection hardening, gitleaks config, mcp/tests.rs cfg-feature guard, SHIELD-037 (agent memory poisoning CWE-20) |
+| 1.0.1 | 668 | SARIF 2.1.0 taxonomy placement fix (run.taxonomies), GitHub Action SHA pinning + shell injection hardening, gitleaks config, mcp/tests.rs cfg-feature guard, SHIELD-037 (agent memory poisoning CWE-20) |
+| 1.0.2 | 704 | Composite flow wiring in `RuleEngine::run()` & non-MCP adapters (`SHIELD-020`), scan-root-relative `--ignore-tests` (`is_test_file_in`), safe-Rust `serde-saphyr` YAML migration (0 `cargo deny` exceptions), adapter/parser/test-helper deduplication (`pipeline.rs`, `common.rs`, `test_helpers.rs`), full `SHIELD-001..037` TP/FP invariant matrix, VS Code extension audit fix (`0` vulns, `-57.5%` deps), git packfile optimization (`73.17 MiB -> 1.54 MiB`) |

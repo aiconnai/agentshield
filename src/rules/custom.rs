@@ -272,7 +272,7 @@ pub fn load_custom_rule_file(path: &Path) -> Result<CustomRuleDetector> {
             ))
         })?
     } else {
-        serde_yaml::from_str(&content).map_err(|e| {
+        serde_saphyr::from_str(&content).map_err(|e| {
             ShieldError::Config(format!(
                 "Failed to parse custom rule YAML '{}': {}",
                 path.display(),
@@ -343,7 +343,7 @@ match:
       reason: "deprecated"
   tool_name_regex: "^admin_.*"
 "#;
-        let def: CustomRuleDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomRuleDef = serde_saphyr::from_str(yaml).unwrap();
         assert_eq!(def.id, "ORG-001");
         assert_eq!(def.severity, Severity::High);
         assert_eq!(def.attack_category, AttackCategory::CredentialExfiltration);
@@ -366,7 +366,7 @@ match:
   banned_dependencies:
     - name: "evil-dep"
 "#;
-        let def: CustomRuleDef = serde_yaml::from_str(yaml).unwrap();
+        let def: CustomRuleDef = serde_saphyr::from_str(yaml).unwrap();
         let detector = CustomRuleDetector::from_def(def).unwrap();
 
         let target = ScanTarget {
