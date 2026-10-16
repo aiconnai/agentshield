@@ -98,4 +98,44 @@ if ! grep -Fq "$changelog_header" CHANGELOG.md; then
   exit 1
 fi
 
+if ! grep -Fq "__version__ = \"${version}\"" python/agentshield/__init__.py; then
+  echo "python/agentshield/__init__.py does not match version ${version}"
+  exit 1
+fi
+
+if ! grep -Fq "assert agentshield.__version__ == \"${version}\"" python/tests/test_agentshield.py; then
+  echo "python/tests/test_agentshield.py does not assert version ${version}"
+  exit 1
+fi
+
+if ! grep -Fq "\"version\": \"${version}\"" vscode/package.json; then
+  echo "vscode/package.json does not match version ${version}"
+  exit 1
+fi
+
+if ! grep -Fq "DEFAULT_VERSION=\"v${version}\"" install.sh; then
+  echo "install.sh DEFAULT_VERSION does not match v${version}"
+  exit 1
+fi
+
+if ! grep -Fq "DEFAULT_VERSION=\"v${version}\"" docs/install.sh; then
+  echo "docs/install.sh DEFAULT_VERSION does not match v${version}"
+  exit 1
+fi
+
+if ! grep -Fq -- "--tag v${version}" docs/site.js; then
+  echo "docs/site.js cargo install snippet does not match v${version}"
+  exit 1
+fi
+
+if ! grep -Fq "| Current version in \`Cargo.toml\` | \`${version}\` |" docs/harness/SPEC.md; then
+  echo "docs/harness/SPEC.md does not match version ${version}"
+  exit 1
+fi
+
+if ! grep -Fq "v${version}</sub>" action.yml; then
+  echo "action.yml PR comment footer does not match v${version}"
+  exit 1
+fi
+
 echo "Release invariants passed for $tag"

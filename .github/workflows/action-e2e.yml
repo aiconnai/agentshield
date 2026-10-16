@@ -325,6 +325,43 @@ jobs:
           fi
           echo "PASS: strict=false did not suppress a genuine scan error"
 
+      - name: "Test 9h: Prepare stub binary exiting 134 (Issue #79 regression)"
+        shell: bash
+        run: |
+          cat > "${{ runner.temp }}/agentshield-abort-stub" <<'SH'
+          #!/usr/bin/env bash
+          echo "simulated abort" >&2
+          exit 134
+          SH
+          chmod +x "${{ runner.temp }}/agentshield-abort-stub"
+
+      - name: "Test 9i: Composite action fails on unexpected exit code 134"
+        id: abort-exit-check
+        continue-on-error: true
+        uses: ./
+        with:
+          binary-path: ${{ runner.temp }}/agentshield-abort-stub
+          path: tests/fixtures/mcp_servers/safe_calculator
+          format: console
+          upload-sarif: false
+          strict: false
+
+      - name: "Test 9j: Verify unexpected exit code 134 is blocking"
+        shell: bash
+        run: |
+          if [ "${{ steps.abort-exit-check.outcome }}" != "failure" ]; then
+            echo "::error::unexpected exit code 134 must fail the action, got ${{ steps.abort-exit-check.outcome }}"
+            exit 1
+          fi
+          if [ "${{ steps.abort-exit-check.outputs.exit-code }}" != "134" ]; then
+            echo "::error::action should preserve exit code 134, got ${{ steps.abort-exit-check.outputs.exit-code }}"
+            exit 1
+          fi
+          echo "PASS: unexpected exit code 134 failed the composite action"
+          # Restore real binary in runner.temp/agentshield/agentshield
+          cp target/release/agentshield "${{ runner.temp }}/agentshield/agentshield"
+          chmod +x "${{ runner.temp }}/agentshield/agentshield"
+
       # --- Upload SARIF for real Code Scanning integration ---
       - name: Upload SARIF to Code Scanning
         if: always() && matrix.os == 'ubuntu-latest'

@@ -296,7 +296,7 @@ runs:
             body = (
                 f"{header}"
                 "✅ **No security vulnerabilities detected.** All agent tools, MCP endpoints, and execution flows passed security gates.\n\n"
-                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.1</sub>"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.2</sub>"
             )
         else:
             findings_table = "| Rule | Severity | Location | Message |\n|---|---|---|---|\n"
@@ -323,7 +323,7 @@ runs:
                 f"{findings_table}\n"
                 "#### 💡 Quick Fix\n"
                 "Run `agentshield fix .` locally to automatically remediate unpinned dependencies and unsafe deserializers.\n\n"
-                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.1</sub>"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.2</sub>"
             )
 
         import tempfile
@@ -367,4 +367,7 @@ runs:
             echo "::error::AgentShield encountered a scan error"
             exit 2
           fi
+        elif [ "${AGENTSHIELD_EXIT:-1}" != "0" ]; then
+          echo "::error::AgentShield exited with unexpected code ${AGENTSHIELD_EXIT:-unknown}"
+          exit "${AGENTSHIELD_EXIT:-1}"
         fi
