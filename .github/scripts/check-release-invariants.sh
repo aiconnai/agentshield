@@ -138,4 +138,20 @@ if ! grep -Fq "v${version}</sub>" action.yml; then
   exit 1
 fi
 
+if ! grep -Fq "version \"${version}\"" Formula/agentshield.rb; then
+  echo "Formula/agentshield.rb does not match version ${version}"
+  exit 1
+fi
+
+if ! grep -Fq "agentshield ${version}" Formula/agentshield.rb; then
+  echo "Formula/agentshield.rb test block does not assert agentshield ${version}"
+  exit 1
+fi
+
+formula_url_count="$(grep -Fc "releases/download/v${version}/agentshield-v${version}-" Formula/agentshield.rb || true)"
+if [[ "$formula_url_count" -ne 4 ]]; then
+  echo "Formula/agentshield.rb must point all 4 platform URLs to v${version} (found ${formula_url_count})"
+  exit 1
+fi
+
 echo "Release invariants passed for $tag"

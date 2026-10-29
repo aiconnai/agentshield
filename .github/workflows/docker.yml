@@ -3,6 +3,12 @@ name: Docker (GHCR)
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and publish (e.g. v1.0.2)"
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -19,7 +25,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
 
       - name: Ensure release invariants
-        run: .github/scripts/check-release-invariants.sh "$GITHUB_REF_NAME"
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: .github/scripts/check-release-invariants.sh "$RELEASE_TAG"
 
   metadata:
     name: Docker metadata
@@ -40,8 +48,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ inputs.tag || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag || github.ref_name }}
             type=sha,prefix=
             type=raw,value=latest
 
@@ -144,7 +152,10 @@ jobs:
           docker buildx imagetools create $tags $sources
 
       - name: Inspect published image
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${GITHUB_REF_NAME#v}" | tee /tmp/agentshield-image.txt
+          docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${RELEASE_TAG#v}" | tee /tmp/agentshield-image.txt
           grep -q "linux/amd64" /tmp/agentshield-image.txt
           grep -q "linux/arm64" /tmp/agentshield-image.txt
+          docker run --rm "${REGISTRY}/${IMAGE_NAME}:${RELEASE_TAG#v}" --version | grep -Fq "agentshield ${RELEASE_TAG#v}"
