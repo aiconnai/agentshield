@@ -1,7 +1,10 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use super::source_scan::{
+    scan_python_tool_lines, scan_tool_scoped_sources, scan_ts_tool_window_lines,
+};
+use crate::ir::{ScanTarget, SourceLocation};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
@@ -23,22 +26,6 @@ pub struct ToolResponseInjectionDetector;
 
 // ── Python statics (applied per-line; no (?m) flag) ───────────────────────────
 
-// Matches @mcp.tool, @tool, @server.tool, @app.tool decorator lines
-static PY_TOOL_DECORATOR_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"^\s*@(?:\w+\.)*tool\b"#).expect("valid regex"));
-
-// Matches `def <name>(` where <name> contains a tool-related keyword
-static PY_TOOL_DEF_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r#"^\s*(?:async\s+)?def\s+\w*(?:tool|handler|execute|process|handle|invoke)\w*\s*\("#,
-    )
-    .expect("valid regex")
-});
-
-// Matches any `def <name>(` — used to detect the function start after a decorator
-static PY_DEF_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"^\s*(?:async\s+)?def\s+\w+\s*\("#).expect("valid regex"));
-
 // Matches `return f"...{var}..."` or `return f'...'` (f-string with at least one interpolation)
 static PY_RETURN_FSTRING_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"^\s*return\s+f(?:"[^"]*\{[^}]+\}|'[^']*\{[^}]+\})"#).expect("valid regex")
@@ -56,11 +43,6 @@ static PY_RETURN_FORMAT_RE: Lazy<Regex> = Lazy::new(|| {
 });
 
 // ── TypeScript / JavaScript statics (applied per-line; no (?m) flag) ──────────
-
-// Matches tool registration: `.tool(`, `.addTool(`, `server.tool(`, `mcp.tool(`
-static TS_TOOL_REGISTRATION_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"\b(?:addTool|server\.tool|mcp\.tool|\.tool)\s*\("#).expect("valid regex")
-});
 
 // Matches template literal return with interpolation: return `...${...}...`
 static TS_RETURN_TEMPLATE_RE: Lazy<Regex> =
@@ -96,219 +78,109 @@ impl Detector for ToolResponseInjectionDetector {
 
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
-
-        for file in &target.source_files {
-            let lines: Vec<&str> = file.content.lines().collect();
-
-            match file.language {
-                Language::Python => {
-                    scan_python(&lines, file, &mut findings);
-                }
-                Language::TypeScript | Language::JavaScript => {
-                    scan_ts_js(&lines, file, &mut findings);
-                }
-                _ => {}
-            }
-        }
-
+        scan_tool_scoped_sources(target, &mut findings, scan_python, scan_ts_js);
         findings
     }
 }
 
 fn scan_python(lines: &[&str], file: &crate::ir::SourceFile, findings: &mut Vec<Finding>) {
-    let mut in_tool_fn = false;
-    let mut expecting_tool_def = false;
-    let mut tool_fn_indent: usize = 0;
+    scan_python_tool_lines(lines, |line_idx, line, trimmed| {
+        let is_unsafe_return = (PY_RETURN_FSTRING_RE.is_match(line)
+            || PY_RETURN_CONCAT_RE.is_match(line)
+            || PY_RETURN_FORMAT_RE.is_match(line))
+            && !SANITIZE_GUARD_RE.is_match(line);
 
-    for (line_idx, &line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with('#') || trimmed.is_empty() {
-            continue;
-        }
-
-        let current_indent = line.len() - line.trim_start().len();
-
-        if expecting_tool_def {
-            if PY_DEF_RE.is_match(line) {
-                in_tool_fn = true;
-                expecting_tool_def = false;
-                tool_fn_indent = current_indent;
-                continue;
-            } else if trimmed.starts_with('@') {
-                // Stacked decorator (e.g. @staticmethod, @validate, @lru_cache)
-                continue;
-            } else {
-                // A non-decorator, non-def line appeared between @tool and def.
-                // Cancel pending tool scope to avoid false-positives on unrelated defs.
-                expecting_tool_def = false;
-            }
-        }
-
-        if in_tool_fn && current_indent <= tool_fn_indent {
-            in_tool_fn = false;
-        }
-
-        if !in_tool_fn {
-            if PY_TOOL_DECORATOR_RE.is_match(line) {
-                expecting_tool_def = true;
-                continue;
-            } else if PY_TOOL_DEF_RE.is_match(line) {
-                in_tool_fn = true;
-                tool_fn_indent = current_indent;
-                continue;
-            }
-        }
-
-        if in_tool_fn {
-            let is_unsafe_return = (PY_RETURN_FSTRING_RE.is_match(line)
-                || PY_RETURN_CONCAT_RE.is_match(line)
-                || PY_RETURN_FORMAT_RE.is_match(line))
-                && !SANITIZE_GUARD_RE.is_match(line);
-
-            if is_unsafe_return {
-                let col = line.find("return").unwrap_or(0);
-                let loc = SourceLocation {
-                    file: file.path.clone(),
-                    line: line_idx + 1,
-                    column: col,
-                    end_line: None,
-                    end_column: None,
-                };
-                findings.push(Finding {
-                    rule_id: "SHIELD-036".into(),
-                    rule_name: "Tool Response Prompt Injection / Unsanitized Parameter Reflection"
+        if is_unsafe_return {
+            let col = line.find("return").unwrap_or(0);
+            let loc = SourceLocation {
+                file: file.path.clone(),
+                line: line_idx + 1,
+                column: col,
+                end_line: None,
+                end_column: None,
+            };
+            findings.push(Finding {
+                rule_id: "SHIELD-036".into(),
+                rule_name: "Tool Response Prompt Injection / Unsanitized Parameter Reflection"
+                    .into(),
+                severity: Severity::High,
+                confidence: Confidence::Medium,
+                attack_category: AttackCategory::PromptInjectionSurface,
+                message: "Tool handler returns an unsanitized parameter via string \
+                          interpolation — an attacker controlling tool inputs can inject \
+                          arbitrary instructions into the downstream LLM prompt"
+                    .into(),
+                location: Some(loc.clone()),
+                evidence: vec![Evidence {
+                    description: "Unsanitized return in tool handler".into(),
+                    location: Some(loc),
+                    snippet: Some(trimmed.to_string()),
+                }],
+                taint_path: None,
+                remediation: Some(
+                    "Sanitize or escape tool output before returning it. Consider wrapping \
+                     the value in a structured JSON response, stripping control characters, \
+                     or validating that output conforms to an expected schema."
                         .into(),
-                    severity: Severity::High,
-                    confidence: Confidence::Medium,
-                    attack_category: AttackCategory::PromptInjectionSurface,
-                    message: "Tool handler returns an unsanitized parameter via string \
-                              interpolation — an attacker controlling tool inputs can inject \
-                              arbitrary instructions into the downstream LLM prompt"
-                        .into(),
-                    location: Some(loc.clone()),
-                    evidence: vec![Evidence {
-                        description: "Unsanitized return in tool handler".into(),
-                        location: Some(loc),
-                        snippet: Some(trimmed.to_string()),
-                    }],
-                    taint_path: None,
-                    remediation: Some(
-                        "Sanitize or escape tool output before returning it. Consider wrapping \
-                         the value in a structured JSON response, stripping control characters, \
-                         or validating that output conforms to an expected schema."
-                            .into(),
-                    ),
-                    cwe_id: Some("CWE-1336".into()),
-                });
-            }
+                ),
+                cwe_id: Some("CWE-1336".into()),
+            });
         }
-    }
+    });
 }
 
 fn scan_ts_js(lines: &[&str], file: &crate::ir::SourceFile, findings: &mut Vec<Finding>) {
-    // Track already-reported body lines to prevent duplicate findings when
-    // multiple .tool() registrations share the same 50-line lookahead window.
-    let mut reported_lines: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    scan_ts_tool_window_lines(lines, |finding_line_idx, body_line, body_trimmed| {
+        let is_unsafe_return = (TS_RETURN_TEMPLATE_RE.is_match(body_line)
+            || TS_RETURN_CONCAT_RE.is_match(body_line))
+            && !SANITIZE_GUARD_RE.is_match(body_line);
 
-    for (line_idx, &line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("//") || trimmed.starts_with('*') {
-            continue;
+        if !is_unsafe_return {
+            return false;
         }
 
-        if TS_TOOL_REGISTRATION_RE.is_match(line) {
-            // Scan the next 50 lines for template-literal or concat returns
-            let end_idx = (line_idx + 50).min(lines.len());
-            for (body_offset, &body_line) in lines[line_idx..end_idx].iter().enumerate() {
-                let body_abs = line_idx + body_offset;
-                if reported_lines.contains(&body_abs) {
-                    continue;
-                }
-                let body_trimmed = body_line.trim();
-                if body_trimmed.starts_with("//") {
-                    continue;
-                }
-
-                let is_unsafe_return = (TS_RETURN_TEMPLATE_RE.is_match(body_line)
-                    || TS_RETURN_CONCAT_RE.is_match(body_line))
-                    && !SANITIZE_GUARD_RE.is_match(body_line);
-
-                if is_unsafe_return {
-                    let col = body_line.find("return").unwrap_or(0);
-                    let finding_line = line_idx + body_offset + 1;
-                    let loc = SourceLocation {
-                        file: file.path.clone(),
-                        line: finding_line,
-                        column: col,
-                        end_line: None,
-                        end_column: None,
-                    };
-                    findings.push(Finding {
-                        rule_id: "SHIELD-036".into(),
-                        rule_name:
-                            "Tool Response Prompt Injection / Unsanitized Parameter Reflection"
-                                .into(),
-                        severity: Severity::High,
-                        confidence: Confidence::Medium,
-                        attack_category: AttackCategory::PromptInjectionSurface,
-                        message: "Tool handler returns an unsanitized template literal or string \
-                                  concatenation — an attacker controlling tool inputs can inject \
-                                  arbitrary instructions into the downstream LLM prompt"
-                            .into(),
-                        location: Some(loc.clone()),
-                        evidence: vec![Evidence {
-                            description: "Unsanitized template-literal or concat return in tool"
-                                .into(),
-                            location: Some(loc),
-                            snippet: Some(body_trimmed.to_string()),
-                        }],
-                        taint_path: None,
-                        remediation: Some(
-                            "Sanitize tool output before returning it. Prefer structured JSON \
-                             responses over raw string interpolation, or escape special characters \
-                             before the value enters the LLM context."
-                                .into(),
-                        ),
-                        cwe_id: Some("CWE-1336".into()),
-                    });
-                    reported_lines.insert(body_abs);
-                    // One finding per tool registration block
-                    break;
-                }
-            }
-        }
-    }
+        let col = body_line.find("return").unwrap_or(0);
+        let loc = SourceLocation {
+            file: file.path.clone(),
+            line: finding_line_idx + 1,
+            column: col,
+            end_line: None,
+            end_column: None,
+        };
+        findings.push(Finding {
+            rule_id: "SHIELD-036".into(),
+            rule_name: "Tool Response Prompt Injection / Unsanitized Parameter Reflection".into(),
+            severity: Severity::High,
+            confidence: Confidence::Medium,
+            attack_category: AttackCategory::PromptInjectionSurface,
+            message: "Tool handler returns an unsanitized template literal or string \
+                      concatenation — an attacker controlling tool inputs can inject \
+                      arbitrary instructions into the downstream LLM prompt"
+                .into(),
+            location: Some(loc.clone()),
+            evidence: vec![Evidence {
+                description: "Unsanitized template-literal or concat return in tool".into(),
+                location: Some(loc),
+                snippet: Some(body_trimmed.to_string()),
+            }],
+            taint_path: None,
+            remediation: Some(
+                "Sanitize tool output before returning it. Prefer structured JSON \
+                 responses over raw string interpolation, or escape special characters \
+                 before the value enters the LLM context."
+                    .into(),
+            ),
+            cwe_id: Some("CWE-1336".into()),
+        });
+        true
+    });
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::make_target_with_lang_source as target_with_source;
     use super::*;
-    use crate::ir::{Framework, Language, ScanTarget, SourceFile};
-    use std::path::PathBuf;
-
-    fn target_with_source(code: &str, language: Language) -> ScanTarget {
-        ScanTarget {
-            name: "test-tool-agent".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("/test"),
-            tools: Vec::new(),
-            execution: Default::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![SourceFile {
-                path: PathBuf::from(match language {
-                    Language::Python => "tool.py",
-                    Language::TypeScript => "tool.ts",
-                    _ => "tool.js",
-                }),
-                language,
-                size_bytes: code.len() as u64,
-                content_hash: "hash".into(),
-                content: code.to_string(),
-            }],
-        }
-    }
+    use crate::ir::Language;
 
     #[test]
     fn detects_python_fstring_return_in_mcp_tool() {

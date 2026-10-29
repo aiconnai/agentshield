@@ -5,6 +5,8 @@ use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
+use super::source_scan::extend_non_dominated_findings;
+
 /// SHIELD-007: Prompt Injection Surface
 ///
 /// Flags tools that fetch external content (HTTP, file read) and could
@@ -104,25 +106,7 @@ impl Detector for PromptInjectionDetector {
         }
 
         // Phase 2: Fallback to existing network operation checking
-        let fallback_findings = self.run_fallback(target);
-
-        // Deduplicate: keep taint-path findings over fallback at same location.
-        // Collect owned locations to avoid borrowing `findings` during mutation.
-        let taint_path_locations: Vec<_> =
-            findings.iter().filter_map(|f| f.location.clone()).collect();
-
-        let new_findings: Vec<_> = fallback_findings
-            .into_iter()
-            .filter(|finding| {
-                let dominated = finding
-                    .location
-                    .as_ref()
-                    .is_some_and(|loc| taint_path_locations.iter().any(|tp_loc| tp_loc == loc));
-                !dominated
-            })
-            .collect();
-
-        findings.extend(new_findings);
+        extend_non_dominated_findings(&mut findings, self.run_fallback(target));
 
         findings
     }
@@ -180,6 +164,7 @@ impl PromptInjectionDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::loc_at;
     use super::*;
     use crate::ir::data_surface::*;
     use crate::ir::execution_surface::*;
@@ -187,23 +172,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn loc() -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from("server.py"),
-            line: 10,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
-    }
-
-    fn loc_at(file: &str, line: usize) -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from(file),
-            line,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
+        loc_at("server.py", 10)
     }
 
     #[test]

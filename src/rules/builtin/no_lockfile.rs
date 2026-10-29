@@ -92,36 +92,22 @@ impl Detector for NoLockfileDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::{empty_target, target_with_deps};
     use super::*;
     use crate::ir::dependency_surface::*;
-    use crate::ir::*;
     use std::path::PathBuf;
 
     #[test]
     fn flags_deps_without_lockfile() {
-        let target = ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: Default::default(),
-            data: Default::default(),
-            dependencies: DependencySurface {
-                dependencies: vec![Dependency {
-                    name: "requests".into(),
-                    version_constraint: Some("2.31.0".into()),
-                    locked_version: None,
-                    locked_hash: None,
-                    registry: "pypi".into(),
-                    is_dev: false,
-                    location: None,
-                }],
-                lockfile: None,
-                issues: vec![],
-            },
-            provenance: Default::default(),
-            source_files: vec![],
-        };
+        let target = target_with_deps(vec![Dependency {
+            name: "requests".into(),
+            version_constraint: Some("2.31.0".into()),
+            locked_version: None,
+            locked_hash: None,
+            registry: "pypi".into(),
+            is_dev: false,
+            location: None,
+        }]);
         let findings = NoLockfileDetector.run(&target);
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].rule_id, "SHIELD-012");
@@ -129,51 +115,28 @@ mod tests {
 
     #[test]
     fn passes_with_lockfile() {
-        let target = ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: Default::default(),
-            data: Default::default(),
-            dependencies: DependencySurface {
-                dependencies: vec![Dependency {
-                    name: "requests".into(),
-                    version_constraint: Some("2.31.0".into()),
-                    locked_version: None,
-                    locked_hash: None,
-                    registry: "pypi".into(),
-                    is_dev: false,
-                    location: None,
-                }],
-                lockfile: Some(LockfileInfo {
-                    path: PathBuf::from("poetry.lock"),
-                    format: LockfileFormat::PoetryLock,
-                    all_pinned: true,
-                    all_hashed: false,
-                }),
-                issues: vec![],
-            },
-            provenance: Default::default(),
-            source_files: vec![],
-        };
+        let mut target = target_with_deps(vec![Dependency {
+            name: "requests".into(),
+            version_constraint: Some("2.31.0".into()),
+            locked_version: None,
+            locked_hash: None,
+            registry: "pypi".into(),
+            is_dev: false,
+            location: None,
+        }]);
+        target.dependencies.lockfile = Some(LockfileInfo {
+            path: PathBuf::from("poetry.lock"),
+            format: LockfileFormat::PoetryLock,
+            all_pinned: true,
+            all_hashed: false,
+        });
         let findings = NoLockfileDetector.run(&target);
         assert!(findings.is_empty());
     }
 
     #[test]
     fn passes_no_deps() {
-        let target = ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: Default::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![],
-        };
+        let target = empty_target();
         let findings = NoLockfileDetector.run(&target);
         assert!(findings.is_empty());
     }

@@ -1,10 +1,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::ir::{ScanTarget, SourceFile, SourceLocation};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
+
+use super::source_scan::{line_window, scan_tool_scoped_sources};
 
 /// SHIELD-032: Insecure MCP Resource URI Path Traversal / Resource Tampering
 ///
@@ -58,43 +60,27 @@ impl Detector for InsecureMcpResourceDetector {
 
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
-
-        for source in &target.source_files {
-            match source.language {
-                Language::Python => {
-                    findings.extend(scan_python_resources(
-                        source.path.as_path(),
-                        &source.content,
-                    ));
-                }
-                Language::TypeScript | Language::JavaScript => {
-                    findings.extend(scan_ts_resources(source.path.as_path(), &source.content));
-                }
-                _ => {}
-            }
-        }
-
+        scan_tool_scoped_sources(
+            target,
+            &mut findings,
+            scan_python_resources,
+            scan_ts_resources,
+        );
         findings
     }
 }
 
-fn scan_python_resources(file_path: &std::path::Path, content: &str) -> Vec<Finding> {
-    let mut findings = Vec::new();
-    let lines: Vec<&str> = content.lines().collect();
-
+fn scan_python_resources(lines: &[&str], file: &SourceFile, findings: &mut Vec<Finding>) {
     for (idx, line) in lines.iter().enumerate() {
         if let Some(cap) = PY_RESOURCE_DECORATOR_RE.captures(line) {
             let uri_template = cap[1].to_string();
             let start_line = idx + 1;
 
-            // Lookahead 30 lines inside the resource handler function
-            let window_end = (idx + 30).min(lines.len());
-            let handler_window = lines[idx..window_end].join("\n");
-
+            let handler_window = line_window(lines, idx, 0, 30);
             let has_guard = PATH_CONFINEMENT_GUARD_RE.is_match(&handler_window);
             if !has_guard && PY_UNCONFINED_FILE_READ_RE.is_match(&handler_window) {
                 let loc = Some(SourceLocation {
-                    file: file_path.to_path_buf(),
+                    file: file.path.clone(),
                     line: start_line,
                     column: 0,
                     end_line: Some(start_line),
@@ -126,27 +112,21 @@ fn scan_python_resources(file_path: &std::path::Path, content: &str) -> Vec<Find
             }
         }
     }
-
-    findings
 }
 
-fn scan_ts_resources(file_path: &std::path::Path, content: &str) -> Vec<Finding> {
-    let mut findings = Vec::new();
-    let lines: Vec<&str> = content.lines().collect();
-
+fn scan_ts_resources(lines: &[&str], file: &SourceFile, findings: &mut Vec<Finding>) {
     for (idx, line) in lines.iter().enumerate() {
         let is_template = TS_RESOURCE_TEMPLATE_RE.is_match(line);
         let is_read_handler = TS_READ_RESOURCE_HANDLER_RE.is_match(line);
 
         if is_template || is_read_handler {
             let start_line = idx + 1;
-            let window_end = (idx + 35).min(lines.len());
-            let handler_window = lines[idx..window_end].join("\n");
+            let handler_window = line_window(lines, idx, 0, 35);
 
             let has_guard = PATH_CONFINEMENT_GUARD_RE.is_match(&handler_window);
             if !has_guard && TS_UNCONFINED_FS_RE.is_match(&handler_window) {
                 let loc = Some(SourceLocation {
-                    file: file_path.to_path_buf(),
+                    file: file.path.clone(),
                     line: start_line,
                     column: 0,
                     end_line: Some(start_line),
@@ -175,38 +155,21 @@ fn scan_ts_resources(file_path: &std::path::Path, content: &str) -> Vec<Finding>
             }
         }
     }
-
-    findings
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::make_target_with_source;
     use super::*;
-    use crate::ir::{Framework, SourceFile};
-    use std::path::PathBuf;
+    use crate::ir::Language;
 
     fn target_with_source(lang: Language, content: &str) -> ScanTarget {
-        ScanTarget {
-            name: "test-mcp".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("/test"),
-            tools: Vec::new(),
-            execution: Default::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![SourceFile {
-                path: PathBuf::from(if lang == Language::Python {
-                    "/test/server.py"
-                } else {
-                    "/test/server.ts"
-                }),
-                language: lang,
-                content: content.into(),
-                size_bytes: content.len() as u64,
-                content_hash: "test".into(),
-            }],
-        }
+        let path = if lang == Language::Python {
+            "/test/server.py"
+        } else {
+            "/test/server.ts"
+        };
+        make_target_with_source(path, content, lang)
     }
 
     #[test]

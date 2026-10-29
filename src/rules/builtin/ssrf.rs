@@ -86,19 +86,14 @@ impl Detector for SsrfDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::loc_at;
     use super::*;
     use crate::ir::execution_surface::*;
     use crate::ir::*;
     use std::path::PathBuf;
 
     fn loc() -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from("test.py"),
-            line: 5,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
+        loc_at("test.py", 5)
     }
 
     #[test]

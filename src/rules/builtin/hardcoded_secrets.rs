@@ -242,28 +242,12 @@ impl Detector for HardcodedSecretsDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::make_target_with_source as make_target;
     use super::*;
-    use crate::ir::{ExecutionSurface, Framework, Language, ScanTarget, SourceFile};
-    use std::path::PathBuf;
+    use crate::ir::Language;
 
     fn make_target_with_source(filename: &str, content: &str) -> ScanTarget {
-        ScanTarget {
-            name: "test-target".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("/test"),
-            tools: Vec::new(),
-            execution: ExecutionSurface::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![SourceFile {
-                path: PathBuf::from(filename),
-                language: Language::Python,
-                size_bytes: content.len() as u64,
-                content_hash: "dummy".into(),
-                content: content.into(),
-            }],
-        }
+        make_target(filename, content, Language::Python)
     }
 
     #[test]

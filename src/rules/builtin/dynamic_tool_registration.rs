@@ -1,10 +1,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
+
+use super::source_scan::{SourceLang, regex_match_location, scan_py_ts_regex_matches};
 
 /// SHIELD-028: Untrusted Dynamic Tool Registration / Hot-Loading
 ///
@@ -69,84 +71,43 @@ impl Detector for DynamicToolRegistrationDetector {
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
-        for source in &target.source_files {
-            let is_python = source.language == Language::Python
-                || source
-                    .path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|e| e == "py");
-            let is_ts = matches!(source.language, Language::TypeScript | Language::JavaScript)
-                || source
-                    .path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|e| matches!(e, "ts" | "js" | "tsx" | "jsx" | "mjs"));
-
-            for (line_idx, line) in source.content.lines().enumerate() {
-                let trimmed = line.trim();
-
-                // Skip full line comments
-                if trimmed.starts_with('#')
-                    || trimmed.starts_with("//")
-                    || trimmed.starts_with("/*")
-                    || trimmed.starts_with('*')
-                {
-                    continue;
-                }
-
-                let (matched, pattern_name) = if is_python {
-                    if let Some(mat) = PY_DYNAMIC_TOOL_RE.find(line) {
-                        (Some(mat), "Python dynamic tool loading pattern")
-                    } else {
-                        (None, "")
-                    }
-                } else if is_ts {
-                    if let Some(mat) = TS_DYNAMIC_TOOL_RE.find(line) {
-                        (Some(mat), "TypeScript dynamic tool loading pattern")
-                    } else {
-                        (None, "")
-                    }
-                } else {
-                    (None, "")
+        scan_py_ts_regex_matches(
+            target,
+            &PY_DYNAMIC_TOOL_RE,
+            &TS_DYNAMIC_TOOL_RE,
+            |source, lang, line_idx, line, mat| {
+                let pattern_name = match lang {
+                    SourceLang::Python => "Python dynamic tool loading pattern",
+                    SourceLang::TypeScriptOrJs => "TypeScript dynamic tool loading pattern",
                 };
+                let loc = regex_match_location(source, line_idx, &mat);
 
-                if let Some(mat) = matched {
-                    let loc = SourceLocation {
-                        file: source.path.clone(),
-                        line: line_idx + 1,
-                        column: mat.start() + 1,
-                        end_line: Some(line_idx + 1),
-                        end_column: Some(mat.end() + 1),
-                    };
-
-                    findings.push(Finding {
-                        rule_id: "SHIELD-028".into(),
-                        rule_name: "Untrusted Dynamic Tool Registration / Hot-Loading".into(),
-                        severity: Severity::High,
-                        confidence: Confidence::High,
-                        attack_category: AttackCategory::CodeInjection,
-                        message: format!(
-                            "Dynamic registration or remote execution of tool handler detected in '{}': {}",
-                            source.path.display(),
-                            pattern_name
-                        ),
-                        location: Some(loc.clone()),
-                        evidence: vec![Evidence {
-                            description: format!("Matches dynamic execution sink in {}", pattern_name),
-                            location: Some(loc),
-                            snippet: Some(line.to_string()),
-                        }],
-                        taint_path: None,
-                        remediation: Some(
-                            "Avoid hot-loading or compiling tools from untrusted remote endpoints or dynamic eval. Register tools statically at build time or verify remote code integrity with cryptographic signatures and strict sandboxing."
-                                .into(),
-                        ),
-                        cwe_id: Some("CWE-829".into()),
-                    });
-                }
-            }
-        }
+                findings.push(Finding {
+                    rule_id: "SHIELD-028".into(),
+                    rule_name: "Untrusted Dynamic Tool Registration / Hot-Loading".into(),
+                    severity: Severity::High,
+                    confidence: Confidence::High,
+                    attack_category: AttackCategory::CodeInjection,
+                    message: format!(
+                        "Dynamic registration or remote execution of tool handler detected in '{}': {}",
+                        source.path.display(),
+                        pattern_name
+                    ),
+                    location: Some(loc.clone()),
+                    evidence: vec![Evidence {
+                        description: format!("Matches dynamic execution sink in {}", pattern_name),
+                        location: Some(loc),
+                        snippet: Some(line.to_string()),
+                    }],
+                    taint_path: None,
+                    remediation: Some(
+                        "Avoid hot-loading or compiling tools from untrusted remote endpoints or dynamic eval. Register tools statically at build time or verify remote code integrity with cryptographic signatures and strict sandboxing."
+                            .into(),
+                    ),
+                    cwe_id: Some("CWE-829".into()),
+                });
+            },
+        );
 
         findings
     }
@@ -156,6 +117,7 @@ impl Detector for DynamicToolRegistrationDetector {
 mod tests {
     use super::super::test_helpers::make_target_with_source;
     use super::*;
+    use crate::ir::Language;
 
     #[test]
     fn test_flags_python_dynamic_tool_registration() {

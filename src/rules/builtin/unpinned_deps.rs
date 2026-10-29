@@ -79,27 +79,9 @@ impl Detector for UnpinnedDepsDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::target_with_deps as make_target;
     use super::*;
     use crate::ir::dependency_surface::*;
-    use crate::ir::*;
-    use std::path::PathBuf;
-
-    fn make_target(deps: Vec<Dependency>) -> ScanTarget {
-        ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: Default::default(),
-            data: Default::default(),
-            dependencies: DependencySurface {
-                dependencies: deps,
-                ..Default::default()
-            },
-            provenance: Default::default(),
-            source_files: vec![],
-        }
-    }
 
     #[test]
     fn flags_unpinned_dep() {

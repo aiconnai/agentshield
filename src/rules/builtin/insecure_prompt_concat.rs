@@ -1,10 +1,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
+
+use super::source_scan::{SourceLang, full_line_location, scan_py_ts_regex_matches};
 
 /// SHIELD-026: Insecure Prompt Template Concatenation
 ///
@@ -88,104 +90,57 @@ impl Detector for InsecurePromptConcatDetector {
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
-        for source in &target.source_files {
-            match source.language {
-                Language::Python => {
-                    for (line_idx, line) in source.content.lines().enumerate() {
-                        let trimmed = line.trim();
-                        if trimmed.starts_with('#') {
-                            continue;
-                        }
-
-                        if PY_PROMPT_CONCAT_RE.is_match(line) && !has_structural_encapsulation(line)
-                        {
-                            let loc = SourceLocation {
-                                file: source.path.clone(),
-                                line: line_idx + 1,
-                                column: 1,
-                                end_line: Some(line_idx + 1),
-                                end_column: Some(line.len() + 1),
-                            };
-
-                            findings.push(Finding {
-                                rule_id: "SHIELD-026".into(),
-                                rule_name: "Insecure Prompt Template Concatenation".into(),
-                                severity: Severity::High,
-                                confidence: Confidence::High,
-                                attack_category: AttackCategory::PromptInjectionSurface,
-                                message: format!(
-                                    "LLM prompt template in '{}' concatenates raw variables without boundary encapsulation: '{}'",
-                                    source.path.display(),
-                                    trimmed
-                                ),
-                                location: Some(loc.clone()),
-                                evidence: vec![Evidence {
-                                    description: "Raw prompt concatenation / unescaped format string detected"
-                                        .into(),
-                                    location: Some(loc),
-                                    snippet: Some(trimmed.to_string()),
-                                }],
-                                taint_path: None,
-                                remediation: Some(
-                                    "Use structured parameterization (e.g. ChatML role objects), template parameters (PromptTemplate input_variables), or wrap dynamic content in distinct XML boundary tags (e.g. <user_input>{input}</user_input>)."
-                                        .into(),
-                                ),
-                                cwe_id: Some("CWE-94".into()),
-                            });
-                        }
-                    }
+        scan_py_ts_regex_matches(
+            target,
+            &PY_PROMPT_CONCAT_RE,
+            &TS_PROMPT_CONCAT_RE,
+            |source, lang, line_idx, line, _mat| {
+                if has_structural_encapsulation(line) {
+                    return;
                 }
-                Language::TypeScript | Language::JavaScript => {
-                    for (line_idx, line) in source.content.lines().enumerate() {
-                        let trimmed = line.trim();
-                        if trimmed.starts_with("//")
-                            || trimmed.starts_with("/*")
-                            || trimmed.starts_with('*')
-                        {
-                            continue;
-                        }
 
-                        if TS_PROMPT_CONCAT_RE.is_match(line) && !has_structural_encapsulation(line)
-                        {
-                            let loc = SourceLocation {
-                                file: source.path.clone(),
-                                line: line_idx + 1,
-                                column: 1,
-                                end_line: Some(line_idx + 1),
-                                end_column: Some(line.len() + 1),
-                            };
+                let trimmed = line.trim();
+                let loc = full_line_location(source, line_idx, line);
+                let (message, description, remediation) = match lang {
+                    SourceLang::Python => (
+                        format!(
+                            "LLM prompt template in '{}' concatenates raw variables without boundary encapsulation: '{}'",
+                            source.path.display(),
+                            trimmed
+                        ),
+                        "Raw prompt concatenation / unescaped format string detected",
+                        "Use structured parameterization (e.g. ChatML role objects), template parameters (PromptTemplate input_variables), or wrap dynamic content in distinct XML boundary tags (e.g. <user_input>{input}</user_input>).",
+                    ),
+                    SourceLang::TypeScriptOrJs => (
+                        format!(
+                            "LLM prompt template in '{}' concatenates raw variables via template literal or string addition: '{}'",
+                            source.path.display(),
+                            trimmed
+                        ),
+                        "Raw template literal / string concatenation in prompt definition",
+                        "Use structured message role parameters or encapsulate dynamic input variables inside XML delimiter tags (e.g. `<user_input>${input}</user_input>`).",
+                    ),
+                };
 
-                            findings.push(Finding {
-                                rule_id: "SHIELD-026".into(),
-                                rule_name: "Insecure Prompt Template Concatenation".into(),
-                                severity: Severity::High,
-                                confidence: Confidence::High,
-                                attack_category: AttackCategory::PromptInjectionSurface,
-                                message: format!(
-                                    "LLM prompt template in '{}' concatenates raw variables via template literal or string addition: '{}'",
-                                    source.path.display(),
-                                    trimmed
-                                ),
-                                location: Some(loc.clone()),
-                                evidence: vec![Evidence {
-                                    description: "Raw template literal / string concatenation in prompt definition"
-                                        .into(),
-                                    location: Some(loc),
-                                    snippet: Some(trimmed.to_string()),
-                                }],
-                                taint_path: None,
-                                remediation: Some(
-                                    "Use structured message role parameters or encapsulate dynamic input variables inside XML delimiter tags (e.g. `<user_input>${input}</user_input>`)."
-                                        .into(),
-                                ),
-                                cwe_id: Some("CWE-94".into()),
-                            });
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
+                findings.push(Finding {
+                    rule_id: "SHIELD-026".into(),
+                    rule_name: "Insecure Prompt Template Concatenation".into(),
+                    severity: Severity::High,
+                    confidence: Confidence::High,
+                    attack_category: AttackCategory::PromptInjectionSurface,
+                    message,
+                    location: Some(loc.clone()),
+                    evidence: vec![Evidence {
+                        description: description.into(),
+                        location: Some(loc),
+                        snippet: Some(trimmed.to_string()),
+                    }],
+                    taint_path: None,
+                    remediation: Some(remediation.into()),
+                    cwe_id: Some("CWE-94".into()),
+                });
+            },
+        );
 
         findings
     }
@@ -195,6 +150,7 @@ impl Detector for InsecurePromptConcatDetector {
 mod tests {
     use super::super::test_helpers::make_target_with_source;
     use super::*;
+    use crate::ir::Language;
 
     #[test]
     fn test_flags_python_fstring_prompt_concatenation() {

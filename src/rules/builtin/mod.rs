@@ -25,6 +25,7 @@ mod runtime_install;
 mod secret_leakage;
 mod self_modification;
 mod sensitive_schema_reflection;
+mod source_scan;
 mod sql_injection;
 mod ssrf;
 mod system_prompt_tampering;

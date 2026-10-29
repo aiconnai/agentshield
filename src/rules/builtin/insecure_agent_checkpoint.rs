@@ -201,28 +201,11 @@ impl Detector for InsecureAgentCheckpointDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::make_target_with_source;
     use super::*;
-    use crate::ir::{Framework, SourceFile};
-    use std::path::PathBuf;
 
     fn target_with_python_source(code: &str) -> ScanTarget {
-        ScanTarget {
-            name: "test-checkpoint-agent".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("/test"),
-            tools: Vec::new(),
-            execution: Default::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![SourceFile {
-                path: PathBuf::from("agent_memory.py"),
-                language: Language::Python,
-                size_bytes: code.len() as u64,
-                content_hash: "hash".into(),
-                content: code.into(),
-            }],
-        }
+        make_target_with_source("agent_memory.py", code, Language::Python)
     }
 
     #[test]

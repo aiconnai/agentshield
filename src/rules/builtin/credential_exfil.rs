@@ -4,6 +4,8 @@ use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
 
+use super::source_scan::extend_non_dominated_findings;
+
 /// SHIELD-002: Credential Exfiltration
 ///
 /// Flags co-occurrence of secret/sensitive env var access and outbound
@@ -97,25 +99,7 @@ impl Detector for CredentialExfilDetector {
         }
 
         // Phase 2: Fallback to existing ArgumentSource checking
-        let fallback_findings = self.run_fallback(target);
-
-        // Deduplicate: keep taint-path findings over fallback at same location.
-        // Collect owned locations to avoid borrowing `findings` during mutation.
-        let taint_path_locations: Vec<_> =
-            findings.iter().filter_map(|f| f.location.clone()).collect();
-
-        let new_findings: Vec<_> = fallback_findings
-            .into_iter()
-            .filter(|finding| {
-                let dominated = finding
-                    .location
-                    .as_ref()
-                    .is_some_and(|loc| taint_path_locations.iter().any(|tp_loc| tp_loc == loc));
-                !dominated
-            })
-            .collect();
-
-        findings.extend(new_findings);
+        extend_non_dominated_findings(&mut findings, self.run_fallback(target));
 
         findings
     }

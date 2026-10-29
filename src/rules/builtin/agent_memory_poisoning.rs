@@ -1,9 +1,13 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::ir::{ScanTarget, SourceLocation};
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
+};
+
+use super::source_scan::{
+    scan_python_tool_lines, scan_tool_scoped_sources, scan_ts_tool_window_lines,
 };
 
 /// SHIELD-037: Agent Memory Poisoning / Unsanitized Vector Store Write
@@ -29,22 +33,6 @@ use crate::rules::{
 pub struct AgentMemoryPoisoningDetector;
 
 // ── Python statics (applied per-line; no (?m) flag) ───────────────────────────
-
-// Matches @mcp.tool, @tool, @server.tool, @app.tool decorator lines.
-static PY_TOOL_DECORATOR_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"^\s*@(?:\w+\.)*tool\b"#).expect("valid regex"));
-
-// Matches `def <name>(` where <name> contains a tool-related keyword.
-static PY_TOOL_DEF_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r#"^\s*(?:async\s+)?def\s+\w*(?:tool|handler|execute|process|handle|invoke)\w*\s*\("#,
-    )
-    .expect("valid regex")
-});
-
-// Matches any `def <name>(` — used to detect function boundaries after a decorator.
-static PY_DEF_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"^\s*(?:async\s+)?def\s+\w+\s*\("#).expect("valid regex"));
 
 // Matches vector store write calls that receive a variable argument (not a plain string literal).
 //
@@ -97,11 +85,6 @@ static SANITIZER_RE: Lazy<Regex> = Lazy::new(|| {
 
 // ── TypeScript / JavaScript statics (applied per-line; no (?m) flag) ──────────
 
-// Matches tool registration: `.tool(`, `.addTool(`, `server.tool(`, `mcp.tool(`
-static TS_TOOL_REGISTRATION_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"\b(?:addTool|server\.tool|mcp\.tool|\.tool)\s*\("#).expect("valid regex")
-});
-
 // Matches TS/JS vector store write calls (all common LangChain / LlamaIndex / SDK variants).
 static TS_VECTOR_WRITE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
@@ -150,21 +133,7 @@ impl Detector for AgentMemoryPoisoningDetector {
 
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
-
-        for file in &target.source_files {
-            let lines: Vec<&str> = file.content.lines().collect();
-
-            match file.language {
-                Language::Python => {
-                    scan_python(&lines, file, &mut findings);
-                }
-                Language::TypeScript | Language::JavaScript => {
-                    scan_ts_js(&lines, file, &mut findings);
-                }
-                _ => {}
-            }
-        }
-
+        scan_tool_scoped_sources(target, &mut findings, scan_python, scan_ts_js);
         findings
     }
 }
@@ -172,61 +141,10 @@ impl Detector for AgentMemoryPoisoningDetector {
 // ── Python scanner ─────────────────────────────────────────────────────────────
 
 fn scan_python(lines: &[&str], file: &crate::ir::SourceFile, findings: &mut Vec<Finding>) {
-    let mut in_tool_fn = false;
-    let mut expecting_tool_def = false;
-    let mut tool_fn_indent: usize = 0;
-
-    for (line_idx, &line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with('#') || trimmed.is_empty() {
-            continue;
-        }
-
-        let current_indent = line.len() - line.trim_start().len();
-
-        // If we were waiting for the def after a decorator, consume it now.
-        if expecting_tool_def {
-            if PY_DEF_RE.is_match(line) {
-                in_tool_fn = true;
-                expecting_tool_def = false;
-                tool_fn_indent = current_indent;
-                continue;
-            } else if trimmed.starts_with('@') {
-                // Stacked decorator (e.g. @staticmethod, @validate, @lru_cache)
-                continue;
-            } else {
-                // If we see something other than a blank/comment/decorator before the def,
-                // reset — this shouldn't normally happen but be defensive.
-                expecting_tool_def = false;
-            }
-        }
-
-        // Detect function exit: dedent back to or above the def-level.
-        if in_tool_fn && current_indent <= tool_fn_indent {
-            in_tool_fn = false;
-        }
-
-        // Detect tool entry.
-        if !in_tool_fn {
-            if PY_TOOL_DECORATOR_RE.is_match(line) {
-                expecting_tool_def = true;
-                continue;
-            } else if PY_TOOL_DEF_RE.is_match(line) {
-                in_tool_fn = true;
-                tool_fn_indent = current_indent;
-                continue;
-            }
-        }
-
-        if in_tool_fn && PY_VECTOR_WRITE_RE.is_match(line) {
-            // Suppress if the argument on this line is a plain string literal.
-            if is_py_literal_arg(line) {
-                continue;
-            }
-
-            // Suppress if any of the preceding 3 lines contain a sanitizer call.
-            if preceding_lines_have_sanitizer(lines, line_idx, 3) {
-                continue;
+    scan_python_tool_lines(lines, |line_idx, line, trimmed| {
+        if PY_VECTOR_WRITE_RE.is_match(line) {
+            if is_py_literal_arg(line) || preceding_lines_have_sanitizer(lines, line_idx, 3) {
+                return;
             }
 
             let col = find_write_col(line);
@@ -239,57 +157,31 @@ fn scan_python(lines: &[&str], file: &crate::ir::SourceFile, findings: &mut Vec<
             };
             findings.push(make_finding(trimmed, loc));
         }
-    }
+    });
 }
 
 // ── TypeScript / JavaScript scanner ───────────────────────────────────────────
 
 fn scan_ts_js(lines: &[&str], file: &crate::ir::SourceFile, findings: &mut Vec<Finding>) {
-    for (line_idx, &line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("//") || trimmed.starts_with('*') {
-            continue;
+    scan_ts_tool_window_lines(lines, |finding_line_idx, body_line, body_trimmed| {
+        if !TS_VECTOR_WRITE_RE.is_match(body_line)
+            || is_ts_literal_arg(body_line)
+            || preceding_lines_have_sanitizer(lines, finding_line_idx, 3)
+        {
+            return false;
         }
 
-        if TS_TOOL_REGISTRATION_RE.is_match(line) {
-            // Scan the next 50 lines for vector store writes.
-            let end_idx = (line_idx + 50).min(lines.len());
-            for (body_offset, &body_line) in lines[line_idx..end_idx].iter().enumerate() {
-                let body_trimmed = body_line.trim();
-                if body_trimmed.starts_with("//") || body_trimmed.starts_with('*') {
-                    continue;
-                }
-
-                if !TS_VECTOR_WRITE_RE.is_match(body_line) {
-                    continue;
-                }
-
-                // Suppress if the argument appears to be a hardcoded string literal.
-                if is_ts_literal_arg(body_line) {
-                    continue;
-                }
-
-                let finding_line_idx = line_idx + body_offset;
-
-                // Suppress if any of the preceding 3 lines contain a sanitizer call.
-                if preceding_lines_have_sanitizer(lines, finding_line_idx, 3) {
-                    continue;
-                }
-
-                let col = find_write_col(body_line);
-                let loc = SourceLocation {
-                    file: file.path.clone(),
-                    line: finding_line_idx + 1,
-                    column: col,
-                    end_line: None,
-                    end_column: None,
-                };
-                findings.push(make_finding(body_trimmed, loc));
-                // One finding per tool registration block.
-                break;
-            }
-        }
-    }
+        let col = find_write_col(body_line);
+        let loc = SourceLocation {
+            file: file.path.clone(),
+            line: finding_line_idx + 1,
+            column: col,
+            end_line: None,
+            end_column: None,
+        };
+        findings.push(make_finding(body_trimmed, loc));
+        true
+    });
 }
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
@@ -384,33 +276,9 @@ fn make_finding(snippet: &str, loc: SourceLocation) -> Finding {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::make_target_with_lang_source as target_with_source;
     use super::*;
-    use crate::ir::{Framework, Language, ScanTarget, SourceFile};
-    use std::path::PathBuf;
-
-    fn target_with_source(code: &str, language: Language) -> ScanTarget {
-        ScanTarget {
-            name: "test-memory-agent".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("/test"),
-            tools: Vec::new(),
-            execution: Default::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![SourceFile {
-                path: PathBuf::from(match language {
-                    Language::Python => "memory_tool.py",
-                    Language::TypeScript => "memory_tool.ts",
-                    _ => "memory_tool.js",
-                }),
-                language,
-                size_bytes: code.len() as u64,
-                content_hash: "hash".into(),
-                content: code.to_string(),
-            }],
-        }
-    }
+    use crate::ir::Language;
 
     // ── Test 1: Python .add(documents=[param]) inside @mcp.tool fires ─────────
 

@@ -1,10 +1,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
+
+use super::source_scan::{SourceLang, full_line_location, scan_py_ts_regex_matches};
 
 /// SHIELD-025: Insecure Temporary File Creation
 ///
@@ -62,97 +64,46 @@ impl Detector for InsecureTempFileDetector {
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
-        for source in &target.source_files {
-            match source.language {
-                Language::Python => {
-                    for (line_idx, line) in source.content.lines().enumerate() {
-                        let trimmed = line.trim();
-                        if trimmed.starts_with('#') {
-                            continue;
-                        }
+        scan_py_ts_regex_matches(
+            target,
+            &PY_INSECURE_TEMP_RE,
+            &TS_INSECURE_TEMP_RE,
+            |source, lang, line_idx, line, _mat| {
+                let loc = full_line_location(source, line_idx, line);
+                let (description, remediation) = match lang {
+                    SourceLang::Python => (
+                        "Predictable shared directory (/tmp) or insecure tempfile.mktemp() usage",
+                        "Use 'tempfile.NamedTemporaryFile()', 'tempfile.TemporaryDirectory()', or secure temp directories with strict mode (0600) instead of predictable /tmp paths or 'tempfile.mktemp()'.",
+                    ),
+                    SourceLang::TypeScriptOrJs => (
+                        "Predictable shared directory (/tmp) file write detected",
+                        "Use 'fs.mkdtempSync()' or unique cryptographic prefixes inside dedicated per-user temporary directories instead of static /tmp paths.",
+                    ),
+                };
 
-                        if PY_INSECURE_TEMP_RE.is_match(line) {
-                            let loc = SourceLocation {
-                                file: source.path.clone(),
-                                line: line_idx + 1,
-                                column: 1,
-                                end_line: Some(line_idx + 1),
-                                end_column: Some(line.len() + 1),
-                            };
-
-                            findings.push(Finding {
-                                rule_id: "SHIELD-025".into(),
-                                rule_name: "Insecure Temporary File Creation".into(),
-                                severity: Severity::Medium,
-                                confidence: Confidence::High,
-                                attack_category: AttackCategory::ArbitraryFileAccess,
-                                message: format!(
-                                    "Insecure temporary file creation detected in '{}' at line {}",
-                                    source.path.display(),
-                                    line_idx + 1
-                                ),
-                                location: Some(loc.clone()),
-                                evidence: vec![Evidence {
-                                    description: "Predictable shared directory (/tmp) or insecure tempfile.mktemp() usage".into(),
-                                    location: Some(loc),
-                                    snippet: Some(trimmed.to_string()),
-                                }],
-                                taint_path: None,
-                                remediation: Some(
-                                    "Use 'tempfile.NamedTemporaryFile()', 'tempfile.TemporaryDirectory()', or secure temp directories with strict mode (0600) instead of predictable /tmp paths or 'tempfile.mktemp()'."
-                                        .into(),
-                                ),
-                                cwe_id: Some("CWE-377".into()),
-                            });
-                        }
-                    }
-                }
-                Language::TypeScript | Language::JavaScript => {
-                    for (line_idx, line) in source.content.lines().enumerate() {
-                        let trimmed = line.trim();
-                        if trimmed.starts_with("//") || trimmed.starts_with('*') {
-                            continue;
-                        }
-
-                        if TS_INSECURE_TEMP_RE.is_match(line) {
-                            let loc = SourceLocation {
-                                file: source.path.clone(),
-                                line: line_idx + 1,
-                                column: 1,
-                                end_line: Some(line_idx + 1),
-                                end_column: Some(line.len() + 1),
-                            };
-
-                            findings.push(Finding {
-                                rule_id: "SHIELD-025".into(),
-                                rule_name: "Insecure Temporary File Creation".into(),
-                                severity: Severity::Medium,
-                                confidence: Confidence::High,
-                                attack_category: AttackCategory::ArbitraryFileAccess,
-                                message: format!(
-                                    "Insecure temporary file creation detected in '{}' at line {}",
-                                    source.path.display(),
-                                    line_idx + 1
-                                ),
-                                location: Some(loc.clone()),
-                                evidence: vec![Evidence {
-                                    description: "Predictable shared directory (/tmp) file write detected".into(),
-                                    location: Some(loc),
-                                    snippet: Some(trimmed.to_string()),
-                                }],
-                                taint_path: None,
-                                remediation: Some(
-                                    "Use 'fs.mkdtempSync()' or unique cryptographic prefixes inside dedicated per-user temporary directories instead of static /tmp paths."
-                                        .into(),
-                                ),
-                                cwe_id: Some("CWE-377".into()),
-                            });
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
+                findings.push(Finding {
+                    rule_id: "SHIELD-025".into(),
+                    rule_name: "Insecure Temporary File Creation".into(),
+                    severity: Severity::Medium,
+                    confidence: Confidence::High,
+                    attack_category: AttackCategory::ArbitraryFileAccess,
+                    message: format!(
+                        "Insecure temporary file creation detected in '{}' at line {}",
+                        source.path.display(),
+                        line_idx + 1
+                    ),
+                    location: Some(loc.clone()),
+                    evidence: vec![Evidence {
+                        description: description.into(),
+                        location: Some(loc),
+                        snippet: Some(line.trim().to_string()),
+                    }],
+                    taint_path: None,
+                    remediation: Some(remediation.into()),
+                    cwe_id: Some("CWE-377".into()),
+                });
+            },
+        );
 
         findings
     }
@@ -162,6 +113,7 @@ impl Detector for InsecureTempFileDetector {
 mod tests {
     use super::super::test_helpers::make_target_from_files as make_target;
     use super::*;
+    use crate::ir::Language;
 
     #[test]
     fn detects_python_mktemp_usage() {

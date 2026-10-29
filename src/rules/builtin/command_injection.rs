@@ -99,37 +99,9 @@ impl Detector for CommandInjectionDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::{loc, target_with_commands as make_target};
     use super::*;
-    use crate::ir::execution_surface::{CommandInvocation, ExecutionSurface};
-    use crate::ir::{Framework, SourceLocation};
-    use std::path::PathBuf;
-
-    fn make_target(commands: Vec<CommandInvocation>) -> ScanTarget {
-        ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: ExecutionSurface {
-                commands,
-                ..Default::default()
-            },
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![],
-        }
-    }
-
-    fn loc() -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from("test.py"),
-            line: 1,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
-    }
+    use crate::ir::execution_surface::CommandInvocation;
 
     #[test]
     fn flags_parameter_source() {

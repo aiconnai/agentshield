@@ -204,24 +204,11 @@ fn check_description_injection(text: &str) -> Option<(&'static str, String)> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::empty_target as make_empty_target;
     use super::*;
-    use crate::ir::{ExecutionSurface, Framework, Language, ScanTarget, SourceFile, ToolSurface};
+    use crate::ir::{Language, SourceFile, ToolSurface};
     use serde_json::json;
     use std::path::PathBuf;
-
-    fn make_empty_target() -> ScanTarget {
-        ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("/test"),
-            tools: vec![],
-            execution: ExecutionSurface::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![],
-        }
-    }
 
     #[test]
     fn test_shield_030_detects_system_tag_injection() {

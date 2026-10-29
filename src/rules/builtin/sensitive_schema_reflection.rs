@@ -123,9 +123,7 @@ impl Detector for SensitiveSchemaReflectionDetector {
 
         // 2. Scan source files for sensitive default assignments and raw env reflection
         for source in &target.source_files {
-            let lines: Vec<&str> = source.content.lines().collect();
-
-            for (idx, line) in lines.iter().enumerate() {
+            for (idx, line) in source.content.lines().enumerate() {
                 let trimmed = line.trim();
                 if trimmed.starts_with("//") || trimmed.starts_with('#') {
                     continue;
@@ -209,28 +207,12 @@ impl Detector for SensitiveSchemaReflectionDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::make_target_with_source;
     use super::*;
-    use crate::ir::{Framework, SourceFile, ToolSurface};
-    use std::path::PathBuf;
+    use crate::ir::{Language, ToolSurface};
 
     fn target_with_source(content: &str) -> ScanTarget {
-        ScanTarget {
-            name: "test-mcp".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("/test"),
-            tools: Vec::new(),
-            execution: Default::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![SourceFile {
-                path: PathBuf::from("/test/server.ts"),
-                language: crate::ir::Language::TypeScript,
-                content: content.into(),
-                size_bytes: content.len() as u64,
-                content_hash: "test".into(),
-            }],
-        }
+        make_target_with_source("/test/server.ts", content, Language::TypeScript)
     }
 
     #[test]

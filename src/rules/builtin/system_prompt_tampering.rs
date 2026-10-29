@@ -1,10 +1,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
+
+use super::source_scan::{SourceLang, full_line_location, scan_py_ts_regex_matches};
 
 /// SHIELD-023: System Prompt Injection Surface
 ///
@@ -73,97 +75,52 @@ impl Detector for SystemPromptTamperingDetector {
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
-        for source in &target.source_files {
-            match source.language {
-                Language::Python => {
-                    for (line_idx, line) in source.content.lines().enumerate() {
-                        let trimmed = line.trim();
-                        if trimmed.starts_with('#') {
-                            continue;
-                        }
+        scan_py_ts_regex_matches(
+            target,
+            &PY_SYSTEM_PROMPT_RE,
+            &TS_SYSTEM_PROMPT_RE,
+            |source, lang, line_idx, line, _mat| {
+                let loc = full_line_location(source, line_idx, line);
+                let (message, description, remediation) = match lang {
+                    SourceLang::Python => (
+                        format!(
+                            "Dynamic interpolation detected in system prompt in '{}' (line {})",
+                            source.path.display(),
+                            line_idx + 1
+                        ),
+                        "System instructions constructed via dynamic string formatting",
+                        "Keep system instructions static and immutable. Pass dynamic inputs strictly in user messages or wrap them in structural isolation delimiters (e.g. `<user_input>{param}</user_input>`).",
+                    ),
+                    SourceLang::TypeScriptOrJs => (
+                        format!(
+                            "Dynamic template interpolation detected in system prompt in '{}' (line {})",
+                            source.path.display(),
+                            line_idx + 1
+                        ),
+                        "System instructions constructed via template literal interpolation",
+                        "Keep system instructions static and immutable. Pass dynamic inputs strictly in user messages or wrap them in structural isolation delimiters (e.g. `<user_input>${param}</user_input>`).",
+                    ),
+                };
 
-                        if PY_SYSTEM_PROMPT_RE.is_match(line) {
-                            let loc = SourceLocation {
-                                file: source.path.clone(),
-                                line: line_idx + 1,
-                                column: 1,
-                                end_line: Some(line_idx + 1),
-                                end_column: Some(line.len() + 1),
-                            };
-
-                            findings.push(Finding {
-                                rule_id: "SHIELD-023".into(),
-                                rule_name: "System Prompt Injection Surface".into(),
-                                severity: Severity::High,
-                                confidence: Confidence::High,
-                                attack_category: AttackCategory::PromptInjectionSurface,
-                                message: format!(
-                                    "Dynamic interpolation detected in system prompt in '{}' (line {})",
-                                    source.path.display(),
-                                    line_idx + 1
-                                ),
-                                location: Some(loc.clone()),
-                                evidence: vec![Evidence {
-                                    description: "System instructions constructed via dynamic string formatting".into(),
-                                    location: Some(loc),
-                                    snippet: Some(trimmed.to_string()),
-                                }],
-                                taint_path: None,
-                                remediation: Some(
-                                    "Keep system instructions static and immutable. Pass dynamic inputs strictly in user messages or wrap them in structural isolation delimiters (e.g. `<user_input>{param}</user_input>`)."
-                                        .into(),
-                                ),
-                                cwe_id: Some("CWE-74".into()),
-                            });
-                        }
-                    }
-                }
-                Language::TypeScript | Language::JavaScript => {
-                    for (line_idx, line) in source.content.lines().enumerate() {
-                        let trimmed = line.trim();
-                        if trimmed.starts_with("//") || trimmed.starts_with('*') {
-                            continue;
-                        }
-
-                        if TS_SYSTEM_PROMPT_RE.is_match(line) {
-                            let loc = SourceLocation {
-                                file: source.path.clone(),
-                                line: line_idx + 1,
-                                column: 1,
-                                end_line: Some(line_idx + 1),
-                                end_column: Some(line.len() + 1),
-                            };
-
-                            findings.push(Finding {
-                                rule_id: "SHIELD-023".into(),
-                                rule_name: "System Prompt Injection Surface".into(),
-                                severity: Severity::High,
-                                confidence: Confidence::High,
-                                attack_category: AttackCategory::PromptInjectionSurface,
-                                message: format!(
-                                    "Dynamic template interpolation detected in system prompt in '{}' (line {})",
-                                    source.path.display(),
-                                    line_idx + 1
-                                ),
-                                location: Some(loc.clone()),
-                                evidence: vec![Evidence {
-                                    description: "System instructions constructed via template literal interpolation".into(),
-                                    location: Some(loc),
-                                    snippet: Some(trimmed.to_string()),
-                                }],
-                                taint_path: None,
-                                remediation: Some(
-                                    "Keep system instructions static and immutable. Pass dynamic inputs strictly in user messages or wrap them in structural isolation delimiters (e.g. `<user_input>${param}</user_input>`)."
-                                        .into(),
-                                ),
-                                cwe_id: Some("CWE-74".into()),
-                            });
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
+                findings.push(Finding {
+                    rule_id: "SHIELD-023".into(),
+                    rule_name: "System Prompt Injection Surface".into(),
+                    severity: Severity::High,
+                    confidence: Confidence::High,
+                    attack_category: AttackCategory::PromptInjectionSurface,
+                    message,
+                    location: Some(loc.clone()),
+                    evidence: vec![Evidence {
+                        description: description.into(),
+                        location: Some(loc),
+                        snippet: Some(line.trim().to_string()),
+                    }],
+                    taint_path: None,
+                    remediation: Some(remediation.into()),
+                    cwe_id: Some("CWE-74".into()),
+                });
+            },
+        );
 
         findings
     }
@@ -173,6 +130,7 @@ impl Detector for SystemPromptTamperingDetector {
 mod tests {
     use super::super::test_helpers::make_target_from_files as make_target;
     use super::*;
+    use crate::ir::Language;
 
     #[test]
     fn detects_python_system_prompt_fstring() {

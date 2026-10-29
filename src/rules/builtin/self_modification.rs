@@ -128,39 +128,17 @@ fn self_mod_finding(
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::{loc_at, make_target_with_source};
     use super::*;
     use crate::ir::execution_surface::*;
     use crate::ir::*;
-    use std::path::PathBuf;
 
     fn loc() -> SourceLocation {
-        SourceLocation {
-            file: PathBuf::from("server.py"),
-            line: 10,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
+        loc_at("server.py", 10)
     }
 
     fn base_target() -> ScanTarget {
-        ScanTarget {
-            name: "test".into(),
-            framework: Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: ExecutionSurface::default(),
-            data: Default::default(),
-            dependencies: Default::default(),
-            provenance: Default::default(),
-            source_files: vec![SourceFile {
-                path: PathBuf::from("server.py"),
-                language: Language::Python,
-                content: String::new(),
-                size_bytes: 0,
-                content_hash: String::new(),
-            }],
-        }
+        make_target_with_source("server.py", "", Language::Python)
     }
 
     #[test]

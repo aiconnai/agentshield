@@ -1,10 +1,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
+
+use super::source_scan::{SourceLang, regex_match_location, scan_py_ts_regex_matches};
 
 /// SHIELD-031: Insecure Inter-Agent Delegation / Unauthenticated Subagent Spawn
 ///
@@ -72,91 +74,47 @@ impl Detector for InsecureSubagentDelegationDetector {
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
-        for source in &target.source_files {
-            let is_python = source.language == Language::Python
-                || source
-                    .path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|e| e == "py");
-            let is_ts = matches!(source.language, Language::TypeScript | Language::JavaScript)
-                || source
-                    .path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|e| matches!(e, "ts" | "js" | "tsx" | "jsx" | "mjs"));
-
-            for (line_idx, line) in source.content.lines().enumerate() {
-                let trimmed = line.trim();
-
-                // Skip full line comments
-                if trimmed.starts_with('#')
-                    || trimmed.starts_with("//")
-                    || trimmed.starts_with("/*")
-                    || trimmed.starts_with('*')
-                {
-                    continue;
-                }
-
-                let (matched, pattern_name) = if is_python {
-                    if let Some(mat) = PY_INSECURE_DELEGATION_RE.find(line) {
-                        (
-                            Some(mat),
-                            "Python Unauthenticated / Unrestricted Subagent Spawn",
-                        )
-                    } else {
-                        (None, "")
+        scan_py_ts_regex_matches(
+            target,
+            &PY_INSECURE_DELEGATION_RE,
+            &TS_INSECURE_DELEGATION_RE,
+            |source, lang, line_idx, line, mat| {
+                let pattern_name = match lang {
+                    SourceLang::Python => "Python Unauthenticated / Unrestricted Subagent Spawn",
+                    SourceLang::TypeScriptOrJs => {
+                        "TypeScript Unauthenticated / Unrestricted Subagent Spawn"
                     }
-                } else if is_ts {
-                    if let Some(mat) = TS_INSECURE_DELEGATION_RE.find(line) {
-                        (
-                            Some(mat),
-                            "TypeScript Unauthenticated / Unrestricted Subagent Spawn",
-                        )
-                    } else {
-                        (None, "")
-                    }
-                } else {
-                    (None, "")
                 };
+                let loc = regex_match_location(source, line_idx, &mat);
 
-                if let Some(mat) = matched {
-                    let loc = SourceLocation {
-                        file: source.path.clone(),
-                        line: line_idx + 1,
-                        column: mat.start() + 1,
-                        end_line: Some(line_idx + 1),
-                        end_column: Some(mat.end() + 1),
-                    };
-
-                    findings.push(Finding {
-                        rule_id: "SHIELD-031".into(),
-                        rule_name: "Insecure Inter-Agent Delegation / Unauthenticated Subagent Spawn".into(),
-                        severity: Severity::High,
-                        confidence: Confidence::High,
-                        attack_category: AttackCategory::CodeInjection,
-                        message: format!(
-                            "Unauthenticated or unconstrained subagent delegation pattern detected in '{}': \"{}\" ({})",
-                            source.path.display(),
-                            mat.as_str(),
-                            pattern_name
-                        ),
-                        location: Some(loc.clone()),
-                        evidence: vec![Evidence {
-                            description: format!("Matched {} in {}", pattern_name, source.path.display()),
-                            location: Some(loc),
-                            snippet: Some(line.to_string()),
-                        }],
-                        taint_path: None,
-                        remediation: Some(
-                            "Require explicit authentication envelopes or permission tokens for subagents, enforce strictly bounded read-only tool sets, and disallow passing untrusted user input directly as subagent system prompts."
-                                .into(),
-                        ),
-                        cwe_id: Some("CWE-287".into()),
-                    });
-                }
-            }
-        }
+                findings.push(Finding {
+                    rule_id: "SHIELD-031".into(),
+                    rule_name:
+                        "Insecure Inter-Agent Delegation / Unauthenticated Subagent Spawn".into(),
+                    severity: Severity::High,
+                    confidence: Confidence::High,
+                    attack_category: AttackCategory::CodeInjection,
+                    message: format!(
+                        "Unauthenticated or unconstrained subagent delegation pattern detected in '{}': \"{}\" ({})",
+                        source.path.display(),
+                        mat.as_str(),
+                        pattern_name
+                    ),
+                    location: Some(loc.clone()),
+                    evidence: vec![Evidence {
+                        description: format!("Matched {} in {}", pattern_name, source.path.display()),
+                        location: Some(loc),
+                        snippet: Some(line.to_string()),
+                    }],
+                    taint_path: None,
+                    remediation: Some(
+                        "Require explicit authentication envelopes or permission tokens for subagents, enforce strictly bounded read-only tool sets, and disallow passing untrusted user input directly as subagent system prompts."
+                            .into(),
+                    ),
+                    cwe_id: Some("CWE-287".into()),
+                });
+            },
+        );
 
         findings
     }

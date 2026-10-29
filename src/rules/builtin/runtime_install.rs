@@ -90,40 +90,9 @@ impl Detector for RuntimeInstallDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::{loc, target_with_commands};
     use super::*;
-    use crate::ir;
     use crate::ir::execution_surface::CommandInvocation;
-    use std::path::PathBuf;
-
-    fn target_with_commands(commands: Vec<CommandInvocation>) -> ir::ScanTarget {
-        ir::ScanTarget {
-            name: "sample".into(),
-            framework: ir::Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: crate::ir::ExecutionSurface {
-                commands,
-                file_operations: vec![],
-                network_operations: vec![],
-                env_accesses: vec![],
-                dynamic_exec: vec![],
-            },
-            data: ir::DataSurface::default(),
-            dependencies: ir::DependencySurface::default(),
-            provenance: ir::ProvenanceSurface::default(),
-            source_files: vec![],
-        }
-    }
-
-    fn loc() -> crate::ir::SourceLocation {
-        crate::ir::SourceLocation {
-            file: PathBuf::from("test.sh"),
-            line: 1,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
-    }
 
     #[test]
     fn flags_runtime_pip_install_command() {

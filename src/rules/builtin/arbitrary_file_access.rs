@@ -79,40 +79,9 @@ impl Detector for ArbitraryFileAccessDetector {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_helpers::{loc, target_with_file_ops};
     use super::*;
-    use crate::ir;
     use crate::ir::execution_surface::{FileOpType, FileOperation};
-    use std::path::PathBuf;
-
-    fn target_with_file_ops(file_ops: Vec<FileOperation>) -> ir::ScanTarget {
-        ir::ScanTarget {
-            name: "sample".into(),
-            framework: ir::Framework::Mcp,
-            root_path: PathBuf::from("."),
-            tools: vec![],
-            execution: crate::ir::ExecutionSurface {
-                commands: vec![],
-                file_operations: file_ops,
-                network_operations: vec![],
-                env_accesses: vec![],
-                dynamic_exec: vec![],
-            },
-            data: ir::DataSurface::default(),
-            dependencies: ir::DependencySurface::default(),
-            provenance: ir::ProvenanceSurface::default(),
-            source_files: vec![],
-        }
-    }
-
-    fn loc() -> crate::ir::SourceLocation {
-        crate::ir::SourceLocation {
-            file: PathBuf::from("test.py"),
-            line: 1,
-            column: 0,
-            end_line: None,
-            end_column: None,
-        }
-    }
 
     #[test]
     fn flags_parameter_file_path() {

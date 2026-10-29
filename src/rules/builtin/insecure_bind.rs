@@ -1,10 +1,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
+
+use super::source_scan::{full_line_location, scan_py_ts_regex_matches};
 
 /// SHIELD-024: Insecure Network Bind (Unauthenticated Local MCP Network Exposure)
 ///
@@ -61,97 +63,40 @@ impl Detector for InsecureBindDetector {
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
-        for source in &target.source_files {
-            match source.language {
-                Language::Python => {
-                    for (line_idx, line) in source.content.lines().enumerate() {
-                        let trimmed = line.trim();
-                        if trimmed.starts_with('#') {
-                            continue;
-                        }
+        scan_py_ts_regex_matches(
+            target,
+            &PY_INSECURE_BIND_RE,
+            &TS_INSECURE_BIND_RE,
+            |source, _lang, line_idx, line, _mat| {
+                let loc = full_line_location(source, line_idx, line);
 
-                        if PY_INSECURE_BIND_RE.is_match(line) {
-                            let loc = SourceLocation {
-                                file: source.path.clone(),
-                                line: line_idx + 1,
-                                column: 1,
-                                end_line: Some(line_idx + 1),
-                                end_column: Some(line.len() + 1),
-                            };
-
-                            findings.push(Finding {
-                                rule_id: "SHIELD-024".into(),
-                                rule_name: "Insecure Network Bind".into(),
-                                severity: Severity::High,
-                                confidence: Confidence::High,
-                                attack_category: AttackCategory::ExcessivePermissions,
-                                message: format!(
-                                    "Server in '{}' binds to wildcard interface (0.0.0.0) at line {}",
-                                    source.path.display(),
-                                    line_idx + 1
-                                ),
-                                location: Some(loc.clone()),
-                                evidence: vec![Evidence {
-                                    description: "Server transport configured with wildcard interface '0.0.0.0'".into(),
-                                    location: Some(loc),
-                                    snippet: Some(trimmed.to_string()),
-                                }],
-                                taint_path: None,
-                                remediation: Some(
-                                    "Bind local MCP tools exclusively to localhost (127.0.0.1) or enforce strict bearer authentication and network authorization when exposing on public interfaces."
-                                        .into(),
-                                ),
-                                cwe_id: Some("CWE-1327".into()),
-                            });
-                        }
-                    }
-                }
-                Language::TypeScript | Language::JavaScript => {
-                    for (line_idx, line) in source.content.lines().enumerate() {
-                        let trimmed = line.trim();
-                        if trimmed.starts_with("//") || trimmed.starts_with('*') {
-                            continue;
-                        }
-
-                        if TS_INSECURE_BIND_RE.is_match(line) {
-                            let loc = SourceLocation {
-                                file: source.path.clone(),
-                                line: line_idx + 1,
-                                column: 1,
-                                end_line: Some(line_idx + 1),
-                                end_column: Some(line.len() + 1),
-                            };
-
-                            findings.push(Finding {
-                                rule_id: "SHIELD-024".into(),
-                                rule_name: "Insecure Network Bind".into(),
-                                severity: Severity::High,
-                                confidence: Confidence::High,
-                                attack_category: AttackCategory::ExcessivePermissions,
-                                message: format!(
-                                    "Server in '{}' binds to wildcard interface (0.0.0.0) at line {}",
-                                    source.path.display(),
-                                    line_idx + 1
-                                ),
-                                location: Some(loc.clone()),
-                                evidence: vec![Evidence {
-                                    description: "Server transport configured with wildcard interface '0.0.0.0'".into(),
-                                    location: Some(loc),
-                                    snippet: Some(trimmed.to_string()),
-                                }],
-                                taint_path: None,
-                                remediation: Some(
-                                    "Bind local MCP tools exclusively to localhost (127.0.0.1) or enforce strict bearer authentication and network authorization when exposing on public interfaces."
-                                        .into(),
-                                ),
-                                cwe_id: Some("CWE-1327".into()),
-                            });
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
+                findings.push(Finding {
+                    rule_id: "SHIELD-024".into(),
+                    rule_name: "Insecure Network Bind".into(),
+                    severity: Severity::High,
+                    confidence: Confidence::High,
+                    attack_category: AttackCategory::ExcessivePermissions,
+                    message: format!(
+                        "Server in '{}' binds to wildcard interface (0.0.0.0) at line {}",
+                        source.path.display(),
+                        line_idx + 1
+                    ),
+                    location: Some(loc.clone()),
+                    evidence: vec![Evidence {
+                        description:
+                            "Server transport configured with wildcard interface '0.0.0.0'".into(),
+                        location: Some(loc),
+                        snippet: Some(line.trim().to_string()),
+                    }],
+                    taint_path: None,
+                    remediation: Some(
+                        "Bind local MCP tools exclusively to localhost (127.0.0.1) or enforce strict bearer authentication and network authorization when exposing on public interfaces."
+                            .into(),
+                    ),
+                    cwe_id: Some("CWE-1327".into()),
+                });
+            },
+        );
 
         findings
     }
@@ -161,6 +106,7 @@ impl Detector for InsecureBindDetector {
 mod tests {
     use super::super::test_helpers::make_target_from_files as make_target;
     use super::*;
+    use crate::ir::Language;
 
     #[test]
     fn detects_python_fastmcp_insecure_bind() {

@@ -1,10 +1,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::ir::{Language, ScanTarget, SourceLocation};
+use crate::ir::ScanTarget;
 use crate::rules::{
     AttackCategory, Confidence, Detector, Evidence, Finding, OwaspMcp, RuleMetadata, Severity,
 };
+
+use super::source_scan::{regex_match_location, scan_py_ts_regex_matches};
 
 /// SHIELD-029: Cross-Session State Bleed in Multi-Tenant Agents
 ///
@@ -63,84 +65,39 @@ impl Detector for CrossSessionStateBleedDetector {
     fn run(&self, target: &ScanTarget) -> Vec<Finding> {
         let mut findings = Vec::new();
 
-        for source in &target.source_files {
-            let is_python = source.language == Language::Python
-                || source
-                    .path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|e| e == "py");
-            let is_ts = matches!(source.language, Language::TypeScript | Language::JavaScript)
-                || source
-                    .path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|e| matches!(e, "ts" | "js" | "tsx" | "jsx" | "mjs"));
+        scan_py_ts_regex_matches(
+            target,
+            &PY_GLOBAL_STATE_RE,
+            &TS_GLOBAL_STATE_RE,
+            |source, lang, line_idx, line, mat| {
+                let loc = regex_match_location(source, line_idx, &mat);
 
-            for (line_idx, line) in source.content.lines().enumerate() {
-                let trimmed = line.trim();
-
-                // Skip full line comments
-                if trimmed.starts_with('#')
-                    || trimmed.starts_with("//")
-                    || trimmed.starts_with("/*")
-                    || trimmed.starts_with('*')
-                {
-                    continue;
-                }
-
-                let (matched, lang_name) = if is_python {
-                    if let Some(mat) = PY_GLOBAL_STATE_RE.find(line) {
-                        (Some(mat), "Python")
-                    } else {
-                        (None, "")
-                    }
-                } else if is_ts {
-                    if let Some(mat) = TS_GLOBAL_STATE_RE.find(line) {
-                        (Some(mat), "TypeScript")
-                    } else {
-                        (None, "")
-                    }
-                } else {
-                    (None, "")
-                };
-
-                if let Some(mat) = matched {
-                    let loc = SourceLocation {
-                        file: source.path.clone(),
-                        line: line_idx + 1,
-                        column: mat.start() + 1,
-                        end_line: Some(line_idx + 1),
-                        end_column: Some(mat.end() + 1),
-                    };
-
-                    findings.push(Finding {
-                        rule_id: "SHIELD-029".into(),
-                        rule_name: "Cross-Session State Bleed in Multi-Tenant Agents".into(),
-                        severity: Severity::Medium,
-                        confidence: Confidence::Medium,
-                        attack_category: AttackCategory::DataExfiltration,
-                        message: format!(
-                            "Unbounded global mutable session accumulator detected in '{}' ({})",
-                            source.path.display(),
-                            lang_name
-                        ),
-                        location: Some(loc.clone()),
-                        evidence: vec![Evidence {
-                            description: "Global mutable session collection pattern match".into(),
-                            location: Some(loc),
-                            snippet: Some(line.to_string()),
-                        }],
-                        taint_path: None,
-                        remediation: Some(
-                            "Avoid module-level global accumulators for user or session data. Pass session state explicitly via request contexts, ContextVar, AsyncLocalStorage, or external isolated cache stores with TTLs."
-                                .into(),
-                        ),
-                        cwe_id: Some("CWE-488".into()),
-                    });
-                }
-            }
-        }
+                findings.push(Finding {
+                    rule_id: "SHIELD-029".into(),
+                    rule_name: "Cross-Session State Bleed in Multi-Tenant Agents".into(),
+                    severity: Severity::Medium,
+                    confidence: Confidence::Medium,
+                    attack_category: AttackCategory::DataExfiltration,
+                    message: format!(
+                        "Unbounded global mutable session accumulator detected in '{}' ({})",
+                        source.path.display(),
+                        lang.label()
+                    ),
+                    location: Some(loc.clone()),
+                    evidence: vec![Evidence {
+                        description: "Global mutable session collection pattern match".into(),
+                        location: Some(loc),
+                        snippet: Some(line.to_string()),
+                    }],
+                    taint_path: None,
+                    remediation: Some(
+                        "Avoid module-level global accumulators for user or session data. Pass session state explicitly via request contexts, ContextVar, AsyncLocalStorage, or external isolated cache stores with TTLs."
+                            .into(),
+                    ),
+                    cwe_id: Some("CWE-488".into()),
+                });
+            },
+        );
 
         findings
     }
@@ -150,6 +107,7 @@ impl Detector for CrossSessionStateBleedDetector {
 mod tests {
     use super::super::test_helpers::make_target_with_source;
     use super::*;
+    use crate::ir::Language;
 
     #[test]
     fn test_flags_python_global_session_accumulator() {
