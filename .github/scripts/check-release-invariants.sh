@@ -98,6 +98,11 @@ if ! grep -Fq "$changelog_header" CHANGELOG.md; then
   exit 1
 fi
 
+if ! grep -Fq 'name = "agent-shield"' pyproject.toml; then
+  echo "pyproject.toml package name must be agent-shield"
+  exit 1
+fi
+
 if ! grep -Fq "__version__ = \"${version}\"" python/agentshield/__init__.py; then
   echo "python/agentshield/__init__.py does not match version ${version}"
   exit 1
@@ -125,6 +130,11 @@ fi
 
 if ! grep -Fq -- "--tag v${version}" docs/site.js; then
   echo "docs/site.js cargo install snippet does not match v${version}"
+  exit 1
+fi
+
+if ! grep -Fq "ghcr.io/aiconnai/agentshield:${version}" docs/site.js; then
+  echo "docs/site.js docker snippet does not match ${version}"
   exit 1
 fi
 

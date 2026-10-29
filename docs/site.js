@@ -166,10 +166,10 @@ jobs:
           fail-on: 'high'
           upload-sarif: true`,
   docker: `# Pull the pre-built GHCR image (full features)
-docker pull ghcr.io/aiconnai/agentshield:1.0.0
+docker pull ghcr.io/aiconnai/agentshield:1.0.2
 
 # Run a scan against the current repository
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:1.0.0 scan .`
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:1.0.2 scan .`
 };
 
 document.addEventListener("DOMContentLoaded", () => {

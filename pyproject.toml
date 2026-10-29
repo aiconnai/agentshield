@@ -3,7 +3,7 @@ requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "agentshield"
+name = "agent-shield"
 dynamic = ["version"]
 description = "Security scanner for AI agent extensions - offline-first, multi-framework, SARIF output"
 readme = "README.md"
@@ -29,6 +29,7 @@ Documentation = "https://aiconnai.github.io/agentshield"
 
 [tool.maturin]
 bindings = "bin"
+module-name = "agentshield"
 strip = true
 python-source = "python"
 features = ["full"]

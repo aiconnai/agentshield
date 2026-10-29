@@ -7,7 +7,7 @@
 [![Website](https://img.shields.io/badge/Website-aiconnai.github.io%2Fagentshield-emerald.svg)](https://aiconnai.github.io/agentshield/)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
-[![PyPI](https://img.shields.io/pypi/v/agentshield.svg)](https://pypi.org/project/agentshield/)
+[![PyPI](https://img.shields.io/pypi/v/agent-shield.svg)](https://pypi.org/project/agent-shield/)
 [![VS Code](https://img.shields.io/badge/VS%20Code-v1.0.2-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=aiconnai-vs.agentshield)
 [![Open VSX](https://img.shields.io/badge/Open%20VSX-v1.0.2-purple?logo=eclipseide)](https://open-vsx.org/extension/aiconnai-vs/agentshield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
@@ -151,8 +151,8 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 
 ```bash
 # 🐍 Install via PyPI (Python & uv)
-pip install agentshield
-# or: uv add --dev agentshield
+pip install agent-shield
+# or: uv add --dev agent-shield
 
 # ⚡ 1-Line Universal Installer (macOS & Linux: Apple Silicon, Intel, ARM64, x86_64)
 curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh

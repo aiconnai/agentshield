@@ -217,7 +217,7 @@ def find_agentshield_bin() -> str:
 
     raise FileNotFoundError(
         "AgentShield binary not found on PATH or in virtual environment. "
-        "Please install via: pip install agentshield, or cargo install agent-shield --features full"
+        "Please install via: pip install agent-shield, or cargo install agent-shield --features full"
     )
 
 
