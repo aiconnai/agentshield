@@ -4,6 +4,7 @@
 //! IPs, and rate limits are enforced by the `wrap` command proxy.
 
 mod domain;
+mod host;
 pub(crate) mod infer;
 mod merge;
 mod network;
@@ -415,5 +416,87 @@ allow = ["*"]
         let merged = base.merge_override(&operator);
         assert_eq!(merged.rate_limit_for("api.github.com"), 10);
         assert_eq!(merged.rate_limits.per_domain.len(), 1);
+    }
+
+    /// A policy that blocks exactly one network category, so a test proves
+    /// which category an address is classified into.
+    fn only_blocking(category: &str) -> EgressPolicy {
+        EgressPolicy {
+            networks: NetworkPolicy {
+                block_private: category == "private",
+                block_link_local: category == "link_local",
+                block_localhost: category == "localhost",
+                block_metadata: category == "metadata",
+            },
+            ..open_policy()
+        }
+    }
+
+    /// A policy that blocks nothing at the network layer.
+    fn no_network_blocks() -> EgressPolicy {
+        only_blocking("none")
+    }
+
+    #[test]
+    fn nat64_embedded_ipv4_is_classified_as_that_ipv4() {
+        // 64:ff9b::/96 (RFC 6052): the low 32 bits are the IPv4 destination.
+        assert!(only_blocking("localhost").is_ip_blocked("64:ff9b::7f00:1"));
+        assert!(only_blocking("localhost").is_ip_blocked("[64:ff9b::7f00:1]"));
+        assert!(only_blocking("localhost").is_ip_blocked("64:ff9b::127.0.0.1"));
+        assert!(only_blocking("metadata").is_ip_blocked("64:ff9b::a9fe:a9fe"));
+        assert!(only_blocking("link_local").is_ip_blocked("64:ff9b::a9fe:a9fe"));
+        assert!(only_blocking("private").is_ip_blocked("64:ff9b::a00:1"));
+        assert!(only_blocking("private").is_ip_blocked("64:ff9b::c0a8:101"));
+        // A public IPv4 behind NAT64 stays reachable.
+        assert!(!open_policy().is_ip_blocked("64:ff9b::808:808"));
+    }
+
+    #[test]
+    fn ipv4_compatible_ipv6_is_classified_as_that_ipv4() {
+        assert!(only_blocking("localhost").is_ip_blocked("::127.0.0.1"));
+        assert!(only_blocking("localhost").is_ip_blocked("::7f00:1"));
+        assert!(only_blocking("metadata").is_ip_blocked("::169.254.169.254"));
+        assert!(only_blocking("private").is_ip_blocked("::10.0.0.1"));
+        assert!(!open_policy().is_ip_blocked("::8.8.8.8"));
+        // `::1` and `::` keep their IPv6 meaning.
+        assert!(only_blocking("localhost").is_ip_blocked("::1"));
+        assert!(only_blocking("localhost").is_ip_blocked("::"));
+    }
+
+    #[test]
+    fn six_to_four_embedded_ipv4_is_classified_conservatively() {
+        // 2002::/16: bits 16..48 are the 6to4 gateway's IPv4 address.
+        assert!(only_blocking("localhost").is_ip_blocked("2002:7f00:1::"));
+        assert!(only_blocking("metadata").is_ip_blocked("2002:a9fe:a9fe::1"));
+        assert!(only_blocking("private").is_ip_blocked("2002:c0a8:101::1"));
+        assert!(!open_policy().is_ip_blocked("2002:808:808::1"));
+    }
+
+    #[test]
+    fn whole_this_network_block_counts_as_localhost() {
+        assert!(only_blocking("localhost").is_ip_blocked("0.0.0.0"));
+        assert!(only_blocking("localhost").is_ip_blocked("0.0.0.1"));
+        assert!(only_blocking("localhost").is_ip_blocked("0.255.255.255"));
+        assert!(only_blocking("localhost").is_ip_blocked("::ffff:0.1.2.3"));
+        assert!(!open_policy().is_ip_blocked("1.0.0.0"));
+        assert!(!no_network_blocks().is_ip_blocked("0.0.0.1"));
+    }
+
+    #[test]
+    fn ipv6_zone_identifiers_do_not_hide_the_address() {
+        // Raw, bracketed and percent-encoded (`%25`) zone separators.
+        assert!(only_blocking("link_local").is_ip_blocked("fe80::1%eth0"));
+        assert!(only_blocking("link_local").is_ip_blocked("[fe80::1%eth0]"));
+        assert!(only_blocking("link_local").is_ip_blocked("[fe80::1%25eth0]"));
+        assert!(only_blocking("link_local").is_ip_blocked("fe80::1%25eth0"));
+        assert!(only_blocking("localhost").is_ip_blocked("::1%lo"));
+        assert!(!open_policy().is_ip_blocked("2606:4700:4700::1111%eth0"));
+    }
+
+    #[test]
+    fn azure_wireserver_is_a_metadata_endpoint() {
+        assert!(only_blocking("metadata").is_ip_blocked("168.63.129.16"));
+        assert!(only_blocking("metadata").is_ip_blocked("::ffff:168.63.129.16"));
+        assert!(!open_policy().is_ip_blocked("168.63.129.17"));
     }
 }
