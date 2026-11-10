@@ -47,9 +47,9 @@ pub(super) fn cmd_suppress(
     };
     let report = agentshield::scan(&workspace, &options)?;
     let matches = report
-        .findings
-        .into_iter()
-        .any(|finding| finding.fingerprint(&report.scan_root) == fingerprint);
+        .finding_fingerprints()
+        .iter()
+        .any(|candidate| candidate == &fingerprint);
     if !matches {
         eprintln!("Error: fingerprint '{fingerprint}' was not found in scan results.");
         return Ok(2);

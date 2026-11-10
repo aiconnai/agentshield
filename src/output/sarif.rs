@@ -54,6 +54,18 @@ fn render_impl(
     rule_metadata: &[RuleMetadata],
     verdict: Option<&PolicyVerdict>,
 ) -> Result<String> {
+    let fingerprints = crate::rules::fingerprint::compute_fingerprints(findings, scan_root);
+    render_fingerprinted(findings, &fingerprints, target_name, rule_metadata, verdict)
+}
+
+/// Render SARIF with precomputed fingerprints aligned with `findings`.
+pub(crate) fn render_fingerprinted(
+    findings: &[Finding],
+    fingerprints: &[String],
+    target_name: &str,
+    rule_metadata: &[RuleMetadata],
+    verdict: Option<&PolicyVerdict>,
+) -> Result<String> {
     let meta_by_id: BTreeMap<&str, &RuleMetadata> =
         rule_metadata.iter().map(|m| (m.id.as_str(), m)).collect();
 
@@ -123,7 +135,8 @@ fn render_impl(
 
     let results: Vec<Value> = findings
         .iter()
-        .filter_map(|f| {
+        .zip(fingerprints)
+        .filter_map(|(f, fingerprint)| {
             // SARIF consumers (GitHub Code Scanning) require at least one
             // location per result. Skip findings without a source location.
             // SHIELD-008 (Excessive Permissions) has no meaningful code
@@ -156,7 +169,6 @@ fn render_impl(
             });
 
             // Merge remediation and fingerprint into the properties bag.
-            let fingerprint = f.fingerprint(scan_root);
             let mut properties = json!({
                 "fingerprint": fingerprint,
                 "attack_category": f.attack_category.to_string(),
@@ -402,7 +414,11 @@ mod tests {
     #[test]
     fn results_and_fingerprints_unchanged_by_metadata() {
         let finding = make_finding("SHIELD-003");
-        let fp = finding.fingerprint(Path::new("."));
+        let fp = crate::rules::fingerprint::compute_fingerprints(
+            std::slice::from_ref(&finding),
+            Path::new("."),
+        )[0]
+        .clone();
 
         let rendered_bare = render_with_metadata(
             std::slice::from_ref(&finding),

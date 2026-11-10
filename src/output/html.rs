@@ -14,8 +14,19 @@ pub fn render(
     target_name: &str,
     scan_root: &Path,
 ) -> Result<String> {
-    let mut sorted: Vec<&Finding> = findings.iter().collect();
-    sorted.sort_by(|a, b| {
+    let fingerprints = crate::rules::fingerprint::compute_fingerprints(findings, scan_root);
+    render_fingerprinted(findings, &fingerprints, verdict, target_name)
+}
+
+/// Render the HTML report with precomputed fingerprints aligned with `findings`.
+pub(crate) fn render_fingerprinted(
+    findings: &[Finding],
+    fingerprints: &[String],
+    verdict: &PolicyVerdict,
+    target_name: &str,
+) -> Result<String> {
+    let mut sorted: Vec<(&Finding, &String)> = findings.iter().zip(fingerprints).collect();
+    sorted.sort_by(|(a, _), (b, _)| {
         b.severity
             .cmp(&a.severity)
             .then_with(|| a.rule_id.cmp(&b.rule_id))
@@ -27,7 +38,7 @@ pub fn render(
 
     let finding_rows: String = sorted
         .iter()
-        .map(|f| {
+        .map(|&(f, fingerprint)| {
             let sev_class = severity_class(f.severity);
             let location = f
                 .location
@@ -46,7 +57,6 @@ pub fn render(
                 })
                 .unwrap_or_else(|| "-".into());
             let remediation = f.remediation.as_deref().unwrap_or("-");
-            let fingerprint = f.fingerprint(scan_root);
             let evidence_html: String = f
                 .evidence
                 .iter()
@@ -90,7 +100,7 @@ pub fn render(
                 confidence = f.confidence,
                 evidence = evidence_html,
                 remediation = html_escape(remediation),
-                fingerprint = html_escape(&fingerprint),
+                fingerprint = html_escape(fingerprint),
             )
         })
         .collect();

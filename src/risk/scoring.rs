@@ -69,7 +69,11 @@ pub(crate) fn assess(
     let mut deduplicated = BTreeMap::<String, RiskContribution>::new();
 
     for finding in findings {
-        let fingerprint = finding.fingerprint(scan_root);
+        // The informational risk index deduplicates by the legacy (v1)
+        // fingerprint on purpose: it merges exact and near-duplicate
+        // manifestations of one rule in one file, which the distinct scheme-v2
+        // fingerprints keep apart. This keeps the experimental score unchanged.
+        let fingerprint = finding.legacy_fingerprint(scan_root);
         let contribution = RiskContribution {
             fingerprint: fingerprint.clone(),
             rule_id: finding.rule_id.clone(),

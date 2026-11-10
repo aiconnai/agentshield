@@ -64,6 +64,7 @@ fn report(findings: Vec<Finding>) -> ScanReport {
             }],
         }],
         path_filter_summary: ScanPathFilterSummary::default(),
+        fingerprints: Vec::new(),
     }
 }
 

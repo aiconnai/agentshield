@@ -81,9 +81,43 @@ pub struct ScanReport {
     /// Used by callers that need to inspect the IR (e.g., `--emit-egress-policy`).
     pub targets: Vec<ScanTarget>,
     pub path_filter_summary: ScanPathFilterSummary,
+    /// Scheme-v2 fingerprints aligned with `findings` (see
+    /// [`rules::fingerprint`]). They are computed over the complete set of
+    /// findings before policy filtering, so they stay stable when sibling
+    /// findings are suppressed or baselined. Keep them aligned when filtering
+    /// `findings` (see [`ScanReport::retain_findings`]); misaligned values are
+    /// recomputed from `findings` by the renderers.
+    pub fingerprints: Vec<String>,
 }
 
 impl ScanReport {
+    /// Fingerprints aligned with `findings`, recomputed if `fingerprints` was
+    /// left out of sync with `findings`.
+    pub fn finding_fingerprints(&self) -> std::borrow::Cow<'_, [String]> {
+        if self.fingerprints.len() == self.findings.len() {
+            std::borrow::Cow::Borrowed(&self.fingerprints)
+        } else {
+            std::borrow::Cow::Owned(rules::fingerprint::compute_fingerprints(
+                &self.findings,
+                &self.scan_root,
+            ))
+        }
+    }
+
+    /// Keep only the findings for which `keep(finding, fingerprint)` is true,
+    /// keeping `fingerprints` aligned.
+    pub fn retain_findings(&mut self, mut keep: impl FnMut(&Finding, &str) -> bool) {
+        let fingerprints = self.finding_fingerprints().into_owned();
+        let (findings, fingerprints): (Vec<Finding>, Vec<String>) =
+            std::mem::take(&mut self.findings)
+                .into_iter()
+                .zip(fingerprints)
+                .filter(|(finding, fingerprint)| keep(finding, fingerprint))
+                .unzip();
+        self.findings = findings;
+        self.fingerprints = fingerprints;
+    }
+
     /// Render this report in the specified output format.
     pub fn render(&self, format: OutputFormat) -> Result<String> {
         render_report(self, format)
@@ -187,8 +221,15 @@ pub fn scan_with_path_filter_overrides(
     // Canonicalize for stable fingerprints; fall back to the raw path on error.
     let scan_root = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
+    // Fingerprint the complete set before filtering so occurrence indexes do
+    // not depend on which siblings are suppressed.
+    let all_fingerprints = rules::fingerprint::compute_fingerprints(&all_findings, &scan_root);
+
     // Apply policy (ignore rules, overrides, suppressions)
-    let effective_findings = config.policy.apply(&all_findings, &scan_root);
+    let (effective_findings, fingerprints) =
+        config
+            .policy
+            .apply_with_fingerprints(&all_findings, &all_fingerprints, &scan_root);
     let verdict = config.policy.evaluate(&effective_findings);
 
     Ok(ScanReport {
@@ -198,14 +239,16 @@ pub fn scan_with_path_filter_overrides(
         scan_root,
         targets,
         path_filter_summary,
+        fingerprints,
     })
 }
 
 /// Render a scan report in the specified format.
 pub fn render_report(report: &ScanReport, format: OutputFormat) -> Result<String> {
     let rule_metadata = rules::RuleEngine::new().list_scanner_rules();
-    output::render_with_metadata(
+    output::render_with_fingerprints(
         &report.findings,
+        &report.finding_fingerprints(),
         &report.verdict,
         format,
         &report.target_name,
@@ -351,8 +394,9 @@ mod integration_tests {
         let entries: Vec<BaselineEntry> = report
             .findings
             .iter()
-            .map(|f| BaselineEntry {
-                fingerprint: f.fingerprint(&report.scan_root),
+            .zip(&report.fingerprints)
+            .map(|(f, fp)| BaselineEntry {
+                fingerprint: fp.clone(),
                 rule_id: f.rule_id.clone(),
                 first_seen: now.clone(),
             })
@@ -365,11 +409,10 @@ mod integration_tests {
         let loaded_baseline = BaselineFile::load(baseline_file.path()).unwrap();
         let filtered: Vec<_> = report2
             .findings
-            .into_iter()
-            .filter(|f| {
-                let fp = f.fingerprint(&report2.scan_root);
-                !loaded_baseline.contains(&fp)
-            })
+            .iter()
+            .zip(&report2.fingerprints)
+            .filter(|(f, fp)| !loaded_baseline.matches(f, fp, &report2.scan_root))
+            .map(|(f, _)| f)
             .collect();
 
         // Step 4: all findings should be filtered out
@@ -400,7 +443,7 @@ mod integration_tests {
         );
 
         let first_finding = &report.findings[0];
-        let fp = first_finding.fingerprint(&report.scan_root);
+        let fp = report.fingerprints[0].clone();
         let rule_id = first_finding.rule_id.clone();
 
         // Step 2: Write a config with the suppression into a temp dir
@@ -435,7 +478,8 @@ mod integration_tests {
         let still_present = report2
             .findings
             .iter()
-            .any(|f| f.rule_id == rule_id && f.fingerprint(&report2.scan_root) == fp);
+            .zip(&report2.fingerprints)
+            .any(|(f, f_fp)| f.rule_id == rule_id && f_fp == &fp);
 
         assert!(
             !still_present,

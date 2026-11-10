@@ -70,11 +70,24 @@ pub fn render(
     target_name: &str,
     scan_root: &Path,
 ) -> Result<String> {
+    let fingerprints = crate::rules::fingerprint::compute_fingerprints(findings, scan_root);
+    render_fingerprinted(findings, &fingerprints, verdict, target_name, scan_root)
+}
+
+/// Render a JSON report with precomputed fingerprints aligned with `findings`.
+pub(crate) fn render_fingerprinted(
+    findings: &[Finding],
+    fingerprints: &[String],
+    verdict: &PolicyVerdict,
+    target_name: &str,
+    scan_root: &Path,
+) -> Result<String> {
     let findings_with_fp: Vec<FindingWithFingerprint<'_>> = findings
         .iter()
-        .map(|f| FindingWithFingerprint {
+        .zip(fingerprints)
+        .map(|(f, fp)| FindingWithFingerprint {
             finding: f,
-            fingerprint: f.fingerprint(scan_root),
+            fingerprint: fp.clone(),
         })
         .collect();
 

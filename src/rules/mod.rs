@@ -1,6 +1,7 @@
 pub mod builtin;
 pub mod custom;
 pub mod finding;
+pub mod fingerprint;
 pub mod policy;
 
 use std::collections::HashSet;

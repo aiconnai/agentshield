@@ -19,6 +19,16 @@ const CYAN: &str = "\x1b[36m";
 /// Each finding includes a truncated fingerprint (first 12 hex chars) for quick
 /// cross-referencing with JSON/SARIF/HTML outputs.
 pub fn render(findings: &[Finding], verdict: &PolicyVerdict, scan_root: &Path) -> String {
+    let fingerprints = crate::rules::fingerprint::compute_fingerprints(findings, scan_root);
+    render_fingerprinted(findings, &fingerprints, verdict)
+}
+
+/// Render findings with precomputed fingerprints aligned with `findings`.
+pub(crate) fn render_fingerprinted(
+    findings: &[Finding],
+    fingerprints: &[String],
+    verdict: &PolicyVerdict,
+) -> String {
     let use_color = std::env::var("NO_COLOR").is_err();
     let mut output = String::new();
 
@@ -34,8 +44,8 @@ pub fn render(findings: &[Finding], verdict: &PolicyVerdict, scan_root: &Path) -
     }
 
     // Sort by severity (critical first), then by file path
-    let mut sorted: Vec<&Finding> = findings.iter().collect();
-    sorted.sort_by(|a, b| {
+    let mut sorted: Vec<(&Finding, &String)> = findings.iter().zip(fingerprints).collect();
+    sorted.sort_by(|(a, _), (b, _)| {
         b.severity.cmp(&a.severity).then_with(|| {
             let a_file = a.location.as_ref().map(|l| &l.file);
             let b_file = b.location.as_ref().map(|l| &l.file);
@@ -58,7 +68,7 @@ pub fn render(findings: &[Finding], verdict: &PolicyVerdict, scan_root: &Path) -
         grouped_count(findings, true)
     ));
 
-    for finding in &sorted {
+    for &(finding, fp) in &sorted {
         let severity_tag = if use_color {
             match finding.severity {
                 Severity::Critical => format!("{RED}{BOLD}[CRITICAL]{RESET}"),
@@ -97,7 +107,6 @@ pub fn render(findings: &[Finding], verdict: &PolicyVerdict, scan_root: &Path) -
             dim = if use_color { DIM } else { "" },
             reset = if use_color { RESET } else { "" },
         ));
-        let fp = finding.fingerprint(scan_root);
         output.push_str(&format!(
             "           {dim}fp {}{reset}\n",
             &fp[..12],

@@ -243,10 +243,12 @@ pub fn build_attestation(
     };
 
     // Summarize findings
+    let fingerprints = crate::rules::fingerprint::compute_fingerprints(findings, scan_root);
     let finding_summaries: Vec<FindingSummary> = findings
         .iter()
-        .map(|f| FindingSummary {
-            fingerprint: f.fingerprint(scan_root),
+        .zip(fingerprints)
+        .map(|(f, fingerprint)| FindingSummary {
+            fingerprint,
             rule_id: f.rule_id.clone(),
             severity: format!("{:?}", f.severity),
             confidence: format!("{:?}", f.confidence),
