@@ -8,7 +8,7 @@ branding:
 
 inputs:
   path:
-    description: 'Path to scan (relative to repo root)'
+    description: 'Path to scan (relative to repo root). Its own .agentshield.toml and .agentshield/rules are applied, so point it at code you own.'
     required: false
     default: '.'
   fail-on:
@@ -198,6 +198,15 @@ runs:
         if [ "${INPUT_IGNORE_TESTS}" = "true" ]; then
           ARGS="$ARGS --ignore-tests"
         fi
+
+        # The Action scans the caller's own repository, so the repository's
+        # .agentshield.toml and .agentshield/rules under `path` stay in force
+        # even when `path` is a subdirectory. Binaries older than the flag
+        # (pinned through `version`) already apply the target config.
+        SCAN_HELP="$(agentshield scan --help 2>/dev/null || true)"
+        case "$SCAN_HELP" in
+          *--trust-target-config*) ARGS="$ARGS --trust-target-config" ;;
+        esac
 
         set +e
         agentshield $ARGS 2>&1 | tee "$SCAN_LOG"
