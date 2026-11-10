@@ -119,6 +119,7 @@ pub(crate) fn load_mcp_target(
     let mut execution = ExecutionSurface::default();
     let mut tool_declarations = Vec::new();
     let mut python_tools = Vec::new();
+    let mut handler_references = std::collections::HashSet::new();
 
     // Collect source files
     collect_source_files_with_filter(root, filter, &mut source_files)?;
@@ -127,6 +128,9 @@ pub(crate) fn load_mcp_target(
             Language::TypeScript | Language::JavaScript => {
                 tool_declarations.extend(extract_mcp_tool_declarations_from_source(
                     &source_file.path,
+                    &source_file.content,
+                ));
+                handler_references.extend(super::tools::extract_mcp_handler_references(
                     &source_file.content,
                 ));
             }
@@ -150,9 +154,10 @@ pub(crate) fn load_mcp_target(
         }
     }
 
-    // Named handlers passed to `server.tool(...)` are invoked by the agent,
-    // so cross-file analysis must not treat internal calls as their only input.
-    mark_named_handlers_as_entry_points(&tool_declarations, &mut parsed_files);
+    // Functions referenced by `server.tool(...)` registrations are invoked by
+    // the agent, so cross-file analysis must not treat internal calls as their
+    // only input.
+    mark_handlers_as_entry_points(&handler_references, &mut parsed_files);
 
     // Phase 2: Cross-file sanitizer-aware analysis — downgrade operations
     // in functions that are only called with sanitized arguments.
@@ -346,18 +351,17 @@ pub(crate) fn collect_source_files_with_filter(
     Ok(())
 }
 
-fn mark_named_handlers_as_entry_points(
-    declarations: &[super::tools::McpToolDeclaration],
+fn mark_handlers_as_entry_points(
+    handler_references: &std::collections::HashSet<String>,
     parsed_files: &mut [(PathBuf, parser::ParsedFile)],
 ) {
-    for declaration in declarations {
-        let Some(super::tools::McpToolHandler::Named { symbol }) = &declaration.handler else {
-            continue;
-        };
-        for (_, parsed) in parsed_files.iter_mut() {
-            if parsed.function_defs.iter().any(|def| &def.name == symbol) {
-                parsed.entry_points.insert(symbol.clone());
-            }
-        }
+    for (_, parsed) in parsed_files.iter_mut() {
+        let handlers: Vec<String> = parsed
+            .function_defs
+            .iter()
+            .filter(|def| handler_references.contains(&def.name))
+            .map(|def| def.name.clone())
+            .collect();
+        parsed.entry_points.extend(handlers);
     }
 }

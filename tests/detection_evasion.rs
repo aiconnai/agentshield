@@ -243,3 +243,95 @@ fn literal_only_helper_called_from_tool_handler_stays_clean() {
     )]);
     assert!(!has_command_injection(dir.path()));
 }
+
+const CLI_PY: &str = "from server import run_cmd\n\n\ndef main():\n    run_cmd(\"ls\")\n";
+const CLI_TS: &str = "import { runCmd } from \"./handlers\";\n\nexport function main(): void {\n  runCmd(\"ls\");\n}\n";
+const HANDLERS_TS: &str = "import { exec } from \"child_process\";\n\nexport async function runCmd(cmd: string): Promise<void> {\n  exec(cmd);\n}\n";
+
+fn python_handler_called_from_cli(decorator: &str) -> bool {
+    let body = format!(
+        "{decorator}\ndef run_cmd(cmd: str) -> str:\n    return subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout\n"
+    );
+    let dir = package(&[
+        ("server.py", py(&body)),
+        ("cli.py", CLI_PY.as_bytes().to_vec()),
+    ]);
+    has_command_injection(dir.path())
+}
+
+fn typescript_handler_registered_as(registration: &str) -> bool {
+    let dir = package(&[
+        ("handlers.ts", HANDLERS_TS.as_bytes().to_vec()),
+        ("server.ts", ts(registration)),
+        ("cli.ts", CLI_TS.as_bytes().to_vec()),
+    ]);
+    has_command_injection(dir.path())
+}
+
+#[test]
+fn comment_after_bare_tool_decorator_still_marks_handler() {
+    assert!(python_handler_called_from_cli(
+        "@server.tool  # exposed to the agent"
+    ));
+}
+
+#[test]
+fn unbalanced_paren_in_decorator_string_still_marks_handler() {
+    assert!(python_handler_called_from_cli(
+        "@server.tool(\"run_cmd\", description=\"(\")"
+    ));
+}
+
+#[test]
+fn unbalanced_paren_in_multiline_decorator_comment_still_marks_handler() {
+    assert!(python_handler_called_from_cli(
+        "@server.tool(  # (\n    \"run_cmd\",\n)"
+    ));
+}
+
+#[test]
+fn other_agent_exposed_decorators_mark_handlers() {
+    for decorator in [
+        "@agent.tool_plain",
+        "@server.call_tool()",
+        "@server.resource(\"file://{cmd}\")",
+        "@mcp.prompt()",
+    ] {
+        assert!(python_handler_called_from_cli(decorator), "{decorator}");
+    }
+}
+
+#[test]
+fn decoy_registration_with_same_tool_name_does_not_hide_handler() {
+    assert!(typescript_handler_registered_as(
+        "import { runCmd } from \"./handlers\";\n\nfunction decoy(): void {}\n\nserver.tool(\"run_cmd\", {}, decoy);\nserver.tool(\"run_cmd\", {}, runCmd);\n"
+    ));
+}
+
+#[test]
+fn namespaced_handler_reference_marks_handler() {
+    assert!(typescript_handler_registered_as(
+        "import * as handlers from \"./handlers\";\n\nserver.tool(\"run_cmd\", {}, handlers.runCmd);\n"
+    ));
+}
+
+#[test]
+fn aliased_handler_import_marks_handler() {
+    assert!(typescript_handler_registered_as(
+        "import { runCmd as rc } from \"./handlers\";\n\nserver.tool(\"run_cmd\", {}, rc);\n"
+    ));
+}
+
+#[test]
+fn wrapped_handler_reference_marks_handler() {
+    assert!(typescript_handler_registered_as(
+        "import { runCmd } from \"./handlers\";\n\nconst withLog = (f: any) => f;\n\nserver.tool(\"run_cmd\", {}, withLog(runCmd));\nserver.tool(\"run_bound\", {}, runCmd.bind(null));\n"
+    ));
+}
+
+#[test]
+fn plain_handler_reference_marks_handler() {
+    assert!(typescript_handler_registered_as(
+        "import { runCmd } from \"./handlers\";\n\nserver.tool(\"run_cmd\", {}, runCmd);\n"
+    ));
+}

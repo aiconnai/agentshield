@@ -1,3 +1,4 @@
+pub(crate) mod handlers;
 pub(crate) mod python;
 pub(crate) mod scan;
 
@@ -6,6 +7,7 @@ use std::path::Path;
 use crate::ir::SourceLocation;
 use crate::ir::tool_surface::ToolSurface;
 
+pub(crate) use handlers::extract_mcp_handler_references;
 pub(crate) use python::extract_mcp_python_decorators;
 pub(crate) use scan::{
     find_matching_delimiter, find_next_mcp_tool_call, parse_mcp_tool_handler,
