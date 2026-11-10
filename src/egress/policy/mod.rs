@@ -665,6 +665,30 @@ deny = ["evil.example.com", "_dmarc.example.com"]
     }
 
     #[test]
+    fn merge_unions_denies_ors_network_blocks_and_takes_operator_audit() {
+        let mut base = policy_with_deny(&["a.example", "shared.example"]);
+        base.networks.block_localhost = false;
+        let mut operator = policy_with_deny(&["shared.example", "b.example"]);
+        operator.networks = NetworkPolicy {
+            block_private: false,
+            block_link_local: false,
+            block_localhost: true,
+            block_metadata: false,
+        };
+        operator.audit.log_allowed = true;
+
+        let merged = base.merge_override(&operator);
+        assert_eq!(
+            merged.domains.deny,
+            vec!["a.example", "shared.example", "b.example"]
+        );
+        assert!(merged.domains.allow.is_empty());
+        assert!(merged.networks.block_localhost, "operator block applies");
+        assert!(merged.networks.block_private, "base block is kept");
+        assert!(merged.audit.log_allowed, "operator audit settings win");
+    }
+
+    #[test]
     fn azure_wireserver_is_a_metadata_endpoint() {
         assert!(only_blocking("metadata").is_ip_blocked("168.63.129.16"));
         assert!(only_blocking("metadata").is_ip_blocked("::ffff:168.63.129.16"));
