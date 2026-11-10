@@ -35,15 +35,7 @@ export function buildScanArgs(
   failOn = "",
   rulesDir = ""
 ): string[] {
-  // The workspace is the user's own code, so its .agentshield.toml and
-  // .agentshield/rules apply even if the scan path and cwd resolve differently.
-  const args = [
-    "scan",
-    workspacePath,
-    "--format",
-    "json",
-    "--trust-target-config",
-  ];
+  const args = ["scan", workspacePath, "--format", "json"];
   if (ignoreTests) {
     args.push("--ignore-tests");
   }

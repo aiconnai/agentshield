@@ -32,7 +32,6 @@ test("builds scanner command inputs from configuration", () => {
     "/workspace",
     "--format",
     "json",
-    "--trust-target-config",
     "--ignore-tests",
   ]);
   assert.deepEqual(buildScanArgs("/workspace", false), [
@@ -40,36 +39,7 @@ test("builds scanner command inputs from configuration", () => {
     "/workspace",
     "--format",
     "json",
-    "--trust-target-config",
   ]);
-});
-
-test("always trusts the workspace's own config, keeping explicit paths", () => {
-  const args = buildScanArgs(
-    "/workspace",
-    false,
-    " /workspace/custom.toml ",
-    "",
-    "high",
-    "/workspace/rules"
-  );
-  assert.deepEqual(args, [
-    "scan",
-    "/workspace",
-    "--format",
-    "json",
-    "--trust-target-config",
-    "--config",
-    "/workspace/custom.toml",
-    "--fail-on",
-    "high",
-    "--rules-dir",
-    "/workspace/rules",
-  ]);
-  assert.equal(
-    args.filter((arg) => arg === "--trust-target-config").length,
-    1
-  );
 });
 
 test("parses reports and honors scanner exit codes", async () => {
