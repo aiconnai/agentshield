@@ -93,9 +93,11 @@ pub struct EgressProxy {
 impl EgressProxy {
     /// Create a new proxy from the given policy.
     ///
+    /// The policy is validated first (see [`EgressPolicy::validate`]).
     /// If the policy has an audit log path configured, the file is opened
     /// (append mode) eagerly so errors surface before the child is spawned.
     pub fn new(policy: EgressPolicy) -> Result<Self, crate::error::ShieldError> {
+        policy.validate()?;
         let audit_writer = if let Some(ref log_path) = policy.audit.log_path {
             let file = std::fs::OpenOptions::new()
                 .create(true)
@@ -560,6 +562,14 @@ mod tests {
             matches!(d, ProxyDecision::BlockedByRateLimit { .. }),
             "4th request should be rate limited"
         );
+    }
+
+    #[test]
+    fn test_new_refuses_a_policy_with_empty_label_patterns() {
+        let mut policy = test_policy();
+        policy.domains.deny = vec!["*.".into()];
+        let err = EgressProxy::new(policy).err().expect("must be refused");
+        assert!(err.to_string().contains("domains.deny"), "{err}");
     }
 
     #[test]

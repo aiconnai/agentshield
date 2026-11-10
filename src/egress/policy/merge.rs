@@ -2,8 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::error::ShieldError;
+
 use super::domain::domain_matches;
-use super::host::normalize_key;
+use super::host::{normalize_host, normalize_key};
 use super::{DomainPolicy, EgressPolicy, NetworkPolicy};
 
 /// Rate limiting configuration for outbound requests.
@@ -31,6 +33,21 @@ impl Default for RateLimitPolicy {
 }
 
 impl RateLimitPolicy {
+    /// Reject per-domain keys that are not usable host names.
+    pub(super) fn validate(&self) -> Result<(), ShieldError> {
+        match self
+            .per_domain
+            .keys()
+            .find(|key| normalize_host(key).is_none())
+        {
+            Some(key) => Err(ShieldError::Config(format!(
+                "Egress policy: rate_limits.per_domain key {key:?} is invalid: \
+                 it is not a valid host name (empty label or invalid internationalized name)"
+            ))),
+            None => Ok(()),
+        }
+    }
+
     /// Get rate limit for a domain (requests per minute).
     ///
     /// Returns the per-domain override if one exists, otherwise the global default.

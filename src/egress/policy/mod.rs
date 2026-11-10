@@ -584,6 +584,86 @@ allow = ["*"]
         assert_eq!(extract_domain("http://xn--.example/"), None);
     }
 
+    fn load_toml(contents: &str) -> Result<EgressPolicy, crate::error::ShieldError> {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("egress.toml");
+        std::fs::write(&path, contents).unwrap();
+        EgressPolicy::load(&path)
+    }
+
+    #[test]
+    fn load_rejects_empty_label_patterns_with_a_clear_error() {
+        for (field, pattern) in [
+            ("allow", "*."),
+            ("deny", "*."),
+            ("allow", "."),
+            ("deny", "*..x"),
+            ("allow", "a..b"),
+            ("allow", ""),
+        ] {
+            let toml = format!(
+                "schema_version = 1\n[domains]\n{field} = [{}]\n",
+                toml::Value::String(pattern.into())
+            );
+            let err = load_toml(&toml).expect_err(&format!("{field} {pattern:?} must be rejected"));
+            let message = err.to_string();
+            assert!(
+                message.contains(&format!("domains.{field}")),
+                "error should name the field: {message}"
+            );
+            assert!(
+                message.contains(&format!("{pattern:?}")),
+                "error should quote the pattern: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn load_error_explains_what_is_wrong_with_the_pattern() {
+        let err = load_toml("schema_version = 1\n[domains]\nallow = [\"*.\"]\n").unwrap_err();
+        assert!(err.to_string().contains("empty label"), "{err}");
+        let err =
+            load_toml("schema_version = 1\n[domains]\nallow = [\"xn--.example\"]\n").unwrap_err();
+        assert!(err.to_string().contains("not a valid host name"), "{err}");
+    }
+
+    #[test]
+    fn load_rejects_empty_label_rate_limit_keys() {
+        let err =
+            load_toml("schema_version = 1\n[domains]\n[rate_limits.per_domain]\n\"a..b\" = 5\n")
+                .unwrap_err();
+        assert!(err.to_string().contains("rate_limits.per_domain"), "{err}");
+    }
+
+    #[test]
+    fn load_still_accepts_existing_policy_shapes() {
+        let policy = load_toml(
+            r#"
+schema_version = 1
+[domains]
+allow = ["*", "*.example.com", "api.github.com.", "Bücher.Example", "203.0.113.5", "[2001:db8::1]", "*legacy.example"]
+deny = ["evil.example.com", "_dmarc.example.com"]
+[rate_limits.per_domain]
+"API.github.com" = 5
+"#,
+        )
+        .unwrap();
+        assert_eq!(policy.domains.allow.len(), 7);
+        assert!(load_toml(EgressPolicy::starter_toml()).is_ok());
+    }
+
+    #[test]
+    fn validate_is_available_to_programmatic_policies() {
+        assert!(open_policy().validate().is_ok());
+        assert!(policy_with_allow(&["*.example.com"]).validate().is_ok());
+        let err = policy_with_allow(&["*."]).validate().unwrap_err();
+        assert!(err.to_string().contains("domains.allow"), "{err}");
+        // Merging valid policies yields a valid policy (deny-all is `*`).
+        let merged =
+            policy_with_allow(&["a.example"]).merge_override(&policy_with_allow(&["b.example"]));
+        assert!(merged.validate().is_ok());
+    }
+
     #[test]
     fn azure_wireserver_is_a_metadata_endpoint() {
         assert!(only_blocking("metadata").is_ip_blocked("168.63.129.16"));

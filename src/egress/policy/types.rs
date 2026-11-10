@@ -39,7 +39,19 @@ impl EgressPolicy {
                 policy.schema_version, CURRENT_SCHEMA_VERSION
             )));
         }
+        policy.validate()?;
         Ok(policy)
+    }
+
+    /// Check that every domain pattern and rate-limit key is well formed.
+    ///
+    /// [`EgressPolicy::load`] and `EgressProxy::new` call this, so a policy
+    /// with an empty-label pattern (`*.`, `.`, `*..x`) or invalid
+    /// internationalized name is refused up front instead of matching more
+    /// than it says. Call it yourself on policies built in code.
+    pub fn validate(&self) -> Result<(), ShieldError> {
+        self.domains.validate()?;
+        self.rate_limits.validate()
     }
 
     /// Save an egress policy to a TOML file.

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::error::ShieldError;
+
 use super::host::normalize_host;
 
 /// Domain-level allow/deny policy using glob-style patterns.
@@ -14,6 +16,22 @@ pub struct DomainPolicy {
 }
 
 impl DomainPolicy {
+    /// Reject patterns that cannot be matched safely, naming the field and
+    /// the offending pattern. An empty-label pattern such as `*.` would
+    /// otherwise normalize to something broader than written.
+    pub(super) fn validate(&self) -> Result<(), ShieldError> {
+        for (field, patterns) in [("allow", &self.allow), ("deny", &self.deny)] {
+            for raw in patterns {
+                Pattern::parse(raw).map_err(|reason| {
+                    ShieldError::Config(format!(
+                        "Egress policy: domains.{field} pattern {raw:?} is invalid: {reason}"
+                    ))
+                })?;
+            }
+        }
+        Ok(())
+    }
+
     /// Check if a domain is allowed by this policy.
     ///
     /// Deny rules take precedence over allow rules. If the allow list is
