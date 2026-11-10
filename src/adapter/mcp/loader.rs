@@ -157,7 +157,10 @@ pub(crate) fn load_mcp_target(
     // Functions referenced by `server.tool(...)` registrations are invoked by
     // the agent, so cross-file analysis must not treat internal calls as their
     // only input.
-    mark_handlers_as_entry_points(&handler_references, &mut parsed_files);
+    crate::adapter::entry_points::mark_referenced_functions(&handler_references, &mut parsed_files);
+    // Handlers declared through framework APIs (`mcp.add_tool(fn)`,
+    // `mcp.tool()(fn)`, tool classes) are entry points for the same reason.
+    crate::adapter::entry_points::mark_framework_entry_points(&source_files, &mut parsed_files);
 
     // Phase 2: Cross-file sanitizer-aware analysis — downgrade operations
     // in functions that are only called with sanitized arguments.
@@ -349,19 +352,4 @@ pub(crate) fn collect_source_files_with_filter(
     }
 
     Ok(())
-}
-
-fn mark_handlers_as_entry_points(
-    handler_references: &std::collections::HashSet<String>,
-    parsed_files: &mut [(PathBuf, parser::ParsedFile)],
-) {
-    for (_, parsed) in parsed_files.iter_mut() {
-        let handlers: Vec<String> = parsed
-            .function_defs
-            .iter()
-            .filter(|def| handler_references.contains(&def.name))
-            .map(|def| def.name.clone())
-            .collect();
-        parsed.entry_points.extend(handlers);
-    }
 }

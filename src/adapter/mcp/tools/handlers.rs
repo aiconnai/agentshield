@@ -53,13 +53,13 @@ pub(crate) fn extract_mcp_handler_references(content: &str) -> HashSet<String> {
     references
 }
 
-fn js_identifiers(text: &str) -> impl Iterator<Item = &str> {
+pub(crate) fn js_identifiers(text: &str) -> impl Iterator<Item = &str> {
     text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
         .filter(|token| is_js_identifier(token) && !is_js_reserved_word(token))
 }
 
 /// Map each local alias to the name it imports (`import { a as b }` → b → a).
-fn import_aliases(content: &str) -> HashMap<String, String> {
+pub(crate) fn import_aliases(content: &str) -> HashMap<String, String> {
     NAMED_IMPORT_RE
         .captures_iter(content)
         .flat_map(|captures| {
