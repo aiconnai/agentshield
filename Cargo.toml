@@ -97,6 +97,8 @@ levenshtein = "1.0"
 
 # URL parsing
 url = "2.5"
+# Internationalized domain names (UTS #46), already pulled in by `url`
+idna = "1"
 
 # Temporary files
 tempfile = "3.9"

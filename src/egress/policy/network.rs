@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use super::host::{parse_ip_literal, six_to_four_gateway};
+use super::host::{normalize_host, parse_ip_literal, six_to_four_gateway};
 
 /// Network-level IP range blocking policy.
 ///
@@ -70,15 +70,11 @@ fn addresses(host: &str) -> Vec<IpAddr> {
     all
 }
 
-fn normalized_hostname(host: &str) -> String {
-    host.trim().trim_end_matches('.').to_ascii_lowercase()
-}
-
 pub(super) fn is_localhost(host: &str) -> bool {
     let addrs = addresses(host);
     if addrs.is_empty() {
-        let name = normalized_hostname(host);
-        return name == "localhost" || name.ends_with(".localhost");
+        return normalize_host(host)
+            .is_some_and(|name| name == "localhost" || name.ends_with(".localhost"));
     }
     addrs.into_iter().any(|ip| match ip {
         // 0.0.0.0/8 is "this network": connecting to it reaches the local host.
@@ -119,7 +115,7 @@ pub(super) fn is_metadata_ip(host: &str) -> bool {
 
     let addrs = addresses(host);
     if addrs.is_empty() {
-        return normalized_hostname(host).contains("metadata.google.internal");
+        return normalize_host(host).is_some_and(|name| name.contains("metadata.google.internal"));
     }
     addrs.into_iter().any(|ip| match ip {
         IpAddr::V4(v4) => METADATA_V4.contains(&v4),

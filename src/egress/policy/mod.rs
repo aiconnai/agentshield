@@ -11,6 +11,8 @@ mod network;
 pub(crate) mod types;
 
 pub use domain::DomainPolicy;
+#[cfg(feature = "runtime")]
+pub(crate) use host::normalize_host;
 pub use merge::{AuditPolicy, RateLimitPolicy};
 pub use network::NetworkPolicy;
 pub use types::EgressPolicy;
@@ -491,6 +493,95 @@ allow = ["*"]
         assert!(only_blocking("link_local").is_ip_blocked("fe80::1%25eth0"));
         assert!(only_blocking("localhost").is_ip_blocked("::1%lo"));
         assert!(!open_policy().is_ip_blocked("2606:4700:4700::1111%eth0"));
+    }
+
+    fn policy_with_deny(deny: &[&str]) -> EgressPolicy {
+        EgressPolicy {
+            domains: DomainPolicy {
+                allow: vec![],
+                deny: deny.iter().map(|d| d.to_string()).collect(),
+            },
+            ..open_policy()
+        }
+    }
+
+    #[test]
+    fn unicode_deny_rule_matches_punycode_host_and_vice_versa() {
+        let unicode_rule = policy_with_deny(&["bücher.example", "*.Stra\u{df}e.example"]);
+        assert!(!unicode_rule.is_domain_allowed("xn--bcher-kva.example"));
+        assert!(!unicode_rule.is_domain_allowed("XN--BCHER-KVA.example."));
+        assert!(!unicode_rule.is_domain_allowed("BÜCHER.example"));
+        assert!(!unicode_rule.is_domain_allowed("www.xn--strae-oqa.example"));
+        assert!(unicode_rule.is_domain_allowed("bucher.example"));
+
+        let punycode_rule = policy_with_deny(&["xn--bcher-kva.example", "*.xn--strae-oqa.example"]);
+        assert!(!punycode_rule.is_domain_allowed("bücher.example"));
+        assert!(!punycode_rule.is_domain_allowed("www.Stra\u{df}e.example"));
+    }
+
+    #[test]
+    fn unicode_and_punycode_allow_rules_are_interchangeable() {
+        assert!(policy_with_allow(&["bücher.example"]).is_domain_allowed("xn--bcher-kva.example"));
+        assert!(policy_with_allow(&["xn--bcher-kva.example"]).is_domain_allowed("bücher.example"));
+        assert!(
+            policy_with_allow(&["*.bücher.example"])
+                .is_domain_allowed("shop.xn--bcher-kva.example")
+        );
+        assert!(!policy_with_allow(&["bücher.example"]).is_domain_allowed("bucher.example"));
+    }
+
+    #[test]
+    fn invalid_idna_fails_closed() {
+        // A host that is not valid IDNA is never allowed, even by an open policy.
+        assert!(!open_policy().is_domain_allowed("xn--.example"));
+        assert!(!open_policy().is_domain_allowed("a..example"));
+        // A rule that is not valid IDNA grants nothing.
+        let broken_allow = policy_with_allow(&["xn--.example"]);
+        assert!(!broken_allow.is_domain_allowed("xn--.example"));
+        assert!(!broken_allow.is_domain_allowed("anything.example"));
+        let with_broken_deny = EgressPolicy {
+            domains: DomainPolicy {
+                allow: vec!["good.example".into()],
+                deny: vec!["xn--.example".into()],
+            },
+            ..open_policy()
+        };
+        assert!(!with_broken_deny.is_domain_allowed("good.example"));
+    }
+
+    #[test]
+    fn rate_limit_keys_and_hosts_share_one_normalization() {
+        let policy = policy_with_domain_rates(&[("bücher.example", 7)]);
+        assert_eq!(policy.rate_limit_for("xn--bcher-kva.example."), 7);
+        assert_eq!(policy.rate_limit_for("  BÜCHER.example "), 7);
+        let merged =
+            policy.merge_override(&policy_with_domain_rates(&[("XN--BCHER-KVA.example", 3)]));
+        assert_eq!(merged.rate_limit_for("bücher.example"), 3);
+        assert_eq!(merged.rate_limits.per_domain.len(), 1);
+    }
+
+    #[test]
+    fn hostname_classification_uses_the_shared_normalization() {
+        let policy = open_policy();
+        assert!(policy.is_ip_blocked("  LOCALHOST.  "));
+        assert!(policy.is_ip_blocked("api.LocalHost."));
+        // Fullwidth letters fold to ASCII under IDNA.
+        assert!(policy.is_ip_blocked("ｌｏｃａｌｈｏｓｔ"));
+        assert!(policy.is_ip_blocked("Metadata.Google.Internal."));
+        assert!(!policy.is_ip_blocked("localhost.example.com"));
+    }
+
+    #[test]
+    fn extracted_domains_are_normalized() {
+        assert_eq!(
+            extract_domain("https://API.Stripe.com/v1"),
+            Some("api.stripe.com".into())
+        );
+        assert_eq!(
+            extract_domain("https://bücher.example/x"),
+            Some("xn--bcher-kva.example".into())
+        );
+        assert_eq!(extract_domain("http://xn--.example/"), None);
     }
 
     #[test]

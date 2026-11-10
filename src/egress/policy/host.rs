@@ -70,9 +70,100 @@ pub(crate) fn six_to_four_gateway(ip: IpAddr) -> Option<Ipv4Addr> {
     })
 }
 
+/// Canonical form of a host name or pattern body, used for every comparison.
+///
+/// - IP literals become the canonical text of [`parse_ip_literal`].
+/// - DNS names are mapped through IDNA (UTS #46, non-strict so names such as
+///   `_dmarc.example.com` survive), which lowercases ASCII and turns Unicode
+///   labels into punycode: `Bücher.example` and `xn--bcher-kva.example`
+///   normalize to the same string.
+/// - One trailing root dot is dropped; surrounding whitespace is trimmed.
+///
+/// Returns `None` when the input has no usable form: empty, an empty label
+/// (`a..b`, `.`), or invalid IDNA (for example a malformed `xn--` label).
+/// Callers must treat `None` as "does not match" for allow rules and as
+/// "blocked" for requests, so unparseable input fails closed.
+pub(crate) fn normalize_host(host: &str) -> Option<String> {
+    let trimmed = host.trim();
+    if let Some(ip) = parse_ip_literal(trimmed) {
+        return Some(ip.to_string());
+    }
+    let ascii = idna::domain_to_ascii(trimmed).ok()?;
+    // IDNA mapping can turn lookalike digits into an IP literal.
+    if let Some(ip) = parse_ip_literal(&ascii) {
+        return Some(ip.to_string());
+    }
+    let name = ascii.strip_suffix('.').unwrap_or(&ascii);
+    if name.is_empty() || name.split('.').any(str::is_empty) {
+        return None;
+    }
+    Some(name.to_string())
+}
+
+/// [`normalize_host`] with a lossy fallback, for keys that must never be
+/// dropped (rate-limit buckets and merged rate maps).
+pub(crate) fn normalize_key(host: &str) -> String {
+    normalize_host(host).unwrap_or_else(|| host.trim().to_ascii_lowercase())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalize_lowercases_trims_and_drops_one_root_dot() {
+        assert_eq!(
+            normalize_host("  API.GitHub.com. "),
+            Some("api.github.com".into())
+        );
+        assert_eq!(normalize_host("a..b"), None);
+        assert_eq!(normalize_host("example.com.."), None);
+        assert_eq!(normalize_host("."), None);
+        assert_eq!(normalize_host(""), None);
+    }
+
+    #[test]
+    fn normalize_unicode_and_punycode_agree() {
+        let unicode = normalize_host("bücher.example");
+        assert_eq!(unicode, Some("xn--bcher-kva.example".into()));
+        assert_eq!(normalize_host("XN--BCHER-KVA.example"), unicode);
+        assert_eq!(normalize_host("BÜCHER.example."), unicode);
+        // Ideographic full stop is a label separator under UTS #46.
+        assert_eq!(normalize_host("bücher。example"), unicode);
+    }
+
+    #[test]
+    fn normalize_rejects_invalid_idna() {
+        assert_eq!(normalize_host("xn--.example"), None);
+        assert_eq!(normalize_host("xn--a-.example"), None);
+    }
+
+    #[test]
+    fn normalize_keeps_non_hostname_ascii_names() {
+        assert_eq!(
+            normalize_host("_dmarc.example.com"),
+            Some("_dmarc.example.com".into())
+        );
+        assert_eq!(
+            normalize_host("*.example.com"),
+            Some("*.example.com".into())
+        );
+    }
+
+    #[test]
+    fn normalize_ip_literals_to_canonical_text() {
+        assert_eq!(
+            normalize_host("[::FFFF:127.0.0.1]"),
+            Some("127.0.0.1".into())
+        );
+        assert_eq!(normalize_host("64:ff9b::7f00:1"), Some("127.0.0.1".into()));
+        assert_eq!(
+            normalize_host("[2001:DB8:0:0::1]"),
+            Some("2001:db8::1".into())
+        );
+        // Fullwidth digits map to ASCII digits under UTS #46.
+        assert_eq!(normalize_host("１２７.０.０.１"), Some("127.0.0.1".into()));
+    }
 
     #[test]
     fn zone_is_dropped_but_only_from_ipv6() {

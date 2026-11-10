@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::domain::{domain_matches, normalize_domain};
+use super::domain::domain_matches;
+use super::host::normalize_key;
 use super::{DomainPolicy, EgressPolicy, NetworkPolicy};
 
 /// Rate limiting configuration for outbound requests.
@@ -33,13 +34,14 @@ impl RateLimitPolicy {
     /// Get rate limit for a domain (requests per minute).
     ///
     /// Returns the per-domain override if one exists, otherwise the global default.
-    /// Keys match ignoring ASCII case and a trailing root dot; when several keys
+    /// Keys match after host normalization (ASCII case, a trailing root dot,
+    /// Unicode versus punycode spelling); when several keys
     /// name the same host, the stricter rate applies.
     pub(super) fn rate_limit_for(&self, domain: &str) -> u32 {
-        let domain = normalize_domain(domain);
+        let domain = normalize_key(domain);
         self.per_domain
             .iter()
-            .filter(|(key, _)| normalize_domain(key) == domain)
+            .filter(|(key, _)| normalize_key(key) == domain)
             .map(|(_, &rate)| rate)
             .reduce(stricter_rate)
             .unwrap_or(self.max_requests_per_minute)
@@ -151,7 +153,7 @@ pub(super) fn merge_override(base: &EgressPolicy, operator: &EgressPolicy) -> Eg
         .per_domain
         .keys()
         .chain(operator.rate_limits.per_domain.keys())
-        .map(|domain| normalize_domain(domain))
+        .map(|domain| normalize_key(domain))
         .collect();
     let per_domain: HashMap<String, u32> = domains
         .into_iter()
