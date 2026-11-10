@@ -169,7 +169,7 @@ pub(super) fn cmd_certify(
     config: Option<PathBuf>,
     ignore_tests: bool,
 ) -> Result<i32, agentshield::error::ShieldError> {
-    use agentshield::certify::envelope::{DsseEnvelope, build_attestation};
+    use agentshield::certify::envelope::{DsseEnvelope, build_attestation_with_fingerprints};
 
     let options = ScanOptions {
         config_path: config.clone(),
@@ -184,9 +184,10 @@ pub(super) fn cmd_certify(
     let cfg = Config::load(&config_path)?;
     let suppressions = &cfg.policy.suppressions;
 
-    let payload = build_attestation(
+    let payload = build_attestation_with_fingerprints(
         &report.scan_root,
         &report.findings,
+        &report.finding_fingerprints(),
         suppressions,
         &report.targets,
         None,

@@ -5,3 +5,4 @@
 //! Statement v1 specifications.
 
 pub mod envelope;
+pub mod subject;
