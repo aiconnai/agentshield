@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents when working with this repositor
 
 ## Project Overview
 
-**AgentShield** (`v1.0.2`) is a Rust-based, offline-first security scanner and runtime guard for AI agent extensions
+**AgentShield** (`v1.0.3`) is a Rust-based, offline-first security scanner and runtime guard for AI agent extensions
 (MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, GPT Actions, Cursor Rules,
 Hermes Agent projects, Vercel AI SDK, AutoGen, LlamaIndex, and Semantic Kernel).
 Official Website: https://aiconnai.github.io/agentshield/
@@ -195,7 +195,7 @@ agentshield/
 │       ├── fuzz_py_parser.rs     # Python parser fuzzing
 │       ├── fuzz_mcp_tools.rs     # MCP tools extractor fuzzing
 │       └── fuzz_composite_flow.rs # Composite flow engine fuzzing
-├── vscode/                       # VS Code extension (v1.0.2)
+├── vscode/                       # VS Code extension (v1.0.3)
 │   ├── package.json              # Extension manifest
 │   ├── tsconfig.json             # TypeScript config
 │   └── src/                      # Extension source (TypeScript)
@@ -218,7 +218,7 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (704 Rust tests under --all-features, including all targets)
+# Test (722 Rust tests under --all-features, including all targets)
 cargo test --workspace --all-targets --locked
 
 # Benchmarks
@@ -411,3 +411,4 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 | 1.0.0 | 594 | 36 detectors (SHIELD-001..036), 11 adapters, criterion benchmarks, cargo-fuzz + proptest harnesses, Windows cross-compilation, SHIELD-034 (agent checkpoint CWE-502), SHIELD-035 (unauthenticated MCP SSE CWE-346), SHIELD-036 (tool response prompt injection CWE-1336), v1.0.0 launch kit |
 | 1.0.1 | 668 | SARIF 2.1.0 taxonomy placement fix (run.taxonomies), GitHub Action SHA pinning + shell injection hardening, gitleaks config, mcp/tests.rs cfg-feature guard, SHIELD-037 (agent memory poisoning CWE-20) |
 | 1.0.2 | 704 | Composite flow wiring in `RuleEngine::run()` & non-MCP adapters (`SHIELD-020`), scan-root-relative `--ignore-tests` (`is_test_file_in`), safe-Rust `serde-saphyr` YAML migration (0 `cargo deny` exceptions), adapter/parser/test-helper deduplication (`pipeline.rs`, `common.rs`, `test_helpers.rs`), full `SHIELD-001..037` TP/FP invariant matrix, VS Code extension audit fix (`0` vulns, `-57.5%` deps), git packfile optimization (`73.17 MiB -> 1.54 MiB`) |
+| 1.0.3 | 722 | GitHub Action fails on unexpected scanner exit codes, quote-bounded concatenation treated as interpolated, test-file call sites ignored in cross-file sanitization, single expansion per function in interprocedural propagation, MCP walker scans dot-directories (depth 64, lossy UTF-8), egress override merge no longer widens allow lists, range-based IP and case-insensitive domain matching |

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-11-10
+
+### Fixed
+
+- **GitHub Action Exit Codes**: `action.yml` now fails the step when the scanner exits with any code other than `0`, `1` (policy failure) or `2` (scan error). The `v1.0.2` Action treated a scanner crash as success.
+- **Scan Evasion Paths (`SHIELD-001` and related detectors)**:
+  - Quote-bounded string concatenation (`"ls " + arg`) is classified as interpolated instead of literal (`src/parser/common.rs::single_string_literal`).
+  - Call sites inside test files no longer count as proof that a function only receives sanitized input during cross-file analysis (`src/analysis/cross_file/engine.rs`).
+  - The interprocedural propagation expands each function once per traversal, removing an exponential blowup on dense call graphs (`src/analysis/interprocedural/propagate.rs`).
+- **Egress Policy Merge and Matching (`wrap`)**:
+  - Disjoint operator and project allow lists now resolve to deny-all instead of allow-all; overlapping lists keep the narrower pattern; a rate limit of `0` is treated as unlimited when merging (`src/egress/policy/merge.rs`).
+  - IP literals are classified by parsed range (IPv4-mapped, unspecified, ULA, CGNAT) instead of string prefix (`src/egress/policy/network.rs`).
+  - Domains match regardless of ASCII case and a trailing root dot (`src/egress/policy/domain.rs`, `src/egress/proxy.rs`).
+- **Release Pipeline**: Upgraded the Dockerfile Rust toolchain, replaced the retired `macos-13` runner, and aligned the Python package name to `agent-shield`.
+
+### Changed
+
+- **Source Collection (behavior change)**: The MCP source walker now descends into dot-directories, ignores `.ignore` files, walks up to depth 64 and decodes non-UTF-8 sources lossily (`src/adapter/mcp/loader.rs`). Scans of the same tree can report findings from files that were previously skipped. `.gitignore` is still honored.
+- **Detector Deduplication**: Shared source scanning and test helpers across built-in rules.
+- **Repository Self-Scan**: `.github/**` and `python/**` are excluded from the repository's own `.agentshield.toml` scan.
+- **Documentation**: Removed the `pip install agent-shield` instructions and PyPI badge from the README; the Python package has not been published to PyPI.
+
 ## [1.0.2] - 2026-10-14
 
 ### Fixed

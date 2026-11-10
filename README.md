@@ -3,13 +3,12 @@
 **Find risky behavior in MCP and AI agent extensions before they ship.**
 
 [![CI](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml/badge.svg)](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/Release-v1.0.2%20GA-success.svg)](https://github.com/aiconnai/agentshield/releases/tag/v1.0.2)
+[![Release](https://img.shields.io/badge/Release-v1.0.3%20GA-success.svg)](https://github.com/aiconnai/agentshield/releases/tag/v1.0.3)
 [![Website](https://img.shields.io/badge/Website-aiconnai.github.io%2Fagentshield-emerald.svg)](https://aiconnai.github.io/agentshield/)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
-[![PyPI](https://img.shields.io/pypi/v/agent-shield.svg)](https://pypi.org/project/agent-shield/)
-[![VS Code](https://img.shields.io/badge/VS%20Code-v1.0.2-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=aiconnai-vs.agentshield)
-[![Open VSX](https://img.shields.io/badge/Open%20VSX-v1.0.2-purple?logo=eclipseide)](https://open-vsx.org/extension/aiconnai-vs/agentshield)
+[![VS Code](https://img.shields.io/badge/VS%20Code-v1.0.3-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=aiconnai-vs.agentshield)
+[![Open VSX](https://img.shields.io/badge/Open%20VSX-v1.0.3-purple?logo=eclipseide)](https://open-vsx.org/extension/aiconnai-vs/agentshield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
 
 - [Website & Interactive Playground](https://aiconnai.github.io/agentshield/)
@@ -22,7 +21,7 @@ AgentShield is an offline, high-performance Rust security engine for teams shipp
 
 It catches command injection, credential exfiltration, SSRF, unsafe file access, runtime package installs, prompt-injection surfaces, and dependency hygiene issues before an agent can call those tools.
 
-AgentShield runs as a CLI, GitHub Action, VS Code extension, or Rust library. It operates 100% offline, keeping source code on your machine, and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML reports. The current release line is `1.0.2` (General Availability).
+AgentShield runs as a CLI, GitHub Action, VS Code extension, or Rust library. It operates 100% offline, keeping source code on your machine, and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML reports. The current release line is `1.0.3` (General Availability).
 
 ## At a glance
 
@@ -150,10 +149,6 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 ### CLI
 
 ```bash
-# 🐍 Install via PyPI (Python & uv)
-pip install agent-shield
-# or: uv add --dev agent-shield
-
 # ⚡ 1-Line Universal Installer (macOS & Linux: Apple Silicon, Intel, ARM64, x86_64)
 curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
 
@@ -164,7 +159,7 @@ brew tap aiconnai/tap && brew install agentshield
 cargo install agent-shield --features full
 
 # Or install from source with Cargo
-cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.2 --features full --force
+cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.3 --features full --force
 
 # First-run setup: config + explained first scan
 agentshield quickstart
@@ -209,14 +204,19 @@ Add AgentShield to `.pre-commit-config.yaml` to block vulnerable tools before ea
 ```yaml
 repos:
   - repo: https://github.com/aiconnai/agentshield
-    rev: v1.0.2
+    rev: v1.0.3
     hooks:
       - id: agentshield
 ```
 
 ### Python SDK
 
-Integrate AgentShield directly into test suites or tool definitions:
+Integrate AgentShield directly into test suites or tool definitions.
+
+> [!NOTE]
+> The `agent-shield` Python package is not published on PyPI yet. The SDK
+> lives in `python/agentshield/` and calls the `agentshield` binary, so install
+> the binary with one of the methods above first.
 
 ```python
 import agentshield
@@ -244,7 +244,7 @@ Download from the [latest release](https://github.com/aiconnai/agentshield/relea
 For container consumers, the release image tag is:
 
 ```text
-ghcr.io/aiconnai/agentshield:1.0.2
+ghcr.io/aiconnai/agentshield:1.0.3
 ```
 
 ### Docker
@@ -252,9 +252,9 @@ ghcr.io/aiconnai/agentshield:1.0.2
 The GHCR image is built with the `full` feature set, including runtime `wrap` support and experimental runtime guard commands. The image is published for `linux/amd64` and `linux/arm64`.
 
 ```bash
-docker pull ghcr.io/aiconnai/agentshield:1.0.2
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:1.0.2 scan .
-docker run --rm ghcr.io/aiconnai/agentshield:1.0.2 --version
+docker pull ghcr.io/aiconnai/agentshield:1.0.3
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:1.0.3 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:1.0.3 --version
 ```
 
 If the GHCR package is private in your organization, authenticate first:
@@ -560,7 +560,7 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- list-rules
 ```
 
-For release-specific notes, see `docs/releases/1.0.2.md`,
-`docs/releases/1.0.1.md`, `docs/releases/1.0.0.md`, and
-`docs/RELEASE_CHECKLIST.md`.
+For release-specific notes, see `docs/releases/1.0.3.md`,
+`docs/releases/1.0.2.md`, `docs/releases/1.0.1.md`, `docs/releases/1.0.0.md`,
+and `docs/RELEASE_CHECKLIST.md`.
 
