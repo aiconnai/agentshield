@@ -268,15 +268,31 @@ pub(crate) fn has_recursive_python_import(root: &Path, needles: &[&str]) -> bool
     false
 }
 
+/// Maximum directory depth walked when collecting source files.
+const MAX_SOURCE_WALK_DEPTH: usize = 64;
+
+/// Tooling directories that never hold the scanned extension's own source.
+const SKIPPED_TOOLING_DIRS: &[&str] = &[".git", ".venv", ".tox", ".nox"];
+
 pub(crate) fn collect_source_files_with_filter(
     root: &Path,
     filter: &ScanPathFilter,
     files: &mut Vec<SourceFile>,
 ) -> Result<()> {
+    // The scanned tree is untrusted: a package must not be able to hide a
+    // payload from the scan with a `.ignore` file, a dot-directory or deep
+    // nesting. Only well-known tooling directories are skipped.
     let walker = ignore::WalkBuilder::new(root)
-        .hidden(true)
+        .hidden(false)
+        .ignore(false)
         .git_ignore(true)
-        .max_depth(Some(5))
+        .max_depth(Some(MAX_SOURCE_WALK_DEPTH))
+        .filter_entry(|entry| {
+            !entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| SKIPPED_TOOLING_DIRS.contains(&name))
+        })
         .build();
 
     for entry in walker.flatten() {
@@ -311,11 +327,14 @@ pub(crate) fn collect_source_files_with_filter(
             continue;
         }
 
-        if let Ok(content) = std::fs::read_to_string(path) {
+        // Decode lossily: a single non-UTF-8 byte (for example a Latin-1
+        // comment) must not remove the whole file from the scan.
+        if let Ok(bytes) = std::fs::read(path) {
             let hash = format!(
                 "{:x}",
-                sha2::Digest::finalize(sha2::Sha256::new().chain_update(content.as_bytes()))
+                sha2::Digest::finalize(sha2::Sha256::new().chain_update(&bytes))
             );
+            let content = String::from_utf8_lossy(&bytes).into_owned();
             files.push(SourceFile {
                 path: path.to_path_buf(),
                 language: lang,

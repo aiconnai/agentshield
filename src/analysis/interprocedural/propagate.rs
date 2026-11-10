@@ -70,7 +70,10 @@ impl<'a> TraversalContext<'a> {
             }
         }
 
-        self.visited_functions.remove(callee_name);
+        // The callee intentionally stays in `visited_functions`. Taint paths
+        // are deduplicated per (source, sink), so re-expanding a function via
+        // every distinct simple path adds no findings and makes densely
+        // connected call graphs explode combinatorially.
     }
 }
 

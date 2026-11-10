@@ -33,6 +33,15 @@ pub(crate) fn classify_argument(
         return ArgumentSource::Interpolated;
     }
 
+    // A quoted piece that is not a single literal is a concatenation or
+    // `%` formatting carrying non-literal data (`"ls " + user + " -la"`).
+    // An incomplete lone quote token stays `Unknown` (still tainted).
+    if (first_arg.starts_with('"') || first_arg.starts_with('\''))
+        && (first_arg.contains('+') || first_arg.contains('%'))
+    {
+        return ArgumentSource::Interpolated;
+    }
+
     // os.environ / env var
     if first_arg.contains("os.environ") || first_arg.contains("os.getenv") {
         return ArgumentSource::EnvVar {
@@ -51,12 +60,7 @@ pub(crate) fn classify_argument(
 }
 
 pub(crate) fn strip_python_string_literal(arg: &str) -> Option<&str> {
-    arg.strip_prefix('"')
-        .and_then(|inner| inner.strip_suffix('"'))
-        .or_else(|| {
-            arg.strip_prefix('\'')
-                .and_then(|inner| inner.strip_suffix('\''))
-        })
+    crate::parser::common::single_string_literal(arg)
 }
 
 pub(crate) use crate::parser::common::{sanitized_label_for_var, sanitized_var_marker};
