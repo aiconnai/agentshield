@@ -1,22 +1,21 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use super::child_process::{ChildProcessBindings, is_exec_name};
+
+/// Process sinks matched by name alone. `exec` and `execSync` are
+/// deliberately absent: they are only sinks when they resolve to
+/// `child_process` (see `child_process::ChildProcessBindings`).
 pub(super) static EXEC_PATTERNS: Lazy<Vec<&str>> = Lazy::new(|| {
     vec![
-        "exec",
-        "execSync",
         "execFile",
         "execFileSync",
         "spawn",
         "spawnSync",
-        "child_process.exec",
-        "child_process.execSync",
         "child_process.execFile",
         "child_process.execFileSync",
         "child_process.spawn",
         "child_process.spawnSync",
-        "cp.exec",
-        "cp.execSync",
         "cp.spawn",
         "cp.spawnSync",
         "shelljs.exec",
@@ -126,6 +125,14 @@ pub(super) static FUNC_DEF_RE: Lazy<Regex> = Lazy::new(|| {
         r"(?m)(?:(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(([^)]*)\)\s*(?:=>|:\s*\w+\s*=>)|(\w+)\s*\(([^)]*)\)\s*(?::\s*\w+\s*)?\{)"
     ).expect("static regex pattern is valid")
 });
+
+/// Whether a call is a process-execution sink.
+pub(super) fn is_command_sink(func_name: &str, child_process: &ChildProcessBindings) -> bool {
+    if is_exec_name(func_name) {
+        return child_process.is_exec_call(func_name) || func_name == "shelljs.exec";
+    }
+    child_process.is_exec_call(func_name) || matches_pattern(func_name, &EXEC_PATTERNS)
+}
 
 /// Check if a function name matches any pattern in the list.
 pub(super) fn matches_pattern(func_name: &str, patterns: &[&str]) -> bool {

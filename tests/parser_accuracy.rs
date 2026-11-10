@@ -8,6 +8,7 @@ use agentshield::{ScanOptions, scan};
 const PACKAGE_JSON: &str =
     r#"{"name":"case","version":"1.0.0","dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#;
 const PY_HEAD: &str = "from mcp import Server\n\nserver = Server(\"case\")\n\n\n";
+const TS_HEAD: &str = "import { Server } from \"@modelcontextprotocol/sdk/server\";\n\nconst server = new Server({ name: \"case\", version: \"1.0.0\" });\n\n";
 
 fn package(files: &[(&str, String)]) -> tempfile::TempDir {
     let dir = tempfile::tempdir().expect("create temp dir");
@@ -31,6 +32,10 @@ fn flagged(root: &Path, rule_id: &str) -> bool {
 
 fn py_case(body: &str) -> tempfile::TempDir {
     package(&[("server.py", format!("{PY_HEAD}{body}"))])
+}
+
+fn ts_case(body: &str) -> tempfile::TempDir {
+    package(&[("server.ts", format!("{TS_HEAD}{body}"))])
 }
 
 // --- 1. Multi-line Python calls -------------------------------------------
@@ -81,6 +86,67 @@ fn python_parens_in_strings_and_comments_do_not_end_the_call() {
         "import os\n\n\n@server.tool(\"ls\")\ndef ls(user: str) -> int:\n    return os.system(\n        \"echo ) \"  # closing ) in a comment\n        + user\n    )\n",
     );
     assert!(flagged(dir.path(), "SHIELD-001"));
+}
+
+// --- 2a. TypeScript exec resolution ---------------------------------------
+
+#[test]
+fn typescript_regexp_exec_is_not_a_process_sink() {
+    let dir = ts_case(
+        "export function find(pattern: RegExp, input: string): string[] | null {\n  return pattern.exec(input);\n}\n",
+    );
+    assert!(!flagged(dir.path(), "SHIELD-001"));
+}
+
+#[test]
+fn typescript_exec_on_unrelated_receiver_is_not_a_process_sink() {
+    let dir = ts_case(
+        "export function q(db: { exec(sql: string): void }, sql: string): void {\n  db.exec(sql);\n}\n",
+    );
+    assert!(!flagged(dir.path(), "SHIELD-001"));
+}
+
+#[test]
+fn typescript_local_exec_function_is_not_a_process_sink() {
+    let dir = ts_case(
+        "function exec(task: string): string {\n  return task;\n}\n\nexport function go(task: string): string {\n  return exec(task);\n}\n",
+    );
+    assert!(!flagged(dir.path(), "SHIELD-001"));
+}
+
+fn child_process_case(import: &str, call: &str) -> tempfile::TempDir {
+    ts_case(&format!(
+        "{import}\n\nexport function run(cmd: string): void {{\n  {call};\n}}\n"
+    ))
+}
+
+#[test]
+fn typescript_child_process_import_forms_stay_flagged() {
+    let cases = [
+        ("import { exec } from \"child_process\";", "exec(cmd)"),
+        ("import { exec } from \"node:child_process\";", "exec(cmd)"),
+        (
+            "import { execSync } from \"child_process\";",
+            "execSync(cmd)",
+        ),
+        ("import { exec as run } from \"child_process\";", "run(cmd)"),
+        ("import * as cp from \"child_process\";", "cp.exec(cmd)"),
+        ("import cp from \"node:child_process\";", "cp.execSync(cmd)"),
+        ("const { exec } = require(\"child_process\");", "exec(cmd)"),
+        (
+            "const { exec: run } = require(\"node:child_process\");",
+            "run(cmd)",
+        ),
+        ("const cp = require(\"child_process\");", "cp.exec(cmd)"),
+        ("", "require(\"child_process\").exec(cmd)"),
+    ];
+    for (import, call) in cases {
+        let dir = child_process_case(import, call);
+        assert!(
+            flagged(dir.path(), "SHIELD-001"),
+            "expected SHIELD-001 for `{import}` + `{call}`"
+        );
+    }
 }
 
 // --- 2b. Python import aliases --------------------------------------------

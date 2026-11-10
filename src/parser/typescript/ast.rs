@@ -13,10 +13,12 @@ use crate::ir::{ArgumentSource, SourceLocation};
 use crate::parser::{CallSite, FunctionDef, FunctionParam, ParsedFile};
 
 #[cfg(feature = "typescript")]
+use super::child_process::ChildProcessBindings;
+#[cfg(feature = "typescript")]
 use super::classify::classify_all_arguments;
 #[cfg(feature = "typescript")]
 use super::patterns::{
-    DYNAMIC_EXEC_PATTERNS, EXEC_PATTERNS, FILE_PATTERNS, NETWORK_PATTERNS, matches_pattern,
+    DYNAMIC_EXEC_PATTERNS, FILE_PATTERNS, NETWORK_PATTERNS, is_command_sink, matches_pattern,
 };
 
 /// Recursively collect function/method/arrow parameter names + FunctionDef entries.
@@ -209,6 +211,7 @@ pub(super) fn walk_node(
     source: &[u8],
     file_path: &Path,
     param_names: &HashSet<String>,
+    child_process: &ChildProcessBindings,
     parsed: &mut ParsedFile,
 ) {
     let kind = node.kind();
@@ -255,7 +258,7 @@ pub(super) fn walk_node(
             });
 
             // Command execution
-            if matches_pattern(&func_name, &EXEC_PATTERNS) {
+            if is_command_sink(&func_name, child_process) {
                 parsed.commands.push(CommandInvocation {
                     function: func_name.clone(),
                     command_arg: arg_source.clone(),
@@ -357,7 +360,7 @@ pub(super) fn walk_node(
     // Recurse into children (skip already-processed subtrees)
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        walk_node(child, source, file_path, param_names, parsed);
+        walk_node(child, source, file_path, param_names, child_process, parsed);
     }
 }
 

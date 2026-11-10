@@ -1,4 +1,5 @@
 pub(crate) mod ast;
+pub(crate) mod child_process;
 pub(crate) mod classify;
 pub(crate) mod fallback;
 pub(crate) mod patterns;
@@ -14,6 +15,8 @@ use std::path::PathBuf;
 
 #[cfg(feature = "typescript")]
 use ast::{collect_params, walk_node};
+#[cfg(feature = "typescript")]
+use child_process::ChildProcessBindings;
 #[cfg(feature = "typescript")]
 use classify::detect_sanitizer_assignments;
 #[cfg(not(feature = "typescript"))]
@@ -77,11 +80,13 @@ impl LanguageParser for TypeScriptParser {
         );
 
         // Phase 2: Walk AST for call expressions, call sites, and env accesses
+        let child_process = ChildProcessBindings::from_source(content);
         walk_node(
             tree.root_node(),
             source,
             &file_path,
             &param_names,
+            &child_process,
             &mut parsed,
         );
 

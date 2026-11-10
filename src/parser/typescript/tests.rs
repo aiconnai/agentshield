@@ -25,6 +25,7 @@ function runCommand(command: string) {
 #[test]
 fn detects_spawn_with_interpolation() {
     let code = r#"
+import { exec } from "child_process";
 function run(cmd: string) {
     exec(`${cmd} --flag`);
 }
@@ -163,6 +164,7 @@ async function exfiltrate(data: string) {
 #[test]
 fn detects_multiline_exec_call() {
     let code = r#"
+import { exec } from "child_process";
 function runCommand(command: string) {
     exec(
         command,
@@ -209,6 +211,7 @@ async function sendData(url: string) {
 #[test]
 fn detects_nested_callback_exec() {
     let code = r#"
+import { exec } from "child_process";
 function runCommand(command: string): Promise<string> {
     return new Promise((resolve, reject) => {
         exec(command, (error, stdout) => {
@@ -232,7 +235,7 @@ function runCommand(command: string): Promise<string> {
 #[test]
 fn accurate_line_numbers() {
     let code = r#"
-// line 2
+import { exec } from "child_process";
 // line 3
 function dangerous(cmd: string) {
     exec(cmd);
@@ -405,4 +408,63 @@ function handler(args: { path: string }) {
         parsed.file_operations[0].path_arg.is_tainted(),
         "redaction output must remain tainted for file path sinks"
     );
+}
+
+fn command_count(code: &str) -> usize {
+    TypeScriptParser
+        .parse_file(Path::new("test.ts"), code)
+        .unwrap()
+        .commands
+        .len()
+}
+
+#[test]
+fn regexp_exec_is_not_a_command() {
+    let code =
+        "function find(pattern: RegExp, input: string) {\n    return pattern.exec(input);\n}\n";
+    assert_eq!(command_count(code), 0);
+}
+
+#[test]
+fn exec_on_unrelated_receivers_is_not_a_command() {
+    let code = "import { Database } from \"sqlite\";\nfunction q(db: Database, sql: string) {\n    db.exec(sql);\n    /a/.exec(sql);\n    this.exec(sql);\n}\n";
+    assert_eq!(command_count(code), 0);
+}
+
+#[test]
+fn unimported_bare_exec_is_not_a_command() {
+    let code = "function exec(task: string) { return task; }\nfunction go(task: string) { return exec(task); }\n";
+    assert_eq!(command_count(code), 0);
+}
+
+#[test]
+fn exec_resolved_through_child_process_imports_is_a_command() {
+    for (import, call) in [
+        ("import { exec } from \"child_process\";", "exec(cmd)"),
+        (
+            "import { exec as sh } from \"node:child_process\";",
+            "sh(cmd)",
+        ),
+        ("import * as cp from \"child_process\";", "cp.exec(cmd)"),
+        ("import cp from \"node:child_process\";", "cp.execSync(cmd)"),
+        ("const cp = require(\"child_process\");", "cp.exec(cmd)"),
+        (
+            "const { execSync } = require(\"child_process\");",
+            "execSync(cmd)",
+        ),
+        (
+            "import { exec } from \"child_process\";\nimport { promisify } from \"util\";\nconst run = promisify(exec);",
+            "run(cmd)",
+        ),
+        ("", "require(\"child_process\").exec(cmd)"),
+    ] {
+        let code = format!("{import}\nfunction go(cmd: string) {{\n    {call};\n}}\n");
+        assert_eq!(command_count(&code), 1, "{import} / {call}");
+    }
+}
+
+#[test]
+fn spawn_and_execfile_keep_name_based_matching() {
+    let code = "function go(cmd: string) {\n    spawn(cmd);\n    execFile(cmd);\n}\n";
+    assert_eq!(command_count(code), 2);
 }
