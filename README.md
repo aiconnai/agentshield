@@ -336,7 +336,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield suppress <fingerprint>` | Add a suppression entry with a required reason and optional expiry. |
 | `agentshield list-suppressions` | Show suppressions configured in `.agentshield.toml`. |
 | `agentshield certify [path]` | Generate a DSSE attestation envelope for scan results. |
-| `agentshield wrap --policy <path> -- <command>` | Enforce an egress policy through a local HTTP proxy when built with the `runtime` feature. |
+| `agentshield wrap --policy <path> -- <command>` | Run a command behind a local HTTP/HTTPS proxy that applies an egress policy to proxy-aware clients (not a sandbox; see `docs/EGRESS.md`). Requires the `runtime` feature. |
 | `agentshield guard --stdin` | Evaluate one runtime event JSON document when built with the `runtime-guard` feature. |
 | `agentshield guard --mcp-proxy [-- <server cmd...>]` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages, block unsafe calls, and either emit forward markers or bridge stdio to a spawned downstream MCP server when built with the `runtime-guard` feature. |
 
@@ -425,12 +425,12 @@ match:
 
 ### Trust workflows
 
-AgentShield includes trust workflow documentation for baselines, suppressions, certification attestations, and egress enforcement:
+AgentShield includes trust workflow documentation for baselines, suppressions, certification attestations, and egress policy:
 
 - `docs/BASELINES.md`: write and use `.agentshield-baseline.json` for known findings.
 - `docs/SUPPRESSIONS.md`: suppress individual findings by fingerprint with required reasons and optional expiry.
 - `docs/CERTIFICATION.md`: generate unsigned or Ed25519-signed DSSE attestations.
-- `docs/EGRESS.md`: emit `agentshield.egress.toml` and enforce it with `agentshield wrap`.
+- `docs/EGRESS.md`: emit `agentshield.egress.toml`, route a command's proxy-aware clients through it with `agentshield wrap`, and what that does and does not guarantee.
 
 Release binaries are built with the `full` feature set, including Python parsing, TypeScript parsing, runtime `wrap` support, and experimental runtime guard commands. If building from source, use `cargo build --features full --release` to include `agentshield wrap` and `agentshield guard`.
 
