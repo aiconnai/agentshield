@@ -214,9 +214,13 @@ repos:
 Integrate AgentShield directly into test suites or tool definitions.
 
 > [!NOTE]
-> The `agent-shield` Python package is not published on PyPI yet. The SDK
-> lives in `python/agentshield/` and calls the `agentshield` binary, so install
-> the binary with one of the methods above first.
+> The `agent-shield` Python package is not published on PyPI yet. Install it
+> from source; the build compiles the scanner, so it needs a Rust toolchain,
+> and it installs both the `agentshield` module and the `agentshield` binary:
+>
+> ```bash
+> pip install "git+https://github.com/aiconnai/agentshield@v1.0.3"
+> ```
 
 ```python
 import agentshield

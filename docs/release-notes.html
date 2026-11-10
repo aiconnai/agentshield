@@ -78,10 +78,10 @@
       <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Released November 2026</p>
       <ul>
         <li><strong>GitHub Action Exit Codes</strong>: The Action now fails when the scanner exits with an unexpected code instead of reporting a crash as success.</li>
-        <li><strong>Detection Evasion Fixes</strong>: Quote-bounded concatenation is treated as interpolated, test-file call sites no longer sanitize production functions, and interprocedural propagation expands each function once.</li>
-        <li><strong>Wider Source Collection</strong>: The MCP walker scans dot-directories, ignores <code>.ignore</code> files and reads non-UTF-8 sources.</li>
-        <li><strong>Egress Policy Hardening</strong>: Operator overrides can no longer widen <code>wrap</code> allow lists; IP and domain matching are range- and case-aware.</li>
-        <li><strong>Verification Suite</strong>: <code>722</code> unit, integration, and property tests passing with zero warnings.</li>
+        <li><strong>Detection Evasion Fixes</strong>: Quote-bounded concatenation is treated as interpolated, test-file call sites no longer sanitize production functions, and interprocedural propagation stays fast on dense call graphs without losing deep paths.</li>
+        <li><strong>Wider Source Collection</strong>: Collection and framework detection scan dot-directories, ignore <code>.ignore</code> files and read non-UTF-8 sources.</li>
+        <li><strong>Egress Policy Hardening</strong>: Operator overrides can no longer widen <code>wrap</code> allow lists; IP and domain matching are range- and case-aware. Carrier-grade NAT, <code>0.0.0.0</code> and <code>*.localhost</code> are now blocked by default.</li>
+        <li><strong>Verification Suite</strong>: <code>732</code> unit, integration, and property tests passing with zero warnings.</li>
       </ul>
     </div>
 

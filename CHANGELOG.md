@@ -11,23 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **GitHub Action Exit Codes**: `action.yml` now fails the step when the scanner exits with any code other than `0`, `1` (policy failure) or `2` (scan error). The `v1.0.2` Action treated a scanner crash as success.
+- **GitHub Action Exit Codes**: `action.yml` now fails the step when the scanner exits with any code other than `0`, `1` (policy failure) or `2` (scan error), and propagates that code. The `v1.0.2` Action treated a scanner crash as success.
 - **Scan Evasion Paths (`SHIELD-001` and related detectors)**:
-  - Quote-bounded string concatenation (`"ls " + arg`) is classified as interpolated instead of literal (`src/parser/common.rs::single_string_literal`).
+  - Quote-bounded string concatenation (`"ls " + arg`) is classified as interpolated instead of literal (`src/parser/common.rs::single_string_literal`). Adjacent Python literals (`"ls " "-la"`) still count as one literal.
   - Call sites inside test files no longer count as proof that a function only receives sanitized input during cross-file analysis (`src/analysis/cross_file/engine.rs`).
-  - The interprocedural propagation expands each function once per traversal, removing an exponential blowup on dense call graphs (`src/analysis/interprocedural/propagate.rs`).
+  - Interprocedural propagation expands a function again only when it is reached at a shallower depth, which removes the exponential blowup on dense call graphs without losing paths cut short by the depth limit (`src/analysis/interprocedural/propagate.rs`).
+- **Adapter Detection**: Framework detection no longer treats test fixtures under nested test directories as the scanned project (`is_test_file_in` in `has_recursive_python_import` and `contains_mcp_source`).
 - **Egress Policy Merge and Matching (`wrap`)**:
-  - Disjoint operator and project allow lists now resolve to deny-all instead of allow-all; overlapping lists keep the narrower pattern; a rate limit of `0` is treated as unlimited when merging (`src/egress/policy/merge.rs`).
-  - IP literals are classified by parsed range (IPv4-mapped, unspecified, ULA, CGNAT) instead of string prefix (`src/egress/policy/network.rs`).
-  - Domains match regardless of ASCII case and a trailing root dot (`src/egress/policy/domain.rs`, `src/egress/proxy.rs`).
-- **Release Pipeline**: Upgraded the Dockerfile Rust toolchain, replaced the retired `macos-13` runner, and aligned the Python package name to `agent-shield`.
+  - Disjoint operator and project allow lists now resolve to deny-all instead of allow-all, and overlapping lists keep the narrower pattern (`src/egress/policy/merge.rs`).
+  - IP literals are classified by parsed range instead of string prefix, so spellings such as `[::ffff:127.0.0.1]` are blocked and hostnames such as `fd-cdn.example.com` are not mistaken for addresses (`src/egress/policy/network.rs`).
+  - Domains and `per_domain` rate-limit keys match regardless of ASCII case and a trailing root dot (`src/egress/policy/domain.rs`, `src/egress/policy/merge.rs`, `src/egress/proxy.rs`).
+- **Release Pipeline**: Upgraded the Dockerfile Rust toolchain, moved `python.yml` off the retired `macos-13` runner, and aligned the Python package name to `agent-shield`. Tag pushes no longer try to publish to PyPI unless the `PYPI_PUBLISH` repository variable is `true`.
 
 ### Changed
 
-- **Source Collection (behavior change)**: The MCP source walker now descends into dot-directories, ignores `.ignore` files, walks up to depth 64 and decodes non-UTF-8 sources lossily (`src/adapter/mcp/loader.rs`). Scans of the same tree can report findings from files that were previously skipped. `.gitignore` is still honored.
+- **Source Collection and Detection (behavior change)**: The source walker used for MCP collection and for framework detection now descends into dot-directories, ignores `.ignore` files, walks up to depth 64 and decodes non-UTF-8 sources lossily (`src/adapter/mcp/loader.rs::source_walker`). Scans of the same tree can report findings from files that were previously skipped, which also appear as new entries against existing baselines. `.gitignore` is still honored.
+- **Egress Network Blocking (behavior change)**: `block_private` now covers carrier-grade NAT (`100.64.0.0/10`, used by Tailscale and some cloud networks); `block_localhost` now covers the unspecified addresses `0.0.0.0` and `::` and every `*.localhost` name. Existing `agentshield.egress.toml` policies can block destinations they previously allowed.
+- **Egress Policy Merge (behavior change)**: A rate limit of `0` means unlimited when merging, so the other policy's limit applies; previously `0` won as the minimum and disabled limiting. Disjoint allow lists now block every destination.
 - **Detector Deduplication**: Shared source scanning and test helpers across built-in rules.
 - **Repository Self-Scan**: `.github/**` and `python/**` are excluded from the repository's own `.agentshield.toml` scan.
-- **Documentation**: Removed the `pip install agent-shield` instructions and PyPI badge from the README; the Python package has not been published to PyPI.
+- **Documentation**: Removed the `pip install agent-shield` instructions and PyPI badge from the README; the Python package has not been published to PyPI. The README now documents installing the SDK from source.
 
 ## [1.0.2] - 2026-10-14
 
@@ -420,6 +423,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Typosquat detection via Levenshtein distance against popular packages
   - Unpinned dependency version detection
 
+[Unreleased]: https://github.com/aiconnai/agentshield/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/aiconnai/agentshield/releases/tag/v1.0.3
 [1.0.2]: https://github.com/aiconnai/agentshield/releases/tag/v1.0.2
 [1.0.1]: https://github.com/aiconnai/agentshield/releases/tag/v1.0.1
 [1.0.0]: https://github.com/aiconnai/agentshield/releases/tag/v1.0.0
