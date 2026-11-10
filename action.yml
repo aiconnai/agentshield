@@ -64,7 +64,7 @@ outputs:
     description: 'Path to the SARIF output file (if format=sarif)'
     value: ${{ steps.scan.outputs.sarif-file }}
   exit-code:
-    description: 'Exit code from the scan (0=pass, 1=fail, 2=error)'
+    description: 'Exit code from the scan (0=pass, 1=findings above fail-on, 2=scan error; any other code is an unexpected scanner failure and fails the step)'
     value: ${{ steps.scan.outputs.exit-code }}
 
 runs:
@@ -296,7 +296,7 @@ runs:
             body = (
                 f"{header}"
                 "✅ **No security vulnerabilities detected.** All agent tools, MCP endpoints, and execution flows passed security gates.\n\n"
-                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.2</sub>"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.3</sub>"
             )
         else:
             findings_table = "| Rule | Severity | Location | Message |\n|---|---|---|---|\n"
@@ -323,7 +323,7 @@ runs:
                 f"{findings_table}\n"
                 "#### 💡 Quick Fix\n"
                 "Run `agentshield fix .` locally to automatically remediate unpinned dependencies and unsafe deserializers.\n\n"
-                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.2</sub>"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.3</sub>"
             )
 
         import tempfile
