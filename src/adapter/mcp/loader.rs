@@ -238,12 +238,7 @@ pub(crate) fn load_mcp_target(
 }
 
 pub(crate) fn has_recursive_python_import(root: &Path, needles: &[&str]) -> bool {
-    let walker = ignore::WalkBuilder::new(root)
-        .hidden(true)
-        .git_ignore(true)
-        .build();
-
-    for entry in walker.flatten() {
+    for entry in source_walker(root).flatten() {
         let path = entry.path();
         if !path.is_file()
             || path.extension().and_then(|ext| ext.to_str()) != Some("py")
@@ -252,16 +247,10 @@ pub(crate) fn has_recursive_python_import(root: &Path, needles: &[&str]) -> bool
             continue;
         }
 
-        if let Ok(metadata) = std::fs::metadata(path) {
-            if metadata.len() > 1_048_576 {
-                continue;
-            }
-        }
-
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if needles.iter().any(|needle| content.contains(needle)) {
-                return true;
-            }
+        if crate::adapter::read_file_capped(path)
+            .is_some_and(|content| needles.iter().any(|needle| content.contains(needle)))
+        {
+            return true;
         }
     }
 
@@ -274,15 +263,14 @@ const MAX_SOURCE_WALK_DEPTH: usize = 64;
 /// Tooling directories that never hold the scanned extension's own source.
 const SKIPPED_TOOLING_DIRS: &[&str] = &[".git", ".venv", ".tox", ".nox"];
 
-pub(crate) fn collect_source_files_with_filter(
-    root: &Path,
-    filter: &ScanPathFilter,
-    files: &mut Vec<SourceFile>,
-) -> Result<()> {
-    // The scanned tree is untrusted: a package must not be able to hide a
-    // payload from the scan with a `.ignore` file, a dot-directory or deep
-    // nesting. Only well-known tooling directories are skipped.
-    let walker = ignore::WalkBuilder::new(root)
+/// Walker shared by source collection and framework detection.
+///
+/// The scanned tree is untrusted: a package must not be able to hide a
+/// payload from the scan, or from adapter detection, with a `.ignore` file, a
+/// dot-directory or deep nesting. Only well-known tooling directories are
+/// skipped.
+pub(crate) fn source_walker(root: &Path) -> ignore::Walk {
+    ignore::WalkBuilder::new(root)
         .hidden(false)
         .ignore(false)
         .git_ignore(true)
@@ -293,9 +281,15 @@ pub(crate) fn collect_source_files_with_filter(
                 .to_str()
                 .is_some_and(|name| SKIPPED_TOOLING_DIRS.contains(&name))
         })
-        .build();
+        .build()
+}
 
-    for entry in walker.flatten() {
+pub(crate) fn collect_source_files_with_filter(
+    root: &Path,
+    filter: &ScanPathFilter,
+    files: &mut Vec<SourceFile>,
+) -> Result<()> {
+    for entry in source_walker(root).flatten() {
         let path = entry.path();
         if !path.is_file() {
             continue;

@@ -79,6 +79,26 @@ fn literal_command_stays_clean() {
 }
 
 #[test]
+fn python_implicit_literal_concatenation_stays_clean() {
+    let dir = package(&[(
+        "server.py",
+        py("@server.tool(\"ls\")\ndef ls() -> int:\n    return os.system(\"ls \" \"-la\")\n"),
+    )]);
+    assert!(!has_command_injection(dir.path()));
+}
+
+#[test]
+fn python_implicit_concatenation_with_a_parameter_is_flagged() {
+    let dir = package(&[(
+        "server.py",
+        py(
+            "@server.tool(\"ls\")\ndef ls(user: str) -> int:\n    return os.system(\"ls \" \"-la\" + user)\n",
+        ),
+    )]);
+    assert!(has_command_injection(dir.path()));
+}
+
+#[test]
 fn test_file_call_site_does_not_clear_tool_handler() {
     let dir = package(&[
         ("server.py", py(RUN_CMD)),
@@ -107,6 +127,38 @@ fn hidden_directory_cannot_hide_a_payload() {
         ("server.py", py(SAFE_TOOL)),
         (".hidden/payload.py", py(RUN_CMD)),
     ]);
+    assert!(has_command_injection(dir.path()));
+}
+
+fn bare_tree(files: &[(&str, Vec<u8>)]) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    for (rel, content) in files {
+        write(dir.path(), rel, content);
+    }
+    dir
+}
+
+#[test]
+fn python_mcp_server_only_in_dot_directory_is_detected() {
+    let dir = bare_tree(&[(".srv/server.py", py(RUN_CMD))]);
+    assert!(has_command_injection(dir.path()));
+}
+
+#[test]
+fn crewai_tool_only_in_dot_directory_is_detected() {
+    let dir = bare_tree(&[(
+        ".src/tools.py",
+        b"import subprocess\nfrom crewai.tools import tool\n\n\n@tool(\"run\")\ndef run(cmd: str) -> str:\n    return subprocess.run(cmd, shell=True).stdout\n"
+            .to_vec(),
+    )]);
+    assert!(has_command_injection(dir.path()));
+}
+
+#[test]
+fn non_utf8_byte_cannot_hide_a_python_mcp_server() {
+    let mut source = py(RUN_CMD);
+    source.extend_from_slice(b"# caf\xe9\n");
+    let dir = bare_tree(&[("server.py", source)]);
     assert!(has_command_injection(dir.path()));
 }
 
