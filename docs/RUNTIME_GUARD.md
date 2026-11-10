@@ -214,6 +214,14 @@ fail_on = "never"       # never block this tool, still audited
 Defaults preserve the stdin guard's behavior (block only on `block`). The config
 is optional; with no `[runtime.proxy]` section the proxy uses defaults.
 
+The proxy reads the file given with `--config`, or `.agentshield.toml` in the
+current directory. It fails closed on configuration errors: if the config file
+exists but cannot be read, parsed or validated, or if a `--config` path does
+not exist, `agentshield guard` prints `Error: ...` naming the file and exits
+`2` without proxying anything. Only when no `--config` is given and no
+`.agentshield.toml` exists does it fall back to the default policy, and it says
+so on stderr.
+
 ### Safe error response for blocked tool calls
 
 A blocked `tools/call` returns a well-formed JSON-RPC error so the host degrades
