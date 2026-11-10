@@ -8,7 +8,11 @@ pub(crate) fn classify_argument(
     param_names: &std::collections::HashSet<String>,
     sanitized_vars: &std::collections::HashSet<String>,
 ) -> ArgumentSource {
-    let first_arg = args_str.split(',').next().unwrap_or("").trim();
+    let first_arg = split_top_level_args(args_str)
+        .first()
+        .copied()
+        .unwrap_or("")
+        .trim();
 
     if first_arg.is_empty() {
         return ArgumentSource::Unknown;
@@ -59,6 +63,76 @@ pub(crate) fn classify_argument(
     ArgumentSource::Unknown
 }
 
+/// Split call arguments on the commas that are not nested inside brackets or
+/// string literals. Like `str::split(',')`, an empty input yields one empty
+/// piece; a trailing comma does not add a phantom argument.
+pub(crate) fn split_top_level_args(args: &str) -> Vec<&str> {
+    let mut pieces = Vec::new();
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    let mut start = 0;
+
+    for (idx, ch) in args.char_indices() {
+        if let Some(current) = quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == current {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                pieces.push(&args[start..idx]);
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    pieces.push(&args[start..]);
+    if pieces.len() > 1 && pieces.last().is_some_and(|last| last.trim().is_empty()) {
+        pieces.pop();
+    }
+    pieces
+}
+
+/// Keyword names that carry the command, URL, or path of a call.
+const PRIMARY_KEYWORDS: &[&str] = &["url", "args", "command", "cmd"];
+
+/// The argument text to classify as the call's primary argument: the first
+/// positional argument, or the value of a well-known keyword
+/// (`url=...`, `args=...`) when every argument is a keyword.
+pub(crate) fn command_argument_text(args: &str) -> &str {
+    let pieces = split_top_level_args(args);
+    let mut keyword_value = None;
+    for piece in &pieces {
+        let piece = piece.trim();
+        match keyword_argument(piece) {
+            None => return piece,
+            Some((name, value)) => {
+                if keyword_value.is_none() && PRIMARY_KEYWORDS.contains(&name) {
+                    keyword_value = Some(value);
+                }
+            }
+        }
+    }
+    keyword_value.unwrap_or_else(|| pieces.first().copied().unwrap_or("").trim())
+}
+
+/// `(name, value)` for a `name=value` keyword argument.
+fn keyword_argument(piece: &str) -> Option<(&str, &str)> {
+    let (name, value) = piece.split_once('=')?;
+    let name = name.trim();
+    let is_name = !name.is_empty() && name.chars().all(|ch| ch.is_alphanumeric() || ch == '_');
+    (is_name && !value.starts_with('=')).then_some((name, value.trim()))
+}
+
 /// Value of `arg` when it is entirely string literals: one literal, or
 /// several adjacent ones that Python joins implicitly (`"ls " "-la"`).
 pub(crate) fn python_string_literal(arg: &str) -> Option<String> {
@@ -104,7 +178,27 @@ pub(crate) fn loc_from_range(
 
 #[cfg(test)]
 mod tests {
-    use super::python_string_literal;
+    use super::{command_argument_text, python_string_literal, split_top_level_args};
+
+    #[test]
+    fn splits_only_top_level_commas() {
+        assert_eq!(
+            split_top_level_args("\"a, b\" + x, f(1, 2), [3, 4]"),
+            vec!["\"a, b\" + x", " f(1, 2)", " [3, 4]"]
+        );
+        assert_eq!(split_top_level_args(""), vec![""]);
+        assert_eq!(split_top_level_args("a, b,"), vec!["a", " b"]);
+        assert_eq!(split_top_level_args("a"), vec!["a"]);
+    }
+
+    #[test]
+    fn primary_argument_skips_keywords_before_positional_values() {
+        assert_eq!(command_argument_text("cmd, shell=True"), "cmd");
+        assert_eq!(command_argument_text("shell=True, args=cmd"), "cmd");
+        assert_eq!(command_argument_text("timeout=5, url=target"), "target");
+        assert_eq!(command_argument_text("a == b"), "a == b");
+        assert_eq!(command_argument_text("\"echo a, b\""), "\"echo a, b\"");
+    }
 
     #[test]
     fn joins_adjacent_literals() {

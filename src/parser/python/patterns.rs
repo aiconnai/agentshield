@@ -73,12 +73,6 @@ pub(crate) static CALL_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?m)(\w+(?:\.\w+)*)\s*\(([^)]*)\)").expect("static regex pattern is valid")
 });
 
-// Regex to find the start of a multi-line call: func_name( with no closing )
-// Captures the function name so we can match it against patterns, then look
-// ahead to the next line(s) for the first argument.
-pub(crate) static PARTIAL_CALL_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(\w+(?:\.\w+)*)\s*\(\s*$").expect("static regex pattern is valid"));
-
 // Regex to find os.environ / os.getenv patterns
 pub(crate) static ENV_ACCESS_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
