@@ -86,6 +86,7 @@ test("buildScanArgs includes --rules-dir when provided", () => {
     "/workspace",
     "--format",
     "json",
+    "--trust-target-config",
     "--ignore-tests",
     "--config",
     ".agentshield.toml",
