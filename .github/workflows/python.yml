@@ -108,7 +108,10 @@ jobs:
 
   publish:
     name: Publish to PyPI
-    if: (startsWith(github.ref, 'refs/tags/v') || inputs.publish == true) && !cancelled()
+    # Tag pushes publish only once PyPI Trusted Publishing is configured and
+    # the PYPI_PUBLISH repository variable is set to "true"; a manual run
+    # with `publish` checked always publishes.
+    if: inputs.publish == true || (startsWith(github.ref, 'refs/tags/v') && vars.PYPI_PUBLISH == 'true')
     needs: [build-wheels, build-sdist]
     runs-on: ubuntu-latest
     environment:
