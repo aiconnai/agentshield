@@ -186,3 +186,78 @@ fn python_local_run_function_is_not_a_process_sink() {
     );
     assert!(!flagged(dir.path(), "SHIELD-001"));
 }
+
+// --- 3. Shell data arguments ----------------------------------------------
+
+fn shell_case(script: &str) -> tempfile::TempDir {
+    package(&[("run.sh", format!("#!/bin/sh\nversion=\"$1\"\n{script}\n"))])
+}
+
+#[test]
+fn shell_install_words_inside_echo_are_not_a_command() {
+    let dir = shell_case(
+        "if ! grep -Fq \"v${version}\" README.md; then\n  echo \"README cargo install snippet does not match v${version}\"\n  exit 1\nfi",
+    );
+    assert!(!flagged(dir.path(), "SHIELD-001"));
+}
+
+#[test]
+fn shell_install_words_in_a_variable_assignment_are_not_a_command() {
+    let dir = shell_case("msg=\"run npm install ${version}\"\nprintf '%s\\n' \"$msg\"");
+    assert!(!flagged(dir.path(), "SHIELD-001"));
+}
+
+#[test]
+fn shell_eval_words_inside_grep_pattern_are_not_eval() {
+    let dir = shell_case("grep -Fq \"eval ${version}\" notes.txt");
+    assert!(!flagged(dir.path(), "SHIELD-011"));
+}
+
+#[test]
+fn shell_package_install_with_a_variable_is_flagged() {
+    let dir = shell_case("npm install \"$version\"");
+    assert!(flagged(dir.path(), "SHIELD-001"));
+}
+
+#[test]
+fn shell_package_install_inside_command_substitution_is_flagged() {
+    let dir = shell_case("out=\"$(cargo install \"$version\")\"");
+    assert!(flagged(dir.path(), "SHIELD-001"));
+}
+
+#[test]
+fn shell_eval_with_a_variable_is_flagged() {
+    let dir = shell_case("eval \"$version\"");
+    assert!(flagged(dir.path(), "SHIELD-011"));
+}
+
+#[test]
+fn shell_dash_c_with_a_variable_is_flagged() {
+    for script in [
+        "sh -c \"$version\"",
+        "bash -c \"$version\"",
+        "/bin/bash -c \"echo $version\"",
+        "sudo sh -c \"$version\"",
+    ] {
+        let dir = shell_case(script);
+        assert!(
+            flagged(dir.path(), "SHIELD-001"),
+            "expected a finding: {script}"
+        );
+    }
+}
+
+#[test]
+fn shell_dash_c_with_a_fixed_script_stays_clean() {
+    for script in [
+        "sh -c 'echo hello'",
+        "bash -c \"echo hello\"",
+        "echo \"sh -c $version\"",
+    ] {
+        let dir = shell_case(script);
+        assert!(
+            !flagged(dir.path(), "SHIELD-001"),
+            "unexpected finding: {script}"
+        );
+    }
+}

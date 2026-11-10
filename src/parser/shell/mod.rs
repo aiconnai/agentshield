@@ -1,5 +1,6 @@
 pub(crate) mod classify;
 pub(crate) mod patterns;
+pub(crate) mod position;
 pub(crate) mod quote;
 
 use std::path::{Path, PathBuf};
@@ -7,7 +8,9 @@ use std::path::{Path, PathBuf};
 use classify::{loc, network_argument, shell_arg_source};
 use patterns::{
     BACKTICK_RE, CURL_WGET_RE, EVAL_RE, INSTALL_RE, PATH_SANITIZER_ASSIGN_RE, SENSITIVE_VAR_RE,
+    SHELL_C_RE,
 };
+use position::is_command_position;
 use quote::is_active_backtick;
 
 use super::{LanguageParser, ParsedFile};
@@ -65,7 +68,10 @@ impl LanguageParser for ShellParser {
             }
 
             // eval
-            if EVAL_RE.is_match(trimmed) {
+            if EVAL_RE
+                .find_iter(trimmed)
+                .any(|found| is_command_position(trimmed, found.start()))
+            {
                 parsed.dynamic_exec.push(DynamicExec {
                     function: "eval".into(),
                     code_arg: shell_arg_source(trimmed, &parsed.sanitized_vars),
@@ -84,8 +90,36 @@ impl LanguageParser for ShellParser {
                 }
             }
 
-            // pip/npm install
-            if INSTALL_RE.is_match(trimmed) {
+            // sh -c "$script": the script argument runs as shell code
+            let mut runs_shell_script = false;
+            for cap in SHELL_C_RE.captures_iter(trimmed) {
+                let shell = cap.get(1).expect("shell capture");
+                if !is_command_position(trimmed, shell.start()) {
+                    continue;
+                }
+                runs_shell_script = true;
+                let command_arg = if let Some(script) = cap.get(3) {
+                    // Single quotes: the calling shell expands nothing.
+                    ArgumentSource::Literal(script.as_str().to_string())
+                } else {
+                    let script = cap.get(2).or_else(|| cap.get(4)).map_or("", |m| m.as_str());
+                    shell_arg_source(script, &parsed.sanitized_vars)
+                };
+                parsed.commands.push(CommandInvocation {
+                    function: format!("{} -c", shell.as_str()),
+                    command_arg,
+                    location: loc(&file_path, line_num),
+                });
+            }
+
+            // pip/npm install. Only where the package manager is executed:
+            // `echo "cargo install ${x}"` just prints the words. A `sh -c`
+            // script on the same line is already recorded above.
+            if !runs_shell_script
+                && INSTALL_RE
+                    .find_iter(trimmed)
+                    .any(|found| is_command_position(trimmed, found.start()))
+            {
                 parsed.commands.push(CommandInvocation {
                     function: "package_install".into(),
                     command_arg: shell_arg_source(trimmed, &parsed.sanitized_vars),
@@ -248,5 +282,84 @@ curl "$safe_path"
                 .iter()
                 .all(|c| c.function == "package_install")
         );
+    }
+
+    fn shell_commands(code: &str) -> Vec<crate::ir::execution_surface::CommandInvocation> {
+        ShellParser
+            .parse_file(Path::new("test.sh"), code)
+            .unwrap()
+            .commands
+    }
+
+    #[test]
+    fn echo_mentioning_cargo_install_is_not_a_command() {
+        let code = "echo \"docs/site.js cargo install snippet does not match v${version}\"\n";
+        assert!(shell_commands(code).is_empty());
+    }
+
+    #[test]
+    fn grep_pattern_with_variable_is_not_a_command_or_eval() {
+        let code =
+            "grep -Fq \"agentshield ${version}\" README.md\ngrep -Fq \"eval ${version}\" notes\n";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert!(parsed.commands.is_empty());
+        assert!(parsed.dynamic_exec.is_empty());
+    }
+
+    #[test]
+    fn executed_install_in_substitution_or_chain_is_still_a_command() {
+        let code = "cd app && npm install \"$pkg\"\nout=\"$(pip install $pkg)\"\n";
+        let commands = shell_commands(code);
+        assert_eq!(commands.len(), 2);
+        assert!(commands.iter().all(|c| c.function == "package_install"));
+    }
+
+    #[test]
+    fn eval_stays_dynamic_exec() {
+        let code = "eval \"$x\"\nx=$(eval \"$y\")\n";
+        let parsed = ShellParser.parse_file(Path::new("test.sh"), code).unwrap();
+        assert_eq!(parsed.dynamic_exec.len(), 2);
+    }
+
+    #[test]
+    fn shell_dash_c_with_variable_is_a_command() {
+        let code = "sh -c \"$1\"\nbash -c \"$cmd\"\n/bin/sh -c \"echo $user\"\n";
+        let commands = shell_commands(code);
+        assert_eq!(commands.len(), 3);
+        assert_eq!(commands[0].function, "sh -c");
+        assert!(matches!(
+            commands[0].command_arg,
+            ArgumentSource::Parameter { .. }
+        ));
+        assert_eq!(commands[1].function, "bash -c");
+        assert!(matches!(
+            commands[1].command_arg,
+            ArgumentSource::EnvVar { .. }
+        ));
+        assert_eq!(commands[2].function, "/bin/sh -c");
+    }
+
+    #[test]
+    fn shell_dash_c_with_fixed_or_single_quoted_script_is_literal() {
+        let code = "sh -c 'echo $HOME'\nbash -c \"echo hello\"\n";
+        let commands = shell_commands(code);
+        assert_eq!(commands.len(), 2);
+        assert!(
+            commands
+                .iter()
+                .all(|c| matches!(c.command_arg, ArgumentSource::Literal(_)))
+        );
+    }
+
+    #[test]
+    fn script_named_like_a_shell_is_not_dash_c() {
+        let code = "./deploy.sh -c \"$1\"\necho \"sh -c $1\"\n";
+        assert!(shell_commands(code).is_empty());
+    }
+
+    #[test]
+    fn install_inside_dash_c_is_reported_once() {
+        let code = "bash -c \"npm install $pkg\"\n";
+        assert_eq!(shell_commands(code).len(), 1);
     }
 }
