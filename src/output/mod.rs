@@ -97,9 +97,14 @@ pub fn render_with_fingerprints(
             fingerprints,
             verdict,
         )),
-        OutputFormat::Json => {
-            json::render_fingerprinted(findings, fingerprints, verdict, target_name, scan_root)
-        }
+        OutputFormat::Json => json::render_fingerprinted(
+            findings,
+            fingerprints,
+            verdict,
+            target_name,
+            scan_root,
+            None,
+        ),
         OutputFormat::Sarif => sarif::render_fingerprinted(
             findings,
             fingerprints,

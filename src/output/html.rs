@@ -47,14 +47,8 @@ pub(crate) fn render_fingerprinted(
                 .unwrap_or_else(|| "-".into());
             let cwe = f
                 .cwe_id
-                .as_ref()
-                .map(|c| {
-                    format!(
-                        "<a href=\"https://cwe.mitre.org/data/definitions/{}.html\">{}</a>",
-                        c.trim_start_matches("CWE-"),
-                        c
-                    )
-                })
+                .as_deref()
+                .map(cwe_cell)
                 .unwrap_or_else(|| "-".into());
             let remediation = f.remediation.as_deref().unwrap_or("-");
             let evidence_html: String = f
@@ -276,6 +270,25 @@ fn severity_class(s: Severity) -> &'static str {
     }
 }
 
+/// Render a CWE identifier as HTML.
+///
+/// Custom rules are user-authored YAML, so the value is untrusted. Only a
+/// well-formed `CWE-<digits>` becomes a link (the number is the only part
+/// placed in the URL); anything else is rendered as escaped text.
+fn cwe_cell(cwe: &str) -> String {
+    let number = cwe.strip_prefix("CWE-").unwrap_or(cwe);
+    let is_numeric = !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit());
+    if is_numeric {
+        format!(
+            "<a href=\"https://cwe.mitre.org/data/definitions/{number}.html\">{}</a>",
+            html_escape(cwe)
+        )
+    } else {
+        html_escape(cwe)
+    }
+}
+
+/// Escape text for both HTML element content and quoted attribute values.
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -337,5 +350,109 @@ mod tests {
         assert!(!html.contains("<img src=x"));
         assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"));
         assert!(html.contains("&lt;SHIELD-XSS&gt;"));
+    }
+
+    const PAYLOAD: &str = "<script>alert(\"x'y\")</script>";
+
+    fn hostile_finding(cwe_id: &str) -> Finding {
+        use crate::ir::SourceLocation;
+        use crate::rules::Evidence;
+
+        let location = SourceLocation {
+            file: PathBuf::from(format!("src/{PAYLOAD}.py")),
+            line: 7,
+            column: 1,
+            end_line: None,
+            end_column: None,
+        };
+        Finding {
+            rule_id: format!("CUSTOM-{PAYLOAD}"),
+            rule_name: format!("name {PAYLOAD}"),
+            severity: Severity::High,
+            confidence: Confidence::High,
+            attack_category: AttackCategory::CommandInjection,
+            message: format!("message {PAYLOAD}"),
+            location: Some(location.clone()),
+            evidence: vec![Evidence {
+                description: format!("evidence {PAYLOAD}"),
+                location: Some(location),
+                snippet: Some(format!("snippet {PAYLOAD}")),
+            }],
+            taint_path: None,
+            remediation: Some(format!("remediation {PAYLOAD}")),
+            cwe_id: Some(cwe_id.to_owned()),
+        }
+    }
+
+    fn failing_verdict() -> PolicyVerdict {
+        PolicyVerdict {
+            pass: false,
+            total_findings: 1,
+            effective_findings: 1,
+            highest_severity: Some(Severity::High),
+            fail_threshold: Severity::High,
+        }
+    }
+
+    #[test]
+    fn html_report_escapes_hostile_text_in_every_field() {
+        let cwe = format!("CWE-79\" onmouseover=\"alert('cwe')\">{PAYLOAD}");
+        let html = render(
+            &[hostile_finding(&cwe)],
+            &failing_verdict(),
+            &format!("target {PAYLOAD}"),
+            &PathBuf::from("/tmp"),
+        )
+        .unwrap();
+
+        assert!(!html.contains("<script>"), "raw <script> leaked:\n{html}");
+        assert!(!html.contains("</script>"), "raw </script> leaked:\n{html}");
+        assert!(!html.contains("x'y"), "raw single quote leaked:\n{html}");
+        assert!(!html.contains("\"x"), "raw double quote leaked:\n{html}");
+        assert!(
+            !html.contains("onmouseover=\""),
+            "attribute breakout:\n{html}"
+        );
+        assert!(
+            !html.contains("alert('cwe')"),
+            "raw CWE text leaked:\n{html}"
+        );
+
+        let escaped = "&lt;script&gt;alert(&quot;x&#x27;y&quot;)&lt;/script&gt;";
+        for field in [
+            "CUSTOM-",
+            "name ",
+            "message ",
+            "src/",
+            "evidence ",
+            "snippet ",
+            "remediation ",
+            "target ",
+        ] {
+            assert!(
+                html.contains(&format!("{field}{escaped}")),
+                "{field} should render escaped:\n{html}"
+            );
+        }
+        assert!(
+            !html.contains("cwe.mitre.org/data/definitions/79\""),
+            "a non-numeric CWE must not become a link:\n{html}"
+        );
+    }
+
+    #[test]
+    fn html_report_links_well_formed_cwe_ids() {
+        let html = render(
+            &[hostile_finding("CWE-78")],
+            &failing_verdict(),
+            "target",
+            &PathBuf::from("/tmp"),
+        )
+        .unwrap();
+
+        assert!(
+            html.contains("<a href=\"https://cwe.mitre.org/data/definitions/78.html\">CWE-78</a>"),
+            "{html}"
+        );
     }
 }

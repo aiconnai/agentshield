@@ -48,13 +48,7 @@ impl super::Adapter for VercelAiAdapter {
             return true;
         }
 
-        let walker = ignore::WalkBuilder::new(root)
-            .hidden(true)
-            .git_ignore(true)
-            .max_depth(Some(4))
-            .build();
-
-        for entry in walker.flatten() {
+        for entry in super::walk::source_walker(root).flatten() {
             let path = entry.path();
             if !path.is_file() {
                 continue;

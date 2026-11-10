@@ -188,7 +188,9 @@ fn v2_suppression_hides_only_one_of_two_colliding_findings() {
     )
     .expect("config");
 
-    let after = json_findings(&["scan", root, "--format", "json"]);
+    // The suppression lives in the target's own config, which a scan from
+    // another cwd applies only on opt-in.
+    let after = json_findings(&["scan", root, "--format", "json", "--trust-target-config"]);
     assert_eq!(after.len() + 1, before.len(), "exactly one suppressed");
     assert!(fingerprints(&after).iter().all(|fp| fp != &target));
 }
@@ -213,6 +215,8 @@ fn legacy_suppression_fingerprint_still_matches() {
     )
     .expect("config");
 
-    let after = json_findings(&["scan", root, "--format", "json"]);
+    // The suppression lives in the target's own config, which a scan from
+    // another cwd applies only on opt-in.
+    let after = json_findings(&["scan", root, "--format", "json", "--trust-target-config"]);
     assert_eq!(after.len(), before - colliding);
 }
