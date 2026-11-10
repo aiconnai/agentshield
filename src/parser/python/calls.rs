@@ -32,6 +32,8 @@ pub(crate) struct CallContext<'a> {
     pub(crate) param_names: &'a HashSet<String>,
     pub(crate) http_client_vars: &'a HashSet<String>,
     pub(crate) imports: &'a PythonImports,
+    /// Sanitized variable names visible at the call.
+    pub(crate) sanitized: &'a HashSet<String>,
     pub(crate) caller: Option<&'a str>,
 }
 
@@ -171,13 +173,13 @@ pub(crate) fn record_call(
     let arg_source = classify_argument(
         command_argument_text(args_str),
         ctx.param_names,
-        &parsed.sanitized_vars,
+        ctx.sanitized,
     );
 
     // Record CallSite for cross-file analysis
     let all_args = split_top_level_args(args_str)
         .iter()
-        .map(|a| classify_argument(a.trim(), ctx.param_names, &parsed.sanitized_vars))
+        .map(|a| classify_argument(a.trim(), ctx.param_names, ctx.sanitized))
         .collect::<Vec<_>>();
     parsed.call_sites.push(CallSite {
         callee: raw_name.to_string(),

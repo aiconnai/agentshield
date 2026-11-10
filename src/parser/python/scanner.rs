@@ -5,6 +5,7 @@ use crate::analysis::sensitivity::looks_sensitive_name;
 use crate::ir::ArgumentSource;
 use crate::ir::execution_surface::*;
 use crate::parser::ParsedFile;
+use crate::parser::common::ScopedSanitizers;
 
 use super::calls::{
     CALL_NAME_BEFORE_PAREN_RE, CallContext, first_unclosed_paren, is_definition_header,
@@ -13,33 +14,33 @@ use super::calls::{
 use super::classify::{classify_argument, loc, loc_from_range};
 use super::imports::PythonImports;
 use super::patterns::*;
+use super::scope::FunctionScopes;
 
 pub(crate) fn scan_python_source(
     content: &str,
     file_path: &Path,
     param_names: &HashSet<String>,
     http_client_vars: &HashSet<String>,
+    scoped_sanitizers: &ScopedSanitizers,
     parsed: &mut ParsedFile,
 ) {
     let lines: Vec<&str> = content.lines().collect();
     let imports = PythonImports::from_source(content);
-    let mut current_functions: Vec<(String, usize)> = Vec::new();
+    let mut scopes = FunctionScopes::default();
+    // Sanitized names visible from the current function, recomputed only when
+    // the scope changes.
+    let mut visible_scope = String::new();
+    let mut sanitized = scoped_sanitizers.view("");
 
     for (line_idx, line) in lines.iter().enumerate() {
         let line_num = line_idx + 1;
         let trimmed = line.trim();
-        let indent = line.chars().take_while(|c| c.is_whitespace()).count();
 
-        if !trimmed.is_empty() {
-            while current_functions
-                .last()
-                .is_some_and(|(_, function_indent)| indent <= *function_indent)
-            {
-                current_functions.pop();
-            }
-        }
-        if let Some(cap) = FUNC_DEF_RE.captures(line) {
-            current_functions.push((cap[1].to_string(), indent));
+        scopes.advance(line, line_idx);
+        let scope_path = scopes.path();
+        if scope_path != visible_scope {
+            sanitized = scoped_sanitizers.view(&scope_path);
+            visible_scope = scope_path;
         }
 
         // Skip comments
@@ -90,7 +91,8 @@ pub(crate) fn scan_python_source(
                     param_names,
                     http_client_vars,
                     imports: &imports,
-                    caller: current_functions.last().map(|(name, _)| name.as_str()),
+                    sanitized: &sanitized,
+                    caller: scopes.current_name(),
                 },
                 name_match.as_str(),
                 &cap[2],
@@ -104,7 +106,7 @@ pub(crate) fn scan_python_source(
         for cap in GITPYTHON_RE.captures_iter(line) {
             let full_call = format!("{}.git.{}", &cap[1], &cap[2]);
             let args_str = &cap[3];
-            let arg_source = classify_argument(args_str, param_names, &parsed.sanitized_vars);
+            let arg_source = classify_argument(args_str, param_names, &sanitized);
             let call_range = cap.get(0).expect("GitPython call capture");
             parsed.commands.push(CommandInvocation {
                 function: full_call,
@@ -141,7 +143,8 @@ pub(crate) fn scan_python_source(
                                 param_names,
                                 http_client_vars,
                                 imports: &imports,
-                                caller: current_functions.last().map(|(name, _)| name.as_str()),
+                                sanitized: &sanitized,
+                                caller: scopes.current_name(),
                             },
                             name_match.as_str().trim_end(),
                             &args,

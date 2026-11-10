@@ -261,3 +261,56 @@ fn shell_dash_c_with_a_fixed_script_stays_clean() {
         );
     }
 }
+
+// --- 4. Sanitizers ---------------------------------------------------------
+
+#[test]
+fn typescript_path_resolve_alone_does_not_sanitize_a_file_path() {
+    let dir = ts_case(
+        "import * as fs from \"fs\";\nimport * as path from \"path\";\n\nexport function read(p: string): string {\n  const safe = path.resolve(\"/srv/data\", p);\n  return fs.readFileSync(safe, \"utf-8\");\n}\n",
+    );
+    assert!(flagged(dir.path(), "SHIELD-004"));
+}
+
+#[test]
+fn python_abspath_alone_does_not_sanitize_a_file_path() {
+    let dir = py_case(
+        "import os\n\n\n@server.tool(\"read\")\ndef read(p: str) -> str:\n    safe = os.path.abspath(p)\n    return open(safe).read()\n",
+    );
+    assert!(flagged(dir.path(), "SHIELD-004"));
+}
+
+#[test]
+fn typescript_resolve_with_containment_check_is_sanitized() {
+    let dir = ts_case(
+        "import * as fs from \"fs\";\nimport * as path from \"path\";\n\nconst BASE = \"/srv/data\";\n\nexport function read(p: string): string {\n  const safe = path.resolve(BASE, p);\n  if (!safe.startsWith(BASE)) {\n    throw new Error(\"outside\");\n  }\n  return fs.readFileSync(safe, \"utf-8\");\n}\n",
+    );
+    assert!(!flagged(dir.path(), "SHIELD-004"));
+}
+
+#[test]
+fn python_sanitized_name_in_one_function_does_not_leak_to_another() {
+    let dir = py_case(
+        "@server.tool(\"a\")\ndef a(p: str) -> str:\n    safe = validate_path(p)\n    return open(safe).read()\n\n\n@server.tool(\"b\")\ndef b(safe: str) -> str:\n    return open(safe).read()\n",
+    );
+    assert!(flagged(dir.path(), "SHIELD-004"));
+}
+
+// The regex fallback used without the `typescript` feature has no function
+// boundaries; it keeps file-wide sanitizer names.
+#[cfg(feature = "typescript")]
+#[test]
+fn typescript_sanitized_name_in_one_function_does_not_leak_to_another() {
+    let dir = ts_case(
+        "import * as fs from \"fs\";\n\nexport function a(p: string): string {\n  const safe = validatePath(p);\n  return fs.readFileSync(safe, \"utf-8\");\n}\n\nexport function b(safe: string): string {\n  return fs.readFileSync(safe, \"utf-8\");\n}\n",
+    );
+    assert!(flagged(dir.path(), "SHIELD-004"));
+}
+
+#[test]
+fn sanitized_variable_stays_sanitized_in_its_own_function() {
+    let dir = py_case(
+        "@server.tool(\"a\")\ndef a(p: str) -> str:\n    safe = validate_path(p)\n    return open(safe).read()\n",
+    );
+    assert!(!flagged(dir.path(), "SHIELD-004"));
+}

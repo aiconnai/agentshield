@@ -148,7 +148,7 @@ pub(crate) fn python_string_literal(arg: &str) -> Option<String> {
     }
 }
 
-pub(crate) use crate::parser::common::{sanitized_label_for_var, sanitized_var_marker};
+pub(crate) use crate::parser::common::sanitized_label_for_var;
 
 pub(crate) fn loc(file: &Path, line: usize) -> SourceLocation {
     SourceLocation {

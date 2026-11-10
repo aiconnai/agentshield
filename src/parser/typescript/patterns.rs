@@ -103,6 +103,7 @@ pub(super) static TEMPLATE_LITERAL_RE: Lazy<Regex> =
 
 // Sanitizer assignment: const validPath = await validatePath(x)
 // Captures: (1) variable name, (2) function name (possibly dotted)
+#[cfg(not(feature = "typescript"))]
 pub(super) static SANITIZER_ASSIGN_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?:const|let|var)\s+(\w+)\s*=\s*(?:await\s+)?(\w+(?:\.\w+)*)\s*\(")
         .expect("static regex pattern is valid")

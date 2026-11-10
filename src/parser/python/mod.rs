@@ -14,6 +14,7 @@ pub mod defs;
 pub mod imports;
 pub mod patterns;
 pub mod scanner;
+pub mod scope;
 
 use defs::{
     collect_entry_points, collect_function_defs_and_params, collect_http_client_vars,
@@ -31,7 +32,7 @@ impl LanguageParser for PythonParser {
         let file_path = PathBuf::from(path);
 
         // Detect sanitizer assignments: safe_path = validate_path(x)
-        collect_sanitizer_vars(content, &mut parsed);
+        let scoped_sanitizers = collect_sanitizer_vars(content, &mut parsed);
 
         // Collect function parameter names + FunctionDef entries
         let param_names = collect_function_defs_and_params(content, &file_path, &mut parsed);
@@ -46,6 +47,7 @@ impl LanguageParser for PythonParser {
             &file_path,
             &param_names,
             &http_client_vars,
+            &scoped_sanitizers,
             &mut parsed,
         );
 
@@ -489,5 +491,59 @@ def handler(path: str):
         let code = "def run(cmd):\n    return cmd\n\ndef f(cmd):\n    run(cmd)\n";
         let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
         assert!(parsed.commands.is_empty());
+    }
+
+    #[test]
+    fn sanitized_name_is_scoped_to_its_function() {
+        let code = "def a(p):\n    safe = validate_path(p)\n    return open(safe).read()\n\n\ndef b(safe):\n    return open(safe).read()\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert_eq!(parsed.file_operations.len(), 2);
+        assert!(!parsed.file_operations[0].path_arg.is_tainted());
+        assert!(parsed.file_operations[1].path_arg.is_tainted());
+    }
+
+    #[test]
+    fn module_level_and_enclosing_sanitized_names_are_visible_in_nested_functions() {
+        let code = "root = validate_path(BASE)\n\ndef outer(p):\n    safe = validate_path(p)\n\n    def inner():\n        return open(safe).read() + open(root).read()\n\n    return inner\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert_eq!(parsed.file_operations.len(), 2);
+        assert!(
+            parsed
+                .file_operations
+                .iter()
+                .all(|op| !op.path_arg.is_tainted())
+        );
+    }
+
+    #[test]
+    fn same_named_functions_do_not_share_sanitized_names() {
+        let code = "def run(p):\n    safe = validate_path(p)\n    return open(safe).read()\n\n\ndef run(safe):\n    return open(safe).read()\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert!(!parsed.file_operations[0].path_arg.is_tainted());
+        assert!(parsed.file_operations[1].path_arg.is_tainted());
+    }
+
+    #[test]
+    fn abspath_alone_does_not_sanitize_but_with_containment_check_does() {
+        let alone = "def f(p):\n    safe = os.path.abspath(p)\n    return open(safe).read()\n";
+        let parsed = PythonParser
+            .parse_file(Path::new("test.py"), alone)
+            .unwrap();
+        assert!(!parsed.sanitized_vars.contains("safe"));
+        assert!(parsed.file_operations[0].path_arg.is_tainted());
+
+        let checked = "def f(p):\n    safe = os.path.abspath(os.path.join(ROOT, p))\n    if not safe.startswith(ROOT):\n        raise ValueError(p)\n    return open(safe).read()\n";
+        let parsed = PythonParser
+            .parse_file(Path::new("test.py"), checked)
+            .unwrap();
+        assert!(parsed.sanitized_vars.contains("safe"));
+        assert!(!parsed.file_operations[0].path_arg.is_tainted());
+    }
+
+    #[test]
+    fn containment_check_in_another_function_does_not_sanitize() {
+        let code = "def f(p):\n    safe = os.path.abspath(p)\n    return open(safe).read()\n\n\ndef g(safe):\n    return safe.startswith(ROOT)\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert!(parsed.file_operations[0].path_arg.is_tainted());
     }
 }

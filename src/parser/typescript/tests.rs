@@ -353,10 +353,29 @@ async function handler(args: any) {
 }
 
 #[test]
-fn sanitized_var_from_path_resolve() {
+fn path_resolve_alone_does_not_sanitize() {
     let code = r#"
 function processFile(rawPath: string) {
-    const safePath = path.resolve(rawPath);
+    const safePath = path.resolve("/srv/data", rawPath);
+    fs.readFileSync(safePath, "utf-8");
+}
+"#;
+    let parsed = TypeScriptParser
+        .parse_file(Path::new("test.ts"), code)
+        .unwrap();
+    assert!(!parsed.sanitized_vars.contains("safePath"));
+    assert_eq!(parsed.file_operations.len(), 1);
+    assert!(parsed.file_operations[0].path_arg.is_tainted());
+}
+
+#[test]
+fn path_resolve_with_containment_check_sanitizes() {
+    let code = r#"
+function processFile(rawPath: string) {
+    const safePath = path.resolve(BASE, rawPath);
+    if (!safePath.startsWith(BASE)) {
+        throw new Error("outside");
+    }
     fs.readFileSync(safePath, "utf-8");
 }
 "#;
@@ -364,6 +383,76 @@ function processFile(rawPath: string) {
         .parse_file(Path::new("test.ts"), code)
         .unwrap();
     assert!(parsed.sanitized_vars.contains("safePath"));
+    assert_eq!(parsed.file_operations.len(), 1);
+    assert!(!parsed.file_operations[0].path_arg.is_tainted());
+}
+
+#[test]
+fn containment_check_on_another_variable_does_not_sanitize() {
+    let code = r#"
+function processFile(rawPath: string, other: string) {
+    const safePath = path.resolve(BASE, rawPath);
+    if (!other.startsWith(BASE)) {
+        throw new Error("outside");
+    }
+    fs.readFileSync(safePath, "utf-8");
+}
+"#;
+    let parsed = TypeScriptParser
+        .parse_file(Path::new("test.ts"), code)
+        .unwrap();
+    assert!(!parsed.sanitized_vars.contains("safePath"));
+}
+
+#[cfg(feature = "typescript")]
+#[test]
+fn sanitized_name_is_scoped_to_its_function() {
+    let code = r#"
+function a(p: string) {
+    const safe = validatePath(p);
+    fs.readFileSync(safe, "utf-8");
+}
+
+function b(safe: string) {
+    fs.readFileSync(safe, "utf-8");
+}
+"#;
+    let parsed = TypeScriptParser
+        .parse_file(Path::new("test.ts"), code)
+        .unwrap();
+    assert_eq!(parsed.file_operations.len(), 2);
+    assert!(!parsed.file_operations[0].path_arg.is_tainted());
+    assert!(parsed.file_operations[1].path_arg.is_tainted());
+}
+
+#[cfg(feature = "typescript")]
+#[test]
+fn sanitized_outer_variable_is_visible_to_a_nested_function() {
+    let code = r#"
+function outer(p: string) {
+    const safe = validatePath(p);
+    return () => fs.readFileSync(safe, "utf-8");
+}
+"#;
+    let parsed = TypeScriptParser
+        .parse_file(Path::new("test.ts"), code)
+        .unwrap();
+    assert!(!parsed.file_operations[0].path_arg.is_tainted());
+}
+
+#[cfg(feature = "typescript")]
+#[test]
+fn typed_and_awaited_declarations_are_sanitized() {
+    let code = r#"
+async function a(p: string) {
+    const safe: string = await validatePath(p);
+    fs.readFileSync(safe, "utf-8");
+}
+"#;
+    let parsed = TypeScriptParser
+        .parse_file(Path::new("test.ts"), code)
+        .unwrap();
+    assert!(!parsed.file_operations[0].path_arg.is_tainted());
 }
 
 #[test]
