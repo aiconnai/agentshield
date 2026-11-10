@@ -41,6 +41,17 @@ impl RateLimitPolicy {
     }
 }
 
+/// The more restrictive of two rate limits, where `0` means "unlimited".
+fn stricter_rate(a: u32, b: u32) -> u32 {
+    match (a, b) {
+        (0, other) | (other, 0) => other,
+        (a, b) => a.min(b),
+    }
+}
+
+/// Pattern that matches every host; used to express "deny all".
+const DENY_ALL_PATTERN: &str = "*";
+
 /// Audit logging configuration for egress events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditPolicy {
@@ -72,38 +83,16 @@ impl Default for AuditPolicy {
 /// Merge with an operator override policy. The override can only restrict, never expand.
 ///
 /// Merge rules:
-/// - `domains.allow` = intersection(base.allow, override.allow)
+/// - `domains.allow` = intersection(base.allow, override.allow), keeping the narrower
+///   pattern of each overlapping pair. Disjoint lists add a deny-all (`*`) rule.
 ///   If override.allow is empty, base.allow is kept (empty means "no restriction").
 ///   If base.allow is empty (allow all), operator's allow list becomes the effective list.
 /// - `domains.deny` = union(base.deny, override.deny)
 /// - `networks`: if either policy blocks a range, it is blocked in the result
-/// - `rate_limits.max_requests_per_minute` = min(self, override)
-/// - `rate_limits.per_domain`: min rate per domain; missing entries inherit the global min
+/// - `rate_limits.max_requests_per_minute` = stricter of the two (`0` means unlimited)
+/// - `rate_limits.per_domain`: stricter effective rate of both policies per domain
 /// - `audit`: operator override wins (operator controls where logs go)
 pub(super) fn merge_override(base: &EgressPolicy, operator: &EgressPolicy) -> EgressPolicy {
-    // Allow list: intersection when both are non-empty; operator restricts further
-    let allow = if operator.domains.allow.is_empty() {
-        // Empty override allow = "no additional restriction on allow"
-        base.domains.allow.clone()
-    } else if base.domains.allow.is_empty() {
-        // Self allows all; operator restricts to its list
-        operator.domains.allow.clone()
-    } else {
-        // Both have allow lists: intersection (only domains in BOTH lists)
-        base.domains
-            .allow
-            .iter()
-            .filter(|d| {
-                operator
-                    .domains
-                    .allow
-                    .iter()
-                    .any(|o| domain_matches(d, o) || domain_matches(o, d))
-            })
-            .cloned()
-            .collect()
-    };
-
     // Deny list: union (operator can only add more denials)
     let mut deny = base.domains.deny.clone();
     for d in &operator.domains.deny {
@@ -112,19 +101,62 @@ pub(super) fn merge_override(base: &EgressPolicy, operator: &EgressPolicy) -> Eg
         }
     }
 
-    // Rate limits: take the minimum (more restrictive wins)
-    let global_min = base
-        .rate_limits
-        .max_requests_per_minute
-        .min(operator.rate_limits.max_requests_per_minute);
+    // Allow list: intersection when both are non-empty; operator restricts further
+    let allow = if operator.domains.allow.is_empty() {
+        // Empty override allow = "no additional restriction on allow"
+        base.domains.allow.clone()
+    } else if base.domains.allow.is_empty() {
+        // Self allows all; operator restricts to its list
+        operator.domains.allow.clone()
+    } else {
+        // Both have allow lists: keep, for every overlapping pair, the
+        // NARROWER pattern so a broad glob never survives a narrow entry.
+        let mut intersection: Vec<String> = Vec::new();
+        for b in &base.domains.allow {
+            for o in &operator.domains.allow {
+                let narrower = if domain_matches(b, o) {
+                    b
+                } else if domain_matches(o, b) {
+                    o
+                } else {
+                    continue;
+                };
+                if !intersection.contains(narrower) {
+                    intersection.push(narrower.clone());
+                }
+            }
+        }
+        if intersection.is_empty() && !deny.iter().any(|d| d == DENY_ALL_PATTERN) {
+            // Disjoint lists mean nothing is allowed. An empty allow list
+            // means "allow all", so the empty intersection must be expressed
+            // as an explicit deny-all rather than silently widening.
+            deny.push(DENY_ALL_PATTERN.to_string());
+        }
+        intersection
+    };
 
-    let mut per_domain = base.rate_limits.per_domain.clone();
-    for (domain, &op_rate) in &operator.rate_limits.per_domain {
-        let entry = per_domain
-            .entry(domain.clone())
-            .or_insert(base.rate_limits.max_requests_per_minute);
-        *entry = (*entry).min(op_rate);
-    }
+    // Rate limits: the more restrictive wins (0 = unlimited)
+    let global_min = stricter_rate(
+        base.rate_limits.max_requests_per_minute,
+        operator.rate_limits.max_requests_per_minute,
+    );
+
+    let domains: std::collections::BTreeSet<&String> = base
+        .rate_limits
+        .per_domain
+        .keys()
+        .chain(operator.rate_limits.per_domain.keys())
+        .collect();
+    let per_domain: HashMap<String, u32> = domains
+        .into_iter()
+        .map(|domain| {
+            let rate = stricter_rate(
+                base.rate_limits.rate_limit_for(domain),
+                operator.rate_limits.rate_limit_for(domain),
+            );
+            (domain.clone(), rate)
+        })
+        .collect();
 
     EgressPolicy {
         schema_version: base.schema_version,

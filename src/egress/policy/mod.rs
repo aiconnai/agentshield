@@ -297,4 +297,98 @@ allow = ["*"]
         let err = result.unwrap_err().to_string();
         assert!(err.contains("newer than supported version"));
     }
+
+    fn open_policy() -> EgressPolicy {
+        EgressPolicy {
+            schema_version: 1,
+            domains: DomainPolicy {
+                allow: vec![],
+                deny: vec![],
+            },
+            networks: NetworkPolicy::default(),
+            rate_limits: RateLimitPolicy::default(),
+            audit: AuditPolicy::default(),
+        }
+    }
+
+    fn policy_with_allow(allow: &[&str]) -> EgressPolicy {
+        EgressPolicy {
+            domains: DomainPolicy {
+                allow: allow.iter().map(|d| d.to_string()).collect(),
+                deny: vec![],
+            },
+            ..open_policy()
+        }
+    }
+
+    #[test]
+    fn merge_disjoint_allow_lists_denies_everything() {
+        let merged =
+            policy_with_allow(&["a.example"]).merge_override(&policy_with_allow(&["b.example"]));
+        assert!(!merged.is_domain_allowed("a.example"));
+        assert!(!merged.is_domain_allowed("b.example"));
+        assert!(!merged.is_domain_allowed("anything.else"));
+    }
+
+    #[test]
+    fn merge_keeps_narrower_allow_pattern() {
+        let merged = policy_with_allow(&["*.example.com"])
+            .merge_override(&policy_with_allow(&["api.example.com"]));
+        assert!(merged.is_domain_allowed("api.example.com"));
+        assert!(!merged.is_domain_allowed("evil.example.com"));
+    }
+
+    #[test]
+    fn merge_rate_limit_zero_is_unlimited_not_strictest() {
+        let mut base = open_policy();
+        base.rate_limits.max_requests_per_minute = 30;
+        base.rate_limits
+            .per_domain
+            .insert("slow.example".into(), 100);
+        let mut operator = open_policy();
+        operator.rate_limits.max_requests_per_minute = 0;
+        let merged = base.merge_override(&operator);
+        assert_eq!(merged.rate_limit_for("any.example"), 30);
+
+        operator.rate_limits.max_requests_per_minute = 10;
+        let merged = base.merge_override(&operator);
+        assert_eq!(merged.rate_limit_for("slow.example"), 10);
+    }
+
+    #[test]
+    fn domain_matching_ignores_case_and_trailing_dot() {
+        let policy = EgressPolicy {
+            domains: DomainPolicy {
+                allow: vec![],
+                deny: vec!["evil.invalid".into(), "*.Bad.invalid".into()],
+            },
+            ..open_policy()
+        };
+        assert!(!policy.is_domain_allowed("EVIL.invalid"));
+        assert!(!policy.is_domain_allowed("evil.invalid."));
+        assert!(!policy.is_domain_allowed("x.bad.INVALID."));
+        assert!(policy.is_domain_allowed("good.invalid"));
+    }
+
+    #[test]
+    fn ip_blocking_parses_addresses_instead_of_prefixes() {
+        let policy = open_policy();
+        // Alternate spellings of blocked ranges
+        assert!(policy.is_ip_blocked("::ffff:127.0.0.1"));
+        assert!(policy.is_ip_blocked("[::ffff:127.0.0.1]"));
+        assert!(policy.is_ip_blocked("[::1]"));
+        assert!(policy.is_ip_blocked("0.0.0.0"));
+        assert!(policy.is_ip_blocked("::ffff:169.254.169.254"));
+        assert!(policy.is_ip_blocked("fc00::1"));
+        assert!(policy.is_ip_blocked("fd12:3456::1"));
+        assert!(policy.is_ip_blocked("fe80::1"));
+        assert!(policy.is_ip_blocked("100.64.0.1"));
+        assert!(policy.is_ip_blocked("LOCALHOST."));
+        // Hostnames that only look like a blocked prefix
+        assert!(!policy.is_ip_blocked("fd-cdn.example.com"));
+        assert!(!policy.is_ip_blocked("fdroid.example.org"));
+        assert!(!policy.is_ip_blocked("10.example.com"));
+        assert!(!policy.is_ip_blocked("172.16.example.com"));
+        assert!(!policy.is_ip_blocked("2606:4700:4700::1111"));
+    }
 }
