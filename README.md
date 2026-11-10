@@ -131,7 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: aiconnai/agentshield@main
+      - uses: aiconnai/agentshield@v1.0.3
         with:
           path: '.'
           fail-on: 'high'

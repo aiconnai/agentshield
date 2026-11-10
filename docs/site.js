@@ -161,7 +161,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: aiconnai/agentshield@main
+      - uses: aiconnai/agentshield@v1.0.3
         with:
           fail-on: 'high'
           upload-sarif: true`,

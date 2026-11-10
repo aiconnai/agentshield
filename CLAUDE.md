@@ -323,7 +323,7 @@ export async function readFileContent(filePath: string) {
 }
 ```
 
-## Cross-File Analysis (`src/analysis/cross_file.rs`)
+## Cross-File Analysis (`src/analysis/cross_file/`)
 
 The `apply_cross_file_sanitization()` function:
 
