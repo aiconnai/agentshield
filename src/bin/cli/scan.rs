@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use agentshield::ScanOptions;
 use agentshield::baseline::{BaselineEntry, BaselineFile};
-use agentshield::config::{Config, ScanPathFilter};
+use agentshield::config::ScanPathFilter;
 use agentshield::egress::policy::EgressPolicy;
 use agentshield::output::OutputFormat;
 use agentshield::rules::Severity;
@@ -23,6 +23,7 @@ pub(super) struct ScanArgs {
     pub(super) explain: bool,
     pub(super) experimental_risk: bool,
     pub(super) rules_dir: Option<PathBuf>,
+    pub(super) trust_target_config: bool,
 }
 
 pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::ShieldError> {
@@ -41,6 +42,7 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         explain,
         experimental_risk,
         rules_dir,
+        trust_target_config,
     } = args;
     let format = OutputFormat::from_str_lenient(&format_str).unwrap_or_else(|| {
         eprintln!("Warning: unknown format '{}', using console", format_str);
@@ -63,11 +65,21 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         ));
     }
 
-    let config_path = config
-        .clone()
-        .unwrap_or_else(|| path.join(".agentshield.toml"));
-    let mut cfg = Config::load(&config_path)?;
     let fail_on = parse_optional_severity(fail_on_str.as_deref())?;
+    let options = ScanOptions {
+        config_path: config,
+        format,
+        fail_on_override: fail_on,
+        ignore_tests,
+        custom_rules_dir: rules_dir,
+        trust_target_config,
+    };
+
+    let policy = agentshield::resolve_scan_policy(&path, &options)?;
+    if let Some(notice) = policy.ignored_notice() {
+        eprintln!("{notice}");
+    }
+    let mut cfg = policy.config;
 
     let effective_ignore_tests = ignore_tests || cfg.scan.ignore_tests;
     let mut effective_scan_config = cfg.scan.clone();
@@ -79,14 +91,6 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         .extend(exclude_patterns.iter().cloned());
     let path_filter_summary =
         ScanPathFilter::from_scan_config(&effective_scan_config, effective_ignore_tests)?.summary();
-
-    let options = ScanOptions {
-        config_path: config,
-        format,
-        fail_on_override: fail_on,
-        ignore_tests,
-        custom_rules_dir: rules_dir,
-    };
 
     let mut report = match agentshield::scan_with_path_filter_overrides(
         &path,
