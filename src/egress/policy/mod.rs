@@ -391,4 +391,29 @@ allow = ["*"]
         assert!(!policy.is_ip_blocked("172.16.example.com"));
         assert!(!policy.is_ip_blocked("2606:4700:4700::1111"));
     }
+
+    fn policy_with_domain_rates(rates: &[(&str, u32)]) -> EgressPolicy {
+        EgressPolicy {
+            rate_limits: RateLimitPolicy {
+                max_requests_per_minute: 0,
+                per_domain: rates.iter().map(|(d, r)| (d.to_string(), *r)).collect(),
+            },
+            ..open_policy()
+        }
+    }
+
+    #[test]
+    fn per_domain_rate_limit_ignores_case_and_trailing_dot() {
+        let policy = policy_with_domain_rates(&[("API.GitHub.com.", 5)]);
+        assert_eq!(policy.rate_limit_for("api.github.com"), 5);
+    }
+
+    #[test]
+    fn merge_keeps_stricter_rate_across_differently_spelled_keys() {
+        let base = policy_with_domain_rates(&[("api.github.com", 30)]);
+        let operator = policy_with_domain_rates(&[("API.github.com", 10)]);
+        let merged = base.merge_override(&operator);
+        assert_eq!(merged.rate_limit_for("api.github.com"), 10);
+        assert_eq!(merged.rate_limits.per_domain.len(), 1);
+    }
 }
