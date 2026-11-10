@@ -135,6 +135,44 @@ mod tests {
     }
 
     #[test]
+    fn entry_point_is_never_downgraded() {
+        let mut file_a = ParsedFile::default();
+        file_a.call_sites.push(CallSite {
+            callee: "readFileContent".into(),
+            arguments: vec![ArgumentSource::Literal("README.md".into())],
+            caller: Some("main".into()),
+            location: loc("cli.ts", 5),
+        });
+
+        let mut file_b = ParsedFile::default();
+        file_b.function_defs.push(FunctionDef {
+            name: "readFileContent".into(),
+            params: vec!["filePath".into()],
+            is_exported: true,
+            location: loc("lib.ts", 1),
+        });
+        file_b.entry_points.insert("readFileContent".into());
+        file_b.file_operations.push(FileOperation {
+            path_arg: ArgumentSource::Parameter {
+                name: "filePath".into(),
+            },
+            operation: FileOpType::Read,
+            location: loc("lib.ts", 3),
+        });
+
+        let mut files = vec![
+            (PathBuf::from("cli.ts"), file_a),
+            (PathBuf::from("lib.ts"), file_b),
+        ];
+
+        let result = apply_cross_file_sanitization(&mut files);
+
+        assert_eq!(result.downgraded_count, 0);
+        assert!(result.sanitized_functions.is_empty());
+        assert!(files[1].1.file_operations[0].path_arg.is_tainted());
+    }
+
+    #[test]
     fn redaction_sanitizers_do_not_downgrade_file_paths() {
         let mut file_a = ParsedFile::default();
         file_a.call_sites.push(CallSite {

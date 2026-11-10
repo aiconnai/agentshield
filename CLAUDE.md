@@ -334,6 +334,7 @@ The `apply_cross_file_sanitization()` function:
 
 **Conservative rules:**
 - Exported functions with zero discovered call sites stay tainted
+- Tool handlers are entry points recorded in `ParsedFile::entry_points`; internal call sites never downgrade them. Python: functions under a tool decorator (`@mcp.tool`, `@tool`, `@tool_plain`, `@call_tool`, `@resource`, `@prompt`, `@kernel_function`, AutoGen `register_for_*`), read with strings and comments masked. MCP TypeScript: every identifier in a non-inline handler argument of `server.tool(...)`/`registerTool(...)`, collected before tool dedupe, with `import { a as b }` aliases resolved (`src/adapter/mcp/tools/handlers.rs`)
 - If ANY call site passes a tainted argument, the parameter stays tainted
 - Only one level deep (caller → callee, not recursive)
 

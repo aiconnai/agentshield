@@ -27,6 +27,10 @@ pub struct ParsedFile {
     pub call_sites: Vec<CallSite>,
     /// Variables holding sanitized values (e.g., `validPath = validatePath(x)`).
     pub sanitized_vars: HashSet<String>,
+    /// Functions in this file invoked from outside the scanned code, such as
+    /// agent tool handlers. Their parameters come from the agent, so internal
+    /// call sites never prove them sanitized.
+    pub entry_points: HashSet<String>,
 }
 
 /// A function parameter discovered in source code.
