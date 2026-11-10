@@ -23,12 +23,21 @@ pub(crate) fn classify_argument(
 
     // String literal. Single quote tokens can appear when a regex-level parse
     // sees an incomplete multiline literal; keep those conservative.
-    if let Some(val) = strip_python_string_literal(first_arg) {
-        return ArgumentSource::Literal(val.to_string());
+    if let Some(val) = python_string_literal(first_arg) {
+        return ArgumentSource::Literal(val);
     }
 
     // f-string or format
     if first_arg.starts_with("f\"") || first_arg.starts_with("f'") || first_arg.contains(".format(")
+    {
+        return ArgumentSource::Interpolated;
+    }
+
+    // A quoted piece that is not a single literal is a concatenation or
+    // `%` formatting carrying non-literal data (`"ls " + user + " -la"`).
+    // An incomplete lone quote token stays `Unknown` (still tainted).
+    if (first_arg.starts_with('"') || first_arg.starts_with('\''))
+        && (first_arg.contains('+') || first_arg.contains('%'))
     {
         return ArgumentSource::Interpolated;
     }
@@ -50,13 +59,19 @@ pub(crate) fn classify_argument(
     ArgumentSource::Unknown
 }
 
-pub(crate) fn strip_python_string_literal(arg: &str) -> Option<&str> {
-    arg.strip_prefix('"')
-        .and_then(|inner| inner.strip_suffix('"'))
-        .or_else(|| {
-            arg.strip_prefix('\'')
-                .and_then(|inner| inner.strip_suffix('\''))
-        })
+/// Value of `arg` when it is entirely string literals: one literal, or
+/// several adjacent ones that Python joins implicitly (`"ls " "-la"`).
+pub(crate) fn python_string_literal(arg: &str) -> Option<String> {
+    let mut value = String::new();
+    let mut rest = arg;
+    loop {
+        let (inner, consumed) = crate::parser::common::leading_string_literal(rest)?;
+        value.push_str(inner);
+        rest = rest[consumed..].trim_start();
+        if rest.is_empty() {
+            return Some(value);
+        }
+    }
 }
 
 pub(crate) use crate::parser::common::{sanitized_label_for_var, sanitized_var_marker};
@@ -84,5 +99,34 @@ pub(crate) fn loc_from_range(
         column: source_line[..start_byte].chars().count(),
         end_line: Some(line),
         end_column: Some(source_line[..end_byte].chars().count()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::python_string_literal;
+
+    #[test]
+    fn joins_adjacent_literals() {
+        assert_eq!(
+            python_string_literal("\"ls -la\"").as_deref(),
+            Some("ls -la")
+        );
+        assert_eq!(
+            python_string_literal("\"ls \" '-la'").as_deref(),
+            Some("ls -la")
+        );
+        assert_eq!(
+            python_string_literal("\"\"\"a\"\"\" \"b\"").as_deref(),
+            Some("ab")
+        );
+    }
+
+    #[test]
+    fn rejects_anything_beyond_literals() {
+        assert_eq!(python_string_literal("\"ls \" + user"), None);
+        assert_eq!(python_string_literal("\"ls \" user"), None);
+        assert_eq!(python_string_literal("\"ls \" \"open"), None);
+        assert_eq!(python_string_literal("user"), None);
     }
 }

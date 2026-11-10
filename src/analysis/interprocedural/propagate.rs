@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::analysis::AnalysisBundle;
 use crate::ir::data_surface::{TaintPath, TaintSource};
@@ -12,7 +12,8 @@ pub(crate) struct TraversalContext<'a> {
     graph: &'a CallGraph,
     source: &'a TaintSource,
     trace: Vec<SourceLocation>,
-    visited_functions: HashSet<String>,
+    /// Shallowest depth at which each function was expanded in this traversal.
+    visited_functions: HashMap<String, usize>,
     visited_paths: &'a mut HashSet<(
         std::path::PathBuf,
         usize,
@@ -26,10 +27,16 @@ pub(crate) struct TraversalContext<'a> {
 
 impl<'a> TraversalContext<'a> {
     fn trace_callee(&mut self, callee_name: &str) {
-        if self.depth > MAX_PROPAGATION_DEPTH || self.visited_functions.contains(callee_name) {
+        if self.depth > MAX_PROPAGATION_DEPTH
+            || self
+                .visited_functions
+                .get(callee_name)
+                .is_some_and(|&seen| seen <= self.depth)
+        {
             return;
         }
-        self.visited_functions.insert(callee_name.to_string());
+        self.visited_functions
+            .insert(callee_name.to_string(), self.depth);
 
         if let Some(nodes) = self.graph.functions.get(callee_name) {
             for node in nodes {
@@ -70,7 +77,13 @@ impl<'a> TraversalContext<'a> {
             }
         }
 
-        self.visited_functions.remove(callee_name);
+        // The callee stays in `visited_functions` with its shallowest depth.
+        // Taint paths are deduplicated per (source, sink), so re-expanding a
+        // function via every distinct simple path adds no findings and makes
+        // dense call graphs explode combinatorially. A function is expanded
+        // again only when reached at a smaller depth, because the first visit
+        // may have been cut short by `MAX_PROPAGATION_DEPTH`; that bounds the
+        // work to `MAX_PROPAGATION_DEPTH + 1` expansions per function.
     }
 }
 
@@ -91,7 +104,7 @@ pub fn propagate_interprocedural_taint(target: &ScanTarget, graph: &CallGraph) -
                     graph,
                     source,
                     trace: vec![call.location.clone()],
-                    visited_functions: HashSet::from([caller_name.clone()]),
+                    visited_functions: HashMap::from([(caller_name.clone(), 0)]),
                     visited_paths: &mut visited_paths,
                     new_paths: &mut new_paths,
                     depth: 0,

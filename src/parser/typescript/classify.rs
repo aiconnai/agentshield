@@ -80,15 +80,10 @@ pub(super) fn classify_argument_text(
         return ArgumentSource::Unknown;
     }
 
-    // String literal (double or single quoted)
-    if (first_arg.starts_with('"') && first_arg.ends_with('"'))
-        || (first_arg.starts_with('\'') && first_arg.ends_with('\''))
-    {
-        if first_arg.len() >= 2 {
-            let val = &first_arg[1..first_arg.len() - 1];
-            return ArgumentSource::Literal(val.to_string());
-        }
-        return ArgumentSource::Literal(String::new());
+    // String literal (double or single quoted). A quote-bounded
+    // concatenation such as `'ls ' + dir + ' -la'` is NOT a literal.
+    if let Some(val) = crate::parser::common::single_string_literal(first_arg) {
+        return ArgumentSource::Literal(val.to_string());
     }
 
     // Template literal with interpolation: `...${var}...`

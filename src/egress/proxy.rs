@@ -252,6 +252,12 @@ impl EgressProxy {
 
     /// Evaluate the egress policy for a target host:port.
     pub fn check_request(&self, host: &str, port: u16) -> ProxyDecision {
+        // DNS names are case-insensitive and may carry a trailing root dot;
+        // canonicalise once so policy lookups and rate-limit buckets cannot
+        // be dodged by respelling the same host.
+        let canonical = host.trim_end_matches('.').to_ascii_lowercase();
+        let host = canonical.as_str();
+
         // Check IP blocking first
         if self.policy.is_ip_blocked(host) {
             return ProxyDecision::BlockedByNetwork(host.to_string());

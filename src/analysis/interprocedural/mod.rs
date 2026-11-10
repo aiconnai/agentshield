@@ -26,6 +26,80 @@ mod tests {
     use crate::ir::{Language, ScanTarget, SourceLocation};
     use std::path::PathBuf;
 
+    fn python_target(code: &str, source_line: usize, sink_line: usize) -> ScanTarget {
+        let file_path = PathBuf::from("server.py");
+        let location = |line| SourceLocation {
+            file: file_path.clone(),
+            line,
+            column: 0,
+            end_line: None,
+            end_column: None,
+        };
+        ScanTarget {
+            name: "test-mcp".into(),
+            framework: crate::ir::Framework::Mcp,
+            root_path: PathBuf::from("/test"),
+            source_files: vec![crate::ir::SourceFile {
+                path: file_path.clone(),
+                language: Language::Python,
+                content: code.into(),
+                size_bytes: code.len() as u64,
+                content_hash: "hash".into(),
+            }],
+            dependencies: DependencySurface::default(),
+            data: DataSurface {
+                sources: vec![TaintSource {
+                    source_type: TaintSourceType::ToolArgument,
+                    description: "Tool 'entry' parameter 'q'".into(),
+                    location: location(source_line),
+                }],
+                sinks: vec![TaintSink {
+                    sink_type: TaintSinkType::ProcessExec,
+                    description: "Process execution via subprocess.run".into(),
+                    location: location(sink_line),
+                }],
+                taint_paths: vec![],
+            },
+            tools: vec![],
+            execution: ExecutionSurface::default(),
+            provenance: ProvenanceSurface::default(),
+        }
+    }
+
+    #[test]
+    fn shorter_path_reexpands_function_first_reached_at_depth_limit() {
+        // `a` reaches `g` first through a chain that lands exactly on the
+        // depth limit, then calls `g` directly. The direct call must still
+        // reach the sink behind `g`.
+        let chain = propagate::MAX_PROPAGATION_DEPTH - 1;
+        let mut code = String::from("def sink_fn(x):\n    subprocess.run(x, shell=True)\n\n");
+        code.push_str("def g(x):\n    sink_fn(x)\n\n");
+        for i in (1..=chain).rev() {
+            let next = if i == chain {
+                "g".to_string()
+            } else {
+                format!("c{}", i + 1)
+            };
+            code.push_str(&format!("def c{i}(x):\n    {next}(x)\n\n"));
+        }
+        code.push_str("def a(x):\n    c1(x)\n    g(x)\n\n");
+        code.push_str("@mcp.tool()\ndef entry(q: str):\n    a(q)\n");
+        let source_line = code
+            .lines()
+            .position(|l| l.starts_with("def entry"))
+            .unwrap()
+            + 1;
+        let target = python_target(&code, source_line, 2);
+
+        let graph = CallGraph::build(&target);
+        let paths = propagate_interprocedural_taint(&target, &graph);
+
+        assert!(
+            paths.iter().any(|path| path.sink.location.line == 2),
+            "expected a taint path to sink_fn, got {paths:?}"
+        );
+    }
+
     #[test]
     fn test_cross_function_command_injection_propagation() {
         let py_code = r#"

@@ -238,12 +238,7 @@ pub(crate) fn load_mcp_target(
 }
 
 pub(crate) fn has_recursive_python_import(root: &Path, needles: &[&str]) -> bool {
-    let walker = ignore::WalkBuilder::new(root)
-        .hidden(true)
-        .git_ignore(true)
-        .build();
-
-    for entry in walker.flatten() {
+    for entry in source_walker(root).flatten() {
         let path = entry.path();
         if !path.is_file()
             || path.extension().and_then(|ext| ext.to_str()) != Some("py")
@@ -252,20 +247,41 @@ pub(crate) fn has_recursive_python_import(root: &Path, needles: &[&str]) -> bool
             continue;
         }
 
-        if let Ok(metadata) = std::fs::metadata(path) {
-            if metadata.len() > 1_048_576 {
-                continue;
-            }
-        }
-
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if needles.iter().any(|needle| content.contains(needle)) {
-                return true;
-            }
+        if crate::adapter::read_file_capped(path)
+            .is_some_and(|content| needles.iter().any(|needle| content.contains(needle)))
+        {
+            return true;
         }
     }
 
     false
+}
+
+/// Maximum directory depth walked when collecting source files.
+const MAX_SOURCE_WALK_DEPTH: usize = 64;
+
+/// Tooling directories that never hold the scanned extension's own source.
+const SKIPPED_TOOLING_DIRS: &[&str] = &[".git", ".venv", ".tox", ".nox"];
+
+/// Walker shared by source collection and framework detection.
+///
+/// The scanned tree is untrusted: a package must not be able to hide a
+/// payload from the scan, or from adapter detection, with a `.ignore` file, a
+/// dot-directory or deep nesting. Only well-known tooling directories are
+/// skipped.
+pub(crate) fn source_walker(root: &Path) -> ignore::Walk {
+    ignore::WalkBuilder::new(root)
+        .hidden(false)
+        .ignore(false)
+        .git_ignore(true)
+        .max_depth(Some(MAX_SOURCE_WALK_DEPTH))
+        .filter_entry(|entry| {
+            !entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| SKIPPED_TOOLING_DIRS.contains(&name))
+        })
+        .build()
 }
 
 pub(crate) fn collect_source_files_with_filter(
@@ -273,13 +289,7 @@ pub(crate) fn collect_source_files_with_filter(
     filter: &ScanPathFilter,
     files: &mut Vec<SourceFile>,
 ) -> Result<()> {
-    let walker = ignore::WalkBuilder::new(root)
-        .hidden(true)
-        .git_ignore(true)
-        .max_depth(Some(5))
-        .build();
-
-    for entry in walker.flatten() {
+    for entry in source_walker(root).flatten() {
         let path = entry.path();
         if !path.is_file() {
             continue;
@@ -311,11 +321,14 @@ pub(crate) fn collect_source_files_with_filter(
             continue;
         }
 
-        if let Ok(content) = std::fs::read_to_string(path) {
+        // Decode lossily: a single non-UTF-8 byte (for example a Latin-1
+        // comment) must not remove the whole file from the scan.
+        if let Ok(bytes) = std::fs::read(path) {
             let hash = format!(
                 "{:x}",
-                sha2::Digest::finalize(sha2::Sha256::new().chain_update(content.as_bytes()))
+                sha2::Digest::finalize(sha2::Sha256::new().chain_update(&bytes))
             );
+            let content = String::from_utf8_lossy(&bytes).into_owned();
             files.push(SourceFile {
                 path: path.to_path_buf(),
                 language: lang,

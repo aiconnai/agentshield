@@ -35,16 +35,27 @@ impl DomainPolicy {
     }
 }
 
+/// Canonical form of a host or pattern for matching: DNS names are
+/// case-insensitive and a trailing root dot names the same host.
+pub(super) fn normalize_domain(domain: &str) -> String {
+    domain.trim().trim_end_matches('.').to_ascii_lowercase()
+}
+
 /// Simple glob matching for domain patterns.
 ///
-/// Supports `*.example.com` (matches `sub.example.com` and `example.com`)
-/// and exact matches like `api.github.com`.
+/// Supports `*.example.com` (matches `sub.example.com` and `example.com`),
+/// exact matches like `api.github.com`, and a bare `*` (matches every host).
+/// Matching ignores ASCII case and a trailing root dot.
 pub(super) fn domain_matches(domain: &str, pattern: &str) -> bool {
-    if let Some(suffix) = pattern.strip_prefix('*') {
+    let domain = normalize_domain(domain);
+    let pattern = normalize_domain(pattern);
+    match pattern.strip_prefix('*') {
+        Some("") => true,
         // "*.example.com" matches "sub.example.com" and "example.com"
-        domain.ends_with(suffix) || domain == &suffix[1..]
-    } else {
-        domain == pattern
+        Some(suffix) => {
+            domain.ends_with(suffix) || suffix.strip_prefix('.').is_some_and(|bare| domain == bare)
+        }
+        None => domain == pattern,
     }
 }
 

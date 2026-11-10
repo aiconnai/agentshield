@@ -82,8 +82,16 @@ pub fn apply_cross_file_sanitization(
 
     // Phase 2: Build call-site map.
     // Key: callee name → Vec of (argument sources)
+    //
+    // Call sites in test files are not evidence about production inputs: a
+    // test calling `run_cmd("ls")` must not prove that the `run_cmd` tool
+    // handler only ever receives literals.
+    let scan_root = common_parent(parsed_files);
     let mut call_sites: HashMap<String, Vec<Vec<ArgumentSource>>> = HashMap::new();
-    for (_, parsed) in parsed_files.iter() {
+    for (path, parsed) in parsed_files.iter() {
+        if crate::adapter::mcp::is_test_file_in(&scan_root, path) {
+            continue;
+        }
         for cs in &parsed.call_sites {
             call_sites
                 .entry(cs.callee.clone())
@@ -232,4 +240,23 @@ pub fn apply_cross_file_sanitization(
         downgraded_count,
         sanitized_functions,
     }
+}
+
+/// Deepest directory containing every parsed file, used to judge test-file
+/// conventions relative to the scanned tree instead of its absolute location.
+fn common_parent(parsed_files: &[(PathBuf, ParsedFile)]) -> PathBuf {
+    let mut parents = parsed_files
+        .iter()
+        .map(|(path, _)| path.parent().map(PathBuf::from).unwrap_or_default());
+    let Some(first) = parents.next() else {
+        return PathBuf::new();
+    };
+    parents.fold(first, |common, parent| {
+        common
+            .components()
+            .zip(parent.components())
+            .take_while(|(a, b)| a == b)
+            .map(|(a, _)| a)
+            .collect()
+    })
 }
