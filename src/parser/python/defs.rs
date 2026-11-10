@@ -74,11 +74,16 @@ pub(crate) fn collect_http_client_vars(content: &str) -> HashSet<String> {
     http_client_vars
 }
 
-/// Final segments of decorator names that expose a function as an agent tool
-/// (MCP, CrewAI, LangChain, OpenAI Agents, Semantic Kernel, AutoGen).
+/// Final segments of decorator names that expose a function to the agent or
+/// MCP client (MCP, FastMCP, CrewAI, LangChain, OpenAI Agents, pydantic-ai,
+/// Semantic Kernel, AutoGen).
 const TOOL_DECORATORS: &[&str] = &[
     "tool",
+    "tool_plain",
     "function_tool",
+    "call_tool",
+    "resource",
+    "prompt",
     "kernel_function",
     "register_tool",
     "register_for_llm",
@@ -88,11 +93,13 @@ const TOOL_DECORATORS: &[&str] = &[
 /// Record functions decorated as agent tools in `parsed.entry_points`.
 ///
 /// Decorators may span several lines and stack; any tool decorator in the
-/// stack marks the next `def`.
+/// stack marks the next `def`. String literals and comments are masked first
+/// so their contents cannot hide a decorator or unbalance its parentheses.
 pub(crate) fn collect_entry_points(content: &str, parsed: &mut ParsedFile) {
+    let masked = mask_strings_and_comments(content);
     let mut pending = false;
     let mut depth: i32 = 0;
-    for line in content.lines() {
+    for line in masked.lines() {
         let trimmed = line.trim();
         if depth > 0 {
             depth += paren_delta(trimmed);
@@ -108,14 +115,18 @@ pub(crate) fn collect_entry_points(content: &str, parsed: &mut ParsedFile) {
                 parsed.entry_points.insert(name.to_string());
             }
         }
-        if !trimmed.is_empty() && !trimmed.starts_with('#') {
+        if !trimmed.is_empty() {
             pending = false;
         }
     }
 }
 
 fn is_tool_decorator(decorator: &str) -> bool {
-    let head = decorator.split('(').next().unwrap_or("").trim();
+    let head_len = decorator
+        .trim_start()
+        .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
+        .unwrap_or(decorator.trim_start().len());
+    let head = &decorator.trim_start()[..head_len];
     let last = head.rsplit('.').next().unwrap_or(head);
     TOOL_DECORATORS.contains(&last)
 }
@@ -136,6 +147,74 @@ fn paren_delta(text: &str) -> i32 {
         ')' => delta - 1,
         _ => delta,
     })
+}
+
+/// Replace the contents of string literals and comments with spaces, keeping
+/// quotes and newlines so line structure is preserved.
+fn mask_strings_and_comments(content: &str) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut chars = content.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '#' => {
+                out.push(' ');
+                while let Some(&next) = chars.peek() {
+                    if next == '\n' {
+                        break;
+                    }
+                    out.push(' ');
+                    chars.next();
+                }
+            }
+            '"' | '\'' => {
+                out.push(c);
+                let triple = chars.clone().take(2).all(|next| next == c);
+                if triple {
+                    chars.next();
+                    chars.next();
+                    out.push(c);
+                    out.push(c);
+                }
+                mask_string_body(&mut chars, &mut out, c, triple);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+fn mask_string_body(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    out: &mut String,
+    quote: char,
+    triple: bool,
+) {
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            out.push(' ');
+            if let Some(escaped) = chars.next() {
+                out.push(if escaped == '\n' { '\n' } else { ' ' });
+            }
+        } else if c == quote && (!triple || chars.clone().take(2).all(|next| next == quote)) {
+            out.push(c);
+            if triple {
+                chars.next();
+                chars.next();
+                out.push(c);
+                out.push(c);
+            }
+            return;
+        } else if c == '\n' {
+            out.push('\n');
+            // A single-quoted string cannot span lines; stop masking so an
+            // unterminated quote does not swallow the rest of the file.
+            if !triple {
+                return;
+            }
+        } else {
+            out.push(' ');
+        }
+    }
 }
 
 #[cfg(test)]
@@ -160,6 +239,21 @@ mod tests {
     fn handles_multiline_and_stacked_decorators() {
         let content = "@server.tool(\n    name=\"run\",\n    description=\"(x)\",\n)\n@functools.wraps(other)\ndef run(cmd): ...\n";
         assert_eq!(entry_points(content), ["run"]);
+    }
+
+    #[test]
+    fn strings_and_comments_cannot_hide_tool_decorators() {
+        let content = "@server.tool  # exposed\ndef a(x): ...\n\n@server.tool(\"a\", description=\"(\")\ndef b(x): ...\n\n@server.tool(  # (\n    \"c\",\n)\ndef c(x): ...\n";
+        assert_eq!(entry_points(content), ["a", "b", "c"]);
+    }
+
+    #[test]
+    fn masking_preserves_line_structure() {
+        let content = "x = \"\"\"a\n(b\"\"\"  # c(\ny = 'it\\'s'\n";
+        let masked = mask_strings_and_comments(content);
+        assert_eq!(masked.lines().count(), content.lines().count());
+        assert!(!masked.contains('('));
+        assert!(masked.starts_with("x = \"\"\""));
     }
 
     #[test]
