@@ -150,6 +150,10 @@ pub(crate) fn load_mcp_target(
         }
     }
 
+    // Named handlers passed to `server.tool(...)` are invoked by the agent,
+    // so cross-file analysis must not treat internal calls as their only input.
+    mark_named_handlers_as_entry_points(&tool_declarations, &mut parsed_files);
+
     // Phase 2: Cross-file sanitizer-aware analysis — downgrade operations
     // in functions that are only called with sanitized arguments.
     apply_cross_file_sanitization(&mut parsed_files);
@@ -346,4 +350,20 @@ pub(crate) fn collect_source_files_with_filter(
     }
 
     Ok(())
+}
+
+fn mark_named_handlers_as_entry_points(
+    declarations: &[super::tools::McpToolDeclaration],
+    parsed_files: &mut [(PathBuf, parser::ParsedFile)],
+) {
+    for declaration in declarations {
+        let Some(super::tools::McpToolHandler::Named { symbol }) = &declaration.handler else {
+            continue;
+        };
+        for (_, parsed) in parsed_files.iter_mut() {
+            if parsed.function_defs.iter().any(|def| &def.name == symbol) {
+                parsed.entry_points.insert(symbol.clone());
+            }
+        }
+    }
 }

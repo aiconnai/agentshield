@@ -334,6 +334,7 @@ The `apply_cross_file_sanitization()` function:
 
 **Conservative rules:**
 - Exported functions with zero discovered call sites stay tainted
+- Tool handlers (Python functions under a tool decorator such as `@mcp.tool`, `@tool` or `@kernel_function`, and named handlers passed to MCP `server.tool(...)`) are entry points recorded in `ParsedFile::entry_points`; internal call sites never downgrade them
 - If ANY call site passes a tainted argument, the parameter stays tainted
 - Only one level deep (caller → callee, not recursive)
 

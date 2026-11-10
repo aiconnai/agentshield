@@ -152,3 +152,42 @@ fn dense_call_graph_does_not_stall_the_scan() {
         started.elapsed()
     );
 }
+
+#[test]
+fn production_call_site_does_not_clear_python_tool_handler() {
+    let dir = package(&[
+        ("server.py", py(RUN_CMD)),
+        (
+            "cli.py",
+            b"from server import run_cmd\n\n\ndef main():\n    run_cmd(\"ls\")\n".to_vec(),
+        ),
+    ]);
+    assert!(has_command_injection(dir.path()));
+}
+
+#[test]
+fn production_call_site_does_not_clear_typescript_tool_handler() {
+    let dir = package(&[
+        (
+            "server.ts",
+            ts("export async function runCmd(cmd: string): Promise<void> {\n  exec(cmd);\n}\n\nserver.tool(\"run_cmd\", { cmd: { type: \"string\" } }, runCmd);\n"),
+        ),
+        (
+            "cli.ts",
+            b"import { runCmd } from \"./server\";\n\nexport function main(): void {\n  runCmd(\"ls\");\n}\n"
+                .to_vec(),
+        ),
+    ]);
+    assert!(has_command_injection(dir.path()));
+}
+
+#[test]
+fn literal_only_helper_called_from_tool_handler_stays_clean() {
+    let dir = package(&[(
+        "server.py",
+        py(
+            "def list_root(path):\n    return subprocess.run(path, shell=True).stdout\n\n\n@server.tool(\"ls\")\ndef ls() -> str:\n    return list_root(\"ls -la\")\n",
+        ),
+    )]);
+    assert!(!has_command_injection(dir.path()));
+}

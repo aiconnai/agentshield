@@ -39,6 +39,7 @@ pub fn apply_cross_file_sanitization(
     // name (issue #33). When two functions in a file share a param
     // name but only one is proven safe, that (param, sink) is excluded.
     let mut file_safe_param_sinks: HashMap<usize, HashSet<(String, SinkClass)>> = HashMap::new();
+    let mut entry_point_defs: Vec<(usize, Vec<String>)> = Vec::new();
     for (idx, (_, parsed)) in parsed_files.iter().enumerate() {
         let has_cmd = !parsed.commands.is_empty();
         let has_file = !parsed.file_operations.is_empty();
@@ -72,12 +73,23 @@ pub fn apply_cross_file_sanitization(
                         .insert((param.clone(), SinkClass::DynamicExec));
                 }
             }
+            if parsed.entry_points.contains(&def.name) {
+                entry_point_defs.push((idx, def.params.clone()));
+                continue;
+            }
             func_defs.entry(def.name.clone()).or_default().push((
                 idx,
                 def.params.clone(),
                 def.is_exported,
             ));
         }
+    }
+
+    // Entry points (tool handlers) receive arguments from the agent, so no
+    // internal call site can prove them safe. Like uncalled functions, they
+    // also make their param names ambiguous for siblings in the same file.
+    for (file_idx, params) in &entry_point_defs {
+        invalidate_params(&mut file_safe_param_sinks, *file_idx, params);
     }
 
     // Phase 2: Build call-site map.
@@ -116,14 +128,7 @@ pub fn apply_cross_file_sanitization(
                 // unambiguous safety for their params within their declaring files
                 // so no unsafe sibling sharing the param name gets downgraded.
                 for (file_idx, params, _) in defs {
-                    if let Some(set) = file_safe_param_sinks.get_mut(file_idx) {
-                        for param in params {
-                            set.remove(&(param.clone(), SinkClass::Command));
-                            set.remove(&(param.clone(), SinkClass::FilePath));
-                            set.remove(&(param.clone(), SinkClass::NetworkUrl));
-                            set.remove(&(param.clone(), SinkClass::DynamicExec));
-                        }
-                    }
+                    invalidate_params(&mut file_safe_param_sinks, *file_idx, params);
                 }
                 continue;
             }
@@ -132,12 +137,7 @@ pub fn apply_cross_file_sanitization(
         for (file_idx, params, _is_exported) in defs {
             // Check each parameter position
             for (param_idx, param_name) in params.iter().enumerate() {
-                for sink in [
-                    SinkClass::Command,
-                    SinkClass::FilePath,
-                    SinkClass::NetworkUrl,
-                    SinkClass::DynamicExec,
-                ] {
+                for sink in SINKS {
                     if all_call_sites_safe_for_sink(sites, param_idx, sink) {
                         params_to_downgrade.push((
                             *file_idx,
@@ -239,6 +239,28 @@ pub fn apply_cross_file_sanitization(
     CrossFileResult {
         downgraded_count,
         sanitized_functions,
+    }
+}
+
+const SINKS: [SinkClass; 4] = [
+    SinkClass::Command,
+    SinkClass::FilePath,
+    SinkClass::NetworkUrl,
+    SinkClass::DynamicExec,
+];
+
+/// Drop `params` from a file's unambiguous-safe set for every sink.
+fn invalidate_params(
+    file_safe_param_sinks: &mut HashMap<usize, HashSet<(String, SinkClass)>>,
+    file_idx: usize,
+    params: &[String],
+) {
+    if let Some(set) = file_safe_param_sinks.get_mut(&file_idx) {
+        for param in params {
+            for sink in SINKS {
+                set.remove(&(param.clone(), sink));
+            }
+        }
     }
 }
 

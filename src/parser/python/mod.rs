@@ -13,7 +13,10 @@ pub mod defs;
 pub mod patterns;
 pub mod scanner;
 
-use defs::{collect_function_defs_and_params, collect_http_client_vars, collect_sanitizer_vars};
+use defs::{
+    collect_entry_points, collect_function_defs_and_params, collect_http_client_vars,
+    collect_sanitizer_vars,
+};
 use scanner::scan_python_source;
 
 impl LanguageParser for PythonParser {
@@ -30,6 +33,7 @@ impl LanguageParser for PythonParser {
 
         // Collect function parameter names + FunctionDef entries
         let param_names = collect_function_defs_and_params(content, &file_path, &mut parsed);
+        collect_entry_points(content, &mut parsed);
 
         // Collect variable names bound to HTTP clients via async context managers
         let http_client_vars = collect_http_client_vars(content);
