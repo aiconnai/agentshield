@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use sha2::Digest;
-
+use crate::adapter::walk::{read_source_file, record_walk_error, source_walker_for};
 use crate::config::ScanPathFilter;
+use crate::coverage::CoverageRecorder;
 use crate::error::Result;
 use crate::ir::{Language, SourceFile};
 
@@ -65,13 +65,14 @@ pub(crate) fn collect_artifact_tree(
         return Ok(());
     }
 
-    let walker = ignore::WalkBuilder::new(dir)
-        .hidden(true)
-        .git_ignore(true)
-        .max_depth(Some(6))
-        .build();
-
-    for entry in walker.flatten() {
+    for item in source_walker_for(dir, root, filter) {
+        let entry = match item {
+            Ok(entry) => entry,
+            Err(err) => {
+                record_walk_error(filter.coverage(), &err);
+                continue;
+            }
+        };
         let path = entry.path();
         if !path.is_file() {
             continue;
@@ -104,7 +105,7 @@ pub(crate) fn collect_artifact_tree(
             );
 
         if is_relevant {
-            push_source_file(path, source_files)?;
+            push_source_file(path, filter.coverage(), source_files)?;
         }
     }
 
@@ -118,35 +119,22 @@ pub(crate) fn push_source_file_if_allowed(
     source_files: &mut Vec<SourceFile>,
 ) -> Result<()> {
     if filter.allows_path(root, path) {
-        push_source_file(path, source_files)?;
+        push_source_file(path, filter.coverage(), source_files)?;
     }
     Ok(())
 }
 
-pub(crate) fn push_source_file(path: &Path, source_files: &mut Vec<SourceFile>) -> Result<()> {
+pub(crate) fn push_source_file(
+    path: &Path,
+    coverage: &CoverageRecorder,
+    source_files: &mut Vec<SourceFile>,
+) -> Result<()> {
     if !path.exists() || !path.is_file() {
         return Ok(());
     }
 
-    let Ok(metadata) = std::fs::metadata(path) else {
-        return Ok(());
-    };
-    if metadata.len() > 1_048_576 {
-        return Ok(());
-    }
-
-    if let Ok(content) = std::fs::read_to_string(path) {
-        let hash = format!(
-            "{:x}",
-            sha2::Digest::finalize(sha2::Sha256::new().chain_update(content.as_bytes()))
-        );
-        source_files.push(SourceFile {
-            path: path.to_path_buf(),
-            language: language_for_path(path),
-            size_bytes: metadata.len(),
-            content_hash: hash,
-            content,
-        });
+    if let Some(source_file) = read_source_file(path, language_for_path(path), coverage) {
+        source_files.push(source_file);
     }
 
     Ok(())

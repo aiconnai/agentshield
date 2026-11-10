@@ -3,6 +3,7 @@ use std::path::Path;
 use chrono::Utc;
 use serde::Serialize;
 
+use crate::coverage::{CoverageEntry, MAX_REPORTED_COVERAGE_ENTRIES, ScanCoverage};
 use crate::error::Result;
 use crate::rules::Finding;
 use crate::rules::policy::PolicyVerdict;
@@ -61,6 +62,17 @@ struct JsonReport<'a> {
     summary: JsonSummary,
     verdict: &'a PolicyVerdict,
     findings: Vec<FindingWithFingerprint<'a>>,
+    /// Additive: absent unless the caller supplies scan coverage.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    coverage: Option<JsonCoverage<'a>>,
+}
+
+/// Paths the scan pruned, truncated or could not read.
+#[derive(Serialize)]
+struct JsonCoverage<'a> {
+    /// Total number of skipped paths, including any beyond the listed ones.
+    skipped_total: usize,
+    skipped: &'a [CoverageEntry],
 }
 
 /// Render findings as a JSON report, with a `fingerprint` and scan metadata.
@@ -69,6 +81,17 @@ pub fn render(
     verdict: &PolicyVerdict,
     target_name: &str,
     scan_root: &Path,
+) -> Result<String> {
+    render_with_coverage(findings, verdict, target_name, scan_root, None)
+}
+
+/// Like [`render`], adding the top-level `coverage` object when given.
+pub fn render_with_coverage(
+    findings: &[Finding],
+    verdict: &PolicyVerdict,
+    target_name: &str,
+    scan_root: &Path,
+    coverage: Option<&ScanCoverage>,
 ) -> Result<String> {
     let findings_with_fp: Vec<FindingWithFingerprint<'_>> = findings
         .iter()
@@ -89,6 +112,10 @@ pub fn render(
         summary,
         verdict,
         findings: findings_with_fp,
+        coverage: coverage.map(|coverage| JsonCoverage {
+            skipped_total: coverage.skipped.len(),
+            skipped: &coverage.skipped[..coverage.skipped.len().min(MAX_REPORTED_COVERAGE_ENTRIES)],
+        }),
     };
 
     let json = serde_json::to_string_pretty(&report)?;

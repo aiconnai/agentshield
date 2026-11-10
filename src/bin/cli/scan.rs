@@ -88,7 +88,7 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         custom_rules_dir: rules_dir,
     };
 
-    let mut report = match agentshield::scan_with_path_filter_overrides(
+    let (mut report, coverage) = match agentshield::scan_with_coverage(
         &path,
         &options,
         &include_patterns,
@@ -106,6 +106,8 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         }
         Err(err) => return Err(err),
     };
+
+    warn_about_coverage_gaps(&coverage);
 
     if let Some(ref bl_path) = baseline_path {
         let baseline = BaselineFile::load(bl_path)?;
@@ -161,14 +163,43 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
             },
         )
     } else if experimental_risk {
-        agentshield::render_report_with_experimental_risk(&report, format)?
+        agentshield::render_report_with_experimental_risk_and_coverage(&report, format, &coverage)?
     } else {
-        agentshield::render_report(&report, format)?
+        agentshield::render_report_with_coverage(&report, format, &coverage)?
     };
 
     write_rendered(output_path.as_ref(), &rendered)?;
 
     Ok(if report.verdict.pass { 0 } else { 1 })
+}
+
+/// Maximum number of skipped paths named in the stderr warning.
+const MAX_WARNED_COVERAGE_PATHS: usize = 10;
+
+/// Warn on stderr about files and directories that were not fully scanned
+/// (truncated, unreadable or beyond the depth limit). Deliberately pruned
+/// dependency directories are not warned about; the JSON report lists them.
+fn warn_about_coverage_gaps(coverage: &agentshield::coverage::ScanCoverage) {
+    let gaps: Vec<_> = coverage.gaps().collect();
+    if gaps.is_empty() {
+        return;
+    }
+    eprintln!(
+        "warning: {} path(s) were not fully scanned; findings there may be missing:",
+        gaps.len()
+    );
+    for entry in gaps.iter().take(MAX_WARNED_COVERAGE_PATHS) {
+        match &entry.detail {
+            Some(detail) => eprintln!("  {} [{}]: {detail}", entry.path, entry.reason.as_str()),
+            None => eprintln!("  {} [{}]", entry.path, entry.reason.as_str()),
+        }
+    }
+    if gaps.len() > MAX_WARNED_COVERAGE_PATHS {
+        eprintln!(
+            "  ... and {} more (use --format json for the full coverage list)",
+            gaps.len() - MAX_WARNED_COVERAGE_PATHS
+        );
+    }
 }
 
 fn parse_optional_severity(
