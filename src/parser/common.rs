@@ -39,6 +39,13 @@ pub(crate) fn sanitized_label_for_var(
 /// requires the opening quote to be closed for the first time at the very
 /// last character (backslash escapes are honoured).
 pub(crate) fn single_string_literal(arg: &str) -> Option<&str> {
+    let (inner, consumed) = leading_string_literal(arg)?;
+    (consumed == arg.len()).then_some(inner)
+}
+
+/// Parse the quoted string literal at the start of `arg`, returning its inner
+/// text and the number of bytes it spans (quotes included).
+pub(crate) fn leading_string_literal(arg: &str) -> Option<(&str, usize)> {
     let quote = arg.chars().next().filter(|c| matches!(c, '"' | '\''))?;
     if arg.len() < 2 {
         return None;
@@ -47,10 +54,7 @@ pub(crate) fn single_string_literal(arg: &str) -> Option<&str> {
     let triple = if quote == '"' { "\"\"\"" } else { "'''" };
     if arg.len() >= 6 && arg.starts_with(triple) {
         let body = &arg[3..];
-        return match body.find(triple) {
-            Some(idx) if idx + 3 == body.len() => Some(&body[..idx]),
-            _ => None,
-        };
+        return body.find(triple).map(|idx| (&body[..idx], idx + 6));
     }
     let inner = &arg[1..];
     let mut escaped = false;
@@ -60,7 +64,7 @@ pub(crate) fn single_string_literal(arg: &str) -> Option<&str> {
         } else if ch == '\\' {
             escaped = true;
         } else if ch == quote {
-            return (idx + 1 == inner.len()).then(|| &inner[..idx]);
+            return Some((&inner[..idx], idx + 2));
         }
     }
     None
