@@ -19,6 +19,7 @@ pub mod analysis;
 pub mod baseline;
 pub mod certify;
 pub mod config;
+pub mod coverage;
 pub mod doctor;
 pub mod egress;
 pub mod error;
@@ -146,6 +147,22 @@ pub fn scan_with_path_filter_overrides(
     include_patterns: &[String],
     exclude_patterns: &[String],
 ) -> Result<ScanReport> {
+    scan_with_coverage(path, options, include_patterns, exclude_patterns).map(|(report, _)| report)
+}
+
+/// Like [`scan_with_path_filter_overrides`], also returning the
+/// [`ScanCoverage`](coverage::ScanCoverage): the files and directories the file
+/// walker pruned, truncated or could not read.
+///
+/// Coverage is returned beside the report rather than inside it so
+/// [`ScanReport`] keeps its shape. Render it into the JSON report with
+/// [`render_report_with_coverage`].
+pub fn scan_with_coverage(
+    path: &Path,
+    options: &ScanOptions,
+    include_patterns: &[String],
+    exclude_patterns: &[String],
+) -> Result<(ScanReport, coverage::ScanCoverage)> {
     let policy = resolve_scan_policy(path, options)?;
     if let Some(notice) = policy.ignored_notice() {
         tracing::info!("{notice}");
@@ -171,6 +188,7 @@ pub fn scan_with_path_filter_overrides(
     let path_filter = ScanPathFilter::from_scan_config(&config.scan, ignore_tests)?;
     let path_filter_summary = path_filter.summary();
     let mut bundles = adapter::auto_detect_analysis_with_filter(path, &path_filter)?;
+    let coverage = path_filter.coverage().snapshot(path);
 
     // Perform interprocedural call-graph taint propagation
     crate::analysis::interprocedural::analyze_and_enrich_targets(&mut bundles);
@@ -209,14 +227,15 @@ pub fn scan_with_path_filter_overrides(
     let effective_findings = config.policy.apply(&all_findings, &scan_root);
     let verdict = config.policy.evaluate(&effective_findings);
 
-    Ok(ScanReport {
+    let report = ScanReport {
         target_name,
         findings: effective_findings,
         verdict,
         scan_root,
         targets,
         path_filter_summary,
-    })
+    };
+    Ok((report, coverage))
 }
 
 /// Decide which config file and custom rules directory a scan of `path` uses.
@@ -237,6 +256,33 @@ pub fn resolve_scan_policy(path: &Path, options: &ScanOptions) -> Result<Resolve
 
 /// Render a scan report in the specified format.
 pub fn render_report(report: &ScanReport, format: OutputFormat) -> Result<String> {
+    render_report_inner(report, format, None)
+}
+
+/// Render a scan report, adding the additive top-level `coverage` object to
+/// JSON output. Other formats render exactly as [`render_report`].
+pub fn render_report_with_coverage(
+    report: &ScanReport,
+    format: OutputFormat,
+    coverage: &coverage::ScanCoverage,
+) -> Result<String> {
+    render_report_inner(report, format, Some(coverage))
+}
+
+fn render_report_inner(
+    report: &ScanReport,
+    format: OutputFormat,
+    coverage: Option<&coverage::ScanCoverage>,
+) -> Result<String> {
+    if matches!(format, OutputFormat::Json) {
+        return output::json::render_with_coverage(
+            &report.findings,
+            &report.verdict,
+            &report.target_name,
+            &report.scan_root,
+            coverage,
+        );
+    }
     let rule_metadata = rules::RuleEngine::new().list_scanner_rules();
     output::render_with_metadata(
         &report.findings,
@@ -256,15 +302,33 @@ pub fn render_report_with_experimental_risk(
     report: &ScanReport,
     format: OutputFormat,
 ) -> Result<String> {
+    render_experimental_inner(report, format, None)
+}
+
+/// Like [`render_report_with_experimental_risk`], also adding the `coverage`
+/// object to JSON output.
+pub fn render_report_with_experimental_risk_and_coverage(
+    report: &ScanReport,
+    format: OutputFormat,
+    coverage: &coverage::ScanCoverage,
+) -> Result<String> {
+    render_experimental_inner(report, format, Some(coverage))
+}
+
+fn render_experimental_inner(
+    report: &ScanReport,
+    format: OutputFormat,
+    coverage: Option<&coverage::ScanCoverage>,
+) -> Result<String> {
     if !matches!(format, OutputFormat::Console | OutputFormat::Json) {
         return Err(error::ShieldError::Config(
             "`--experimental-risk` supports only console and JSON output".to_owned(),
         ));
     }
 
-    let base_report = render_report(report, format)?;
-    let coverage = risk::CoverageDescriptor::current();
-    let assessment = risk::assess(&report.findings, &report.scan_root, &coverage)
+    let base_report = render_report_inner(report, format, coverage)?;
+    let descriptor = risk::CoverageDescriptor::current();
+    let assessment = risk::assess(&report.findings, &report.scan_root, &descriptor)
         .map_err(|error| error::ShieldError::Internal(error.to_string()))?;
     risk::render_experimental(&base_report, &assessment, format)
 }

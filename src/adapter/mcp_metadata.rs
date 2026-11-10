@@ -72,7 +72,7 @@ enum SourceDetectionMode {
 }
 
 fn contains_mcp_source(root: &Path, mode: SourceDetectionMode) -> bool {
-    for entry in super::mcp::source_walker(root).flatten() {
+    for entry in super::walk::source_walker(root).flatten() {
         let path = entry.path();
         if !path.is_file() || super::mcp::is_test_file_in(root, path) {
             continue;

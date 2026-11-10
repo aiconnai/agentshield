@@ -2,6 +2,7 @@ use std::path::{Component, Path};
 
 use serde::{Deserialize, Serialize};
 
+use crate::coverage::CoverageRecorder;
 use crate::error::{Result, ShieldError};
 use crate::rules::policy::Policy;
 
@@ -51,6 +52,8 @@ pub struct ScanPathFilter {
     ignore_tests: bool,
     include: Vec<CompiledPathPattern>,
     exclude: Vec<CompiledPathPattern>,
+    /// Shared log of paths the file walker skipped; clones share it.
+    coverage: CoverageRecorder,
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +74,7 @@ impl ScanPathFilter {
             ignore_tests,
             include: Vec::new(),
             exclude: Vec::new(),
+            coverage: CoverageRecorder::default(),
         }
     }
 
@@ -79,6 +83,7 @@ impl ScanPathFilter {
             ignore_tests,
             include: compile_path_patterns("scan.include", &config.include)?,
             exclude: compile_path_patterns("scan.exclude", &config.exclude)?,
+            coverage: CoverageRecorder::default(),
         })
     }
 
@@ -99,6 +104,29 @@ impl ScanPathFilter {
             .any(|pattern| pattern.matches(&relative));
 
         included && !excluded
+    }
+
+    /// The shared log adapters use to record paths they did not fully scan.
+    pub fn coverage(&self) -> &CoverageRecorder {
+        &self.coverage
+    }
+
+    /// True when an exclude pattern of the form `<dir>/**` covers `dir`, so
+    /// nothing below it can be scanned and the walker may prune it.
+    ///
+    /// Only that unambiguous form prunes. Other patterns (`dir/*`, `**/*.py`)
+    /// can leave descendants of `dir` in scope, so they keep filtering files
+    /// after the walk.
+    pub fn excludes_directory(&self, root: &Path, dir: &Path) -> bool {
+        if self.exclude.is_empty() {
+            return false;
+        }
+        let relative = relative_path(root, dir);
+        !relative.is_empty()
+            && self
+                .exclude
+                .iter()
+                .any(|pattern| pattern.covers_directory(&relative))
     }
 
     pub fn summary(&self) -> ScanPathFilterSummary {
@@ -137,6 +165,16 @@ impl CompiledPathPattern {
         Ok(Self {
             raw: raw.to_string(),
             patterns,
+        })
+    }
+
+    fn covers_directory(&self, relative_dir: &str) -> bool {
+        self.patterns.iter().any(|pattern| {
+            pattern
+                .as_str()
+                .strip_suffix("/**")
+                .and_then(|prefix| glob::Pattern::new(prefix).ok())
+                .is_some_and(|prefix| prefix.matches_with(relative_dir, PATH_PATTERN_MATCH_OPTIONS))
         })
     }
 
