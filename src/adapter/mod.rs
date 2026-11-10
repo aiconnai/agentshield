@@ -28,7 +28,9 @@ pub(crate) fn read_file_capped(path: &Path) -> Option<String> {
     if metadata.len() > MAX_ADAPTER_FILE_SIZE_BYTES {
         return None;
     }
-    std::fs::read_to_string(path).ok()
+    // Decode lossily so one non-UTF-8 byte cannot hide a file from detection.
+    let bytes = std::fs::read(path).ok()?;
+    Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// Contextual analysis adapters load both public IR and non-serialized sidecar

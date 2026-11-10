@@ -72,13 +72,7 @@ enum SourceDetectionMode {
 }
 
 fn contains_mcp_source(root: &Path, mode: SourceDetectionMode) -> bool {
-    let walker = ignore::WalkBuilder::new(root)
-        .hidden(true)
-        .git_ignore(true)
-        .max_depth(Some(5))
-        .build();
-
-    for entry in walker.flatten() {
+    for entry in super::mcp::source_walker(root).flatten() {
         let path = entry.path();
         if !path.is_file() || super::mcp::is_test_file_in(root, path) {
             continue;
