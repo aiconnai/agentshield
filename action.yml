@@ -64,7 +64,7 @@ outputs:
     description: 'Path to the SARIF output file (if format=sarif)'
     value: ${{ steps.scan.outputs.sarif-file }}
   exit-code:
-    description: 'Exit code from the scan (0=pass, 1=fail, 2=error)'
+    description: 'Exit code from the scan (0=pass, 1=findings above fail-on, 2=scan error; any other code is an unexpected scanner failure and fails the step)'
     value: ${{ steps.scan.outputs.exit-code }}
 
 runs:
@@ -130,13 +130,35 @@ runs:
       run: |
         BASE_URL="https://github.com/aiconnai/agentshield/releases/download/${VERSION}"
 
+        # Verify the archive against the release's published checksum before
+        # extracting anything.
+        verify_checksum() {
+          local file="$1" archive="$2" expected actual
+          if ! curl -fsSL "${BASE_URL}/${archive}.sha256" -o "${file}.sha256"; then
+            echo "::error::Could not download ${archive}.sha256; refusing to use an unverified binary"
+            exit 1
+          fi
+          expected=$(awk '{print $1}' "${file}.sha256" | tr -d '\r' | tr 'A-F' 'a-f')
+          if command -v sha256sum >/dev/null 2>&1; then
+            actual=$(sha256sum "$file" | awk '{print $1}')
+          else
+            actual=$(shasum -a 256 "$file" | awk '{print $1}')
+          fi
+          if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+            echo "::error::Checksum mismatch for ${archive} (expected ${expected:-none}, got ${actual})"
+            exit 1
+          fi
+        }
+
         if [[ "$TARGET" == *"windows"* ]]; then
           ARCHIVE="agentshield-${VERSION}-${TARGET}.zip"
           curl -fsSL "${BASE_URL}/${ARCHIVE}" -o agentshield.zip
+          verify_checksum agentshield.zip "$ARCHIVE"
           unzip -o agentshield.zip -d "${RUNNER_TEMP_DIR}/agentshield"
         else
           ARCHIVE="agentshield-${VERSION}-${TARGET}.tar.gz"
           curl -fsSL "${BASE_URL}/${ARCHIVE}" -o agentshield.tar.gz
+          verify_checksum agentshield.tar.gz "$ARCHIVE"
           mkdir -p "${RUNNER_TEMP_DIR}/agentshield"
           tar xzf agentshield.tar.gz -C "${RUNNER_TEMP_DIR}/agentshield"
         fi
@@ -305,7 +327,7 @@ runs:
             body = (
                 f"{header}"
                 "✅ **No security vulnerabilities detected.** All agent tools, MCP endpoints, and execution flows passed security gates.\n\n"
-                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.2</sub>"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.3</sub>"
             )
         else:
             findings_table = "| Rule | Severity | Location | Message |\n|---|---|---|---|\n"
@@ -332,7 +354,7 @@ runs:
                 f"{findings_table}\n"
                 "#### 💡 Quick Fix\n"
                 "Run `agentshield fix .` locally to automatically remediate unpinned dependencies and unsafe deserializers.\n\n"
-                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.2</sub>"
+                "<sub>Scanned with [AgentShield](https://github.com/aiconnai/agentshield) v1.0.3</sub>"
             )
 
         import tempfile

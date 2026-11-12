@@ -267,7 +267,11 @@ fn user_directory_excludes_still_apply() {
         .findings
         .iter()
         .filter(|f| f.rule_id == "SHIELD-001")
-        .filter_map(|f| f.location.as_ref().map(|l| l.file.display().to_string()))
+        .filter_map(|f| {
+            f.location
+                .as_ref()
+                .map(|l| l.file.display().to_string().replace('\\', "/"))
+        })
         .collect();
     // `vendor/**` prunes the directory; `lib/*` only matches direct children,
     // so the nested file stays in scope.

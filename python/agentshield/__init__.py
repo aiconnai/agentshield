@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 
 class AgentShieldError(Exception):
@@ -217,7 +217,7 @@ def find_agentshield_bin() -> str:
 
     raise FileNotFoundError(
         "AgentShield binary not found on PATH or in virtual environment. "
-        "Please install via: pip install agent-shield, or cargo install agent-shield --features full"
+        "Install it with: curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh, or cargo install agent-shield --features full"
     )
 
 
