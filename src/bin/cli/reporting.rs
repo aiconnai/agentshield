@@ -44,6 +44,9 @@ pub(super) fn cmd_suppress(
         fail_on_override: None,
         ignore_tests: false,
         custom_rules_dir: None,
+        // The workspace is derived from the config file the user is editing,
+        // so its rules directory belongs to the same (trusted) project.
+        trust_target_config: true,
     };
     let report = agentshield::scan(&workspace, &options)?;
     let matches = report
@@ -162,27 +165,44 @@ pub(super) fn cmd_list_suppressions(
     Ok(0)
 }
 
-pub(super) fn cmd_certify(
-    path: PathBuf,
-    sign_key: Option<PathBuf>,
-    output: Option<PathBuf>,
-    config: Option<PathBuf>,
-    ignore_tests: bool,
-) -> Result<i32, agentshield::error::ShieldError> {
+pub(super) struct CertifyArgs {
+    pub(super) path: PathBuf,
+    pub(super) sign_key: Option<PathBuf>,
+    pub(super) output: Option<PathBuf>,
+    pub(super) config: Option<PathBuf>,
+    pub(super) ignore_tests: bool,
+    pub(super) trust_target_config: bool,
+}
+
+pub(super) fn cmd_certify(args: CertifyArgs) -> Result<i32, agentshield::error::ShieldError> {
     use agentshield::certify::envelope::{DsseEnvelope, build_attestation};
 
+    let CertifyArgs {
+        path,
+        sign_key,
+        output,
+        config,
+        ignore_tests,
+        trust_target_config,
+    } = args;
+
     let options = ScanOptions {
-        config_path: config.clone(),
+        config_path: config,
         format: OutputFormat::Console,
         fail_on_override: None,
         ignore_tests,
         custom_rules_dir: None,
+        trust_target_config,
     };
 
+    // Resolve once so the attested suppressions come from exactly the policy
+    // the scan applied, never from an untrusted target's own config.
+    let policy = agentshield::resolve_scan_policy(&path, &options)?;
+    if let Some(notice) = policy.ignored_notice() {
+        eprintln!("{notice}");
+    }
     let report = agentshield::scan(&path, &options)?;
-    let config_path = config.unwrap_or_else(|| path.join(".agentshield.toml"));
-    let cfg = Config::load(&config_path)?;
-    let suppressions = &cfg.policy.suppressions;
+    let suppressions = &policy.config.policy.suppressions;
 
     let payload = build_attestation(
         &report.scan_root,

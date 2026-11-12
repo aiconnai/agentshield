@@ -69,7 +69,7 @@ fn render_experimental_console(base_report: &str, output: &ExperimentalRiskOutpu
             rendered,
             "- {} {} {} {}: {} point(s)",
             contribution.fingerprint,
-            contribution.rule_id,
+            crate::output::console::terminal_safe(&contribution.rule_id),
             contribution.effective_severity,
             contribution.confidence,
             contribution.points

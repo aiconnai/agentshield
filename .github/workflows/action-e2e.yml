@@ -252,6 +252,29 @@ jobs:
           print('PASS: composite action used root config and suppressed excluded metadata findings')
           "
 
+      - name: "Test 8d: Composite action trusts the scanned subdirectory's own config"
+        id: subdir-target-config-action
+        uses: ./
+        with:
+          binary-path: ${{ runner.temp }}/agentshield/agentshield
+          path: tests/fixtures/action_subdir_filters
+          format: sarif
+          fail-on: low
+          upload-sarif: false
+
+      - name: "Test 8e: Verify the subdirectory config applied without config input"
+        shell: bash
+        run: |
+          if [ "${{ steps.subdir-target-config-action.outputs.exit-code }}" != "0" ]; then
+            echo "::error::the Action must apply <path>/.agentshield.toml (--trust-target-config), got exit ${{ steps.subdir-target-config-action.outputs.exit-code }}"
+            exit 1
+          fi
+          if [ "${{ steps.subdir-target-config-action.outputs.finding-count }}" != "0" ]; then
+            echo "::error::expected zero findings with the subdirectory config applied, got ${{ steps.subdir-target-config-action.outputs.finding-count }}"
+            exit 1
+          fi
+          echo "PASS: composite action applied the scanned subdirectory's own config"
+
       - name: "Test 9a: Prepare strict-mode fixtures"
         shell: bash
         run: |

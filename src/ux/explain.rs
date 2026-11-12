@@ -149,7 +149,9 @@ pub fn render_explain(report: &ScanReport, options: &ExplainOptions) -> String {
         "- It checks known risky patterns in supported agent surfaces and dependency metadata.\n",
     );
 
-    output
+    // Findings, paths and remediation text come from scanned sources and rule
+    // files; the layout itself uses no escape sequences.
+    crate::output::console::terminal_block_safe(&output).into_owned()
 }
 
 pub fn render_no_adapter_explain(

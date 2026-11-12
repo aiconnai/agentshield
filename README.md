@@ -142,6 +142,8 @@ jobs:
 
 Findings appear as PR annotations and in the repository's **Security > Code scanning** tab when SARIF upload is enabled.
 
+The Action applies the `.agentshield.toml` and `.agentshield/rules` found under `path`, even when `path` is a subdirectory, because it scans your own repository. Use the `config` input to point at a different config file.
+
 > [!IMPORTANT]
 > **Shipping fast without a security team?**  
 > Give us a ⭐ **star** to bookmark AgentShield. Run a 50ms scan before your next deploy so you never push rogue tools or leaked credentials to production.
@@ -344,7 +346,7 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield guard --stdin` | Evaluate one runtime event JSON document when built with the `runtime-guard` feature. |
 | `agentshield guard --mcp-proxy [-- <server cmd...>]` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages, block unsafe calls, and either emit forward markers or bridge stdio to a spawned downstream MCP server when built with the `runtime-guard` feature. |
 
-Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--explain`, `--experimental-risk`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
+Useful `scan` options include `--config`, `--rules-dir`, `--trust-target-config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--explain`, `--experimental-risk`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
 Configured `[scan] include` and `[scan] exclude` filters scope source and
 metadata-derived findings before detectors run.
 
@@ -381,7 +383,7 @@ agentshield list-rules --format json
 
 ### Custom Declarative Rules
 
-You can define custom organization security policies in `.agentshield/rules/*.yaml` or pass `--rules-dir <path>`:
+You can define custom organization security policies in `.agentshield/rules/*.yaml` or pass `--rules-dir <path>`. The scan root's `.agentshield/rules` loads only under the trust rule in [When the scanned directory's own config applies](#when-the-scanned-directorys-own-config-applies):
 
 ```yaml
 id: "ORG-001"
@@ -479,6 +481,34 @@ source-file count before relying on a focused scan in CI.
 Path filter matching is case-sensitive, accepts `/` on all platforms, treats
 leading `./` or `/` as relative to the scan root, and treats a trailing slash
 such as `legacy/` as matching that directory's contents.
+
+### When the scanned directory's own config applies
+
+A scanned directory can contain its own `.agentshield.toml` and
+`.agentshield/rules`. Third-party code (a downloaded MCP server, a package
+under `node_modules/`) could use them to suppress its own findings, so
+AgentShield applies them only when:
+
+- the scan root is the current working directory, as in `agentshield scan .`
+  from your repository root, pre-commit hooks and most CI jobs; or
+- you pass `--trust-target-config` (library: `ScanOptions { trust_target_config: true, .. }`).
+
+Otherwise the scan uses built-in defaults and prints one notice on stderr
+naming the ignored files; JSON, SARIF and HTML output are unaffected.
+`--config <path>` and `--rules-dir <path>` are always honoured. `certify`
+follows the same rule and accepts the same flag.
+
+```bash
+# Scan untrusted third-party code: its own policy is ignored
+agentshield scan ./node_modules/some-mcp-server
+
+# Scan a subdirectory of your own repository with its config
+agentshield scan packages/my-server --trust-target-config
+```
+
+The GitHub Action scans your own repository and passes
+`--trust-target-config` for you; the VS Code extension runs from your
+workspace root, so your workspace config applies automatically.
 
 ---
 

@@ -256,12 +256,22 @@ fn user_directory_excludes_still_apply() {
             b"[scan]\nexclude = [\"vendor/**\", \"lib/*\"]\n".to_vec(),
         ),
     ]);
-    let report = report(dir.path());
+    // The config lives in a temp dir, not the cwd, so it applies only when
+    // the caller opts in to the target's policy.
+    let options = ScanOptions {
+        trust_target_config: true,
+        ..ScanOptions::default()
+    };
+    let report = scan(dir.path(), &options).expect("scan succeeds");
     let flagged: Vec<_> = report
         .findings
         .iter()
         .filter(|f| f.rule_id == "SHIELD-001")
-        .filter_map(|f| f.location.as_ref().map(|l| l.file.display().to_string()))
+        .filter_map(|f| {
+            f.location
+                .as_ref()
+                .map(|l| l.file.display().to_string().replace('\\', "/"))
+        })
         .collect();
     // `vendor/**` prunes the directory; `lib/*` only matches direct children,
     // so the nested file stays in scope.

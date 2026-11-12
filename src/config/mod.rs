@@ -6,6 +6,8 @@ use crate::coverage::CoverageRecorder;
 use crate::error::{Result, ShieldError};
 use crate::rules::policy::Policy;
 
+pub mod trust;
+
 /// Top-level configuration from `.agentshield.toml`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {

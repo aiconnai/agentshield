@@ -35,7 +35,8 @@ pub mod ux;
 
 use std::path::Path;
 
-use config::{Config, ScanPathFilter, ScanPathFilterSummary};
+use config::trust::{PolicySources, ResolvedPolicy};
+use config::{ScanPathFilter, ScanPathFilterSummary};
 use error::Result;
 use ir::ScanTarget;
 use output::OutputFormat;
@@ -43,9 +44,24 @@ use rules::policy::PolicyVerdict;
 use rules::{Finding, RuleEngine};
 
 /// Options for a scan invocation.
+///
+/// Construct with struct-update syntax so new options stay source compatible:
+///
+/// ```
+/// use agentshield::ScanOptions;
+///
+/// let options = ScanOptions {
+///     ignore_tests: true,
+///     ..ScanOptions::default()
+/// };
+/// assert!(!options.trust_target_config);
+/// ```
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
-    /// Path to config file (defaults to `.agentshield.toml` in scan dir).
+    /// Explicit config file. Always honoured when set.
+    ///
+    /// When `None`, `<scan path>/.agentshield.toml` is used only if the scan
+    /// target is trusted (see [`scan`]); otherwise built-in defaults apply.
     pub config_path: Option<std::path::PathBuf>,
     /// Preferred output format for callers that render the resulting [`ScanReport`].
     pub format: OutputFormat,
@@ -53,8 +69,15 @@ pub struct ScanOptions {
     pub fail_on_override: Option<rules::Severity>,
     /// Skip test files (test/, tests/, *.test.ts, *.spec.ts, etc.).
     pub ignore_tests: bool,
-    /// Optional directory containing custom declarative rules (*.yaml, *.yml, *.json).
+    /// Explicit directory containing custom declarative rules (*.yaml, *.yml, *.json).
+    /// Always honoured when set.
     pub custom_rules_dir: Option<std::path::PathBuf>,
+    /// Apply the scan target's own `.agentshield.toml` and `.agentshield/rules`
+    /// even when the scan root is not the current working directory.
+    ///
+    /// Defaults to `false`. Enable it only for code you own; a target's policy
+    /// can suppress or ignore its own findings. CLI: `--trust-target-config`.
+    pub trust_target_config: bool,
 }
 
 impl Default for ScanOptions {
@@ -65,6 +88,7 @@ impl Default for ScanOptions {
             fail_on_override: None,
             ignore_tests: false,
             custom_rules_dir: None,
+            trust_target_config: false,
         }
     }
 }
@@ -92,6 +116,21 @@ impl ScanReport {
 }
 
 /// Run a complete scan: detect framework, parse, analyze, evaluate policy.
+///
+/// # Target policy trust
+///
+/// The scanned directory may contain its own `.agentshield.toml` and
+/// `.agentshield/rules`. Because a third-party target could use them to
+/// suppress its own findings, they are applied only when:
+///
+/// - the canonicalized `path` equals the canonicalized current working
+///   directory (scanning your own repository from its root), or
+/// - [`ScanOptions::trust_target_config`] is `true`.
+///
+/// Otherwise built-in defaults are used. [`ScanOptions::config_path`] and
+/// [`ScanOptions::custom_rules_dir`] are always honoured. Use
+/// [`resolve_scan_policy`] to inspect the decision, including any target
+/// policy files that were ignored.
 pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
     scan_with_path_filter_overrides(path, options, &[], &[])
 }
@@ -124,12 +163,11 @@ pub fn scan_with_coverage(
     include_patterns: &[String],
     exclude_patterns: &[String],
 ) -> Result<(ScanReport, coverage::ScanCoverage)> {
-    // Load config
-    let config_path = options
-        .config_path
-        .clone()
-        .unwrap_or_else(|| path.join(".agentshield.toml"));
-    let mut config = Config::load(&config_path)?;
+    let policy = resolve_scan_policy(path, options)?;
+    if let Some(notice) = policy.ignored_notice() {
+        tracing::info!("{notice}");
+    }
+    let mut config = policy.config;
 
     // Apply CLI path-filter overrides before constructing the filter used by
     // adapters. This keeps execution and the reported filter summary aligned.
@@ -157,29 +195,9 @@ pub fn scan_with_coverage(
 
     // Run detectors on all targets (built-in + custom)
     let mut engine = RuleEngine::new();
-    if let Some(ref dir) = options.custom_rules_dir {
+    if let Some(ref dir) = policy.rules_dir {
         if let Err(err) = engine.load_custom_rules_from(dir) {
             tracing::warn!(dir = %dir.display(), error = %err, "Failed to load custom rules");
-        }
-    } else if let Some(ref dir) = config.rules.custom_dir {
-        let abs_dir = if dir.is_absolute() {
-            dir.clone()
-        } else {
-            path.join(dir)
-        };
-        if let Err(err) = engine.load_custom_rules_from(&abs_dir) {
-            tracing::warn!(dir = %abs_dir.display(), error = %err, "Failed to load custom rules");
-        }
-    } else {
-        let default_rules_dir = path.join(".agentshield").join("rules");
-        if default_rules_dir.is_dir() {
-            if let Err(err) = engine.load_custom_rules_from(&default_rules_dir) {
-                tracing::warn!(
-                    dir = %default_rules_dir.display(),
-                    error = %err,
-                    "Failed to load default custom rules"
-                );
-            }
         }
     }
     let mut all_findings: Vec<Finding> = Vec::new();
@@ -218,6 +236,22 @@ pub fn scan_with_coverage(
         path_filter_summary,
     };
     Ok((report, coverage))
+}
+
+/// Decide which config file and custom rules directory a scan of `path` uses.
+///
+/// Applies the trust rule documented on [`scan`]. The returned value lists
+/// target policy files that exist but were ignored; callers such as the CLI
+/// surface [`ResolvedPolicy::ignored_notice`] on stderr.
+pub fn resolve_scan_policy(path: &Path, options: &ScanOptions) -> Result<ResolvedPolicy> {
+    ResolvedPolicy::resolve(
+        path,
+        PolicySources {
+            explicit_config: options.config_path.as_deref(),
+            explicit_rules_dir: options.custom_rules_dir.as_deref(),
+            trust_target_config: options.trust_target_config,
+        },
+    )
 }
 
 /// Render a scan report in the specified format.

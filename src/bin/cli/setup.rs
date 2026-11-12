@@ -59,6 +59,9 @@ pub(super) fn cmd_quickstart(
         fail_on_override: Some(fail_on),
         ignore_tests,
         custom_rules_dir: None,
+        // Quickstart initializes the user's own project: it writes (or keeps)
+        // that project's config and scans it with that project's rules.
+        trust_target_config: true,
     };
 
     match agentshield::scan(&path, &options) {
