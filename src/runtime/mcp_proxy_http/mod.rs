@@ -111,9 +111,9 @@ mod tests {
         assert!(resp.contains("HTTP/1.1 413 Payload Too Large"));
     }
 
-    /// Send one POST through a proxy whose upstream records whether it was
-    /// contacted. Returns the raw HTTP response and the upstream flag.
-    async fn post_through_proxy(body: &[u8]) -> (String, bool) {
+    /// Send one HTTP request through a proxy whose upstream records whether it
+    /// was contacted. Returns the raw HTTP response and the upstream flag.
+    async fn send_through_proxy(method: &str, body: &[u8]) -> (String, bool) {
         let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let upstream_addr = upstream.local_addr().unwrap();
         let contacted = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -143,18 +143,28 @@ mod tests {
         });
 
         let mut client = TcpStream::connect(listen_addr).await.unwrap();
-        let head = format!(
-            "POST /mcp HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
-            body.len()
-        );
+        let head = if body.is_empty() && method != "POST" {
+            format!("{method} /mcp HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        } else {
+            format!(
+                "{method} /mcp HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
+                body.len()
+            )
+        };
         client.write_all(head.as_bytes()).await.unwrap();
-        client.write_all(body).await.unwrap();
+        if !body.is_empty() {
+            client.write_all(body).await.unwrap();
+        }
 
         let mut resp = String::new();
         let (read_half, _) = client.split();
         let mut reader = BufReader::new(read_half);
         reader.read_to_string(&mut resp).await.unwrap();
         (resp, contacted.load(Ordering::SeqCst))
+    }
+
+    async fn post_through_proxy(body: &[u8]) -> (String, bool) {
+        send_through_proxy("POST", body).await
     }
 
     #[tokio::test]
@@ -191,5 +201,27 @@ mod tests {
         let body = br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
         let (resp, contacted) = post_through_proxy(body).await;
         assert!(contacted, "benign request must reach the upstream: {resp}");
+    }
+
+    #[tokio::test]
+    async fn disallowed_http_method_with_body_is_rejected_not_forwarded() {
+        let body = br#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"http.get","arguments":{"url":"http://169.254.169.254/"}}}"#;
+        let (resp, contacted) = send_through_proxy("PUT", body).await;
+        assert!(
+            resp.starts_with("HTTP/1.1 405 Method Not Allowed"),
+            "{resp}"
+        );
+        assert!(!contacted, "PUT must not bypass inspection to upstream");
+    }
+
+    #[tokio::test]
+    async fn non_post_method_with_body_is_rejected_and_bodyless_delete_forwards() {
+        let (resp, contacted) = send_through_proxy("DELETE", b"{}").await;
+        assert!(resp.starts_with("HTTP/1.1 400 Bad Request"), "{resp}");
+        assert!(!contacted, "DELETE with body must not reach upstream");
+
+        let (resp, contacted) = send_through_proxy("DELETE", b"").await;
+        assert!(resp.starts_with("HTTP/1.1 200 OK"), "{resp}");
+        assert!(contacted, "bodyless DELETE must forward to upstream");
     }
 }

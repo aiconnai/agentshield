@@ -270,20 +270,58 @@ pub(crate) async fn handle_connection(
         .await;
     }
 
-    // Forward any other HTTP requests
-    let mut body = vec![0u8; content_length];
-    if content_length > 0 {
-        reader
-            .read_exact(&mut body)
-            .await
-            .map_err(ShieldError::Io)?;
+    // MCP Streamable HTTP uses GET (SSE), POST (JSON-RPC) and DELETE (session
+    // termination), plus HEAD/OPTIONS. Any other method (for instance PUT or
+    // PATCH) cannot pass through the JSON-RPC inspector, so reject it.
+    if !matches!(method, "GET" | "HEAD" | "DELETE" | "OPTIONS") {
+        metrics.blocked_requests.fetch_add(1, Ordering::Relaxed);
+        log_audit(
+            &config.audit_log,
+            &peer_addr,
+            method,
+            path,
+            "rejected_method",
+            None,
+            None,
+        );
+        return send_http_response(
+            &mut client_write,
+            405,
+            "Method Not Allowed",
+            "text/plain",
+            b"Method Not Allowed: MCP proxy only permits GET, POST, HEAD, DELETE, OPTIONS\n",
+        )
+        .await;
     }
+
+    if content_length > 0 {
+        metrics.blocked_requests.fetch_add(1, Ordering::Relaxed);
+        log_audit(
+            &config.audit_log,
+            &peer_addr,
+            method,
+            path,
+            "rejected_unexpected_body",
+            None,
+            None,
+        );
+        return send_http_response(
+            &mut client_write,
+            400,
+            "Bad Request",
+            "text/plain",
+            b"Request body is only allowed on POST requests\n",
+        )
+        .await;
+    }
+
+    // Forward bodyless GET/HEAD/DELETE/OPTIONS requests.
     forward_http_request(
         &config.target_url,
         method,
         path,
         &headers,
-        &body,
+        &[],
         &mut client_write,
     )
     .await

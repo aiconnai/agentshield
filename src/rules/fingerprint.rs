@@ -92,16 +92,21 @@ pub fn scan_relative_path(path: &Path, scan_root: &Path) -> String {
         return slash_path(&lexical_normalize(relative), path);
     }
 
-    let absolute = if path.is_absolute() {
-        lexical_normalize(path)
-    } else {
-        std::env::current_dir()
-            .map(|cwd| lexical_normalize(&cwd.join(path)))
-            .unwrap_or_else(|_| lexical_normalize(path))
+    let resolve = |p: &Path| {
+        if p.is_absolute() {
+            lexical_normalize(p)
+        } else {
+            std::env::current_dir()
+                .map(|cwd| lexical_normalize(&cwd.join(p)))
+                .unwrap_or_else(|_| lexical_normalize(p))
+        }
     };
-    let root = lexical_normalize(scan_root);
-    if let Ok(relative) = absolute.strip_prefix(&root) {
-        return slash_path(relative, path);
+    let absolute = resolve(path);
+    let root = resolve(scan_root);
+    if !root.as_os_str().is_empty() {
+        if let Ok(relative) = absolute.strip_prefix(&root) {
+            return slash_path(relative, path);
+        }
     }
 
     if let (Ok(file), Ok(root)) = (absolute.canonicalize(), scan_root.canonicalize()) {
@@ -190,8 +195,12 @@ fn normalize_text(text: &str, raw_path: Option<&str>, relative: &str, scan_root:
         rewritten = rewritten.replace(raw, relative);
     }
     let root = scan_root.display().to_string();
-    if !root.is_empty() {
-        rewritten = rewritten.replace(&format!("{root}/"), "");
+    if !root.is_empty() && root != "." && root != "./" && root != ".\\" {
+        let trimmed = root.trim_end_matches(['/', '\\']);
+        if !trimmed.is_empty() && trimmed != "." {
+            rewritten = rewritten.replace(&format!("{trimmed}/"), "");
+            rewritten = rewritten.replace(&format!("{trimmed}\\"), "");
+        }
     }
     rewritten.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -394,5 +403,26 @@ mod tests {
             hasher.update(field.as_bytes());
         }
         assert_eq!(fps[0], hex::encode(hasher.finalize()));
+    }
+
+    #[test]
+    fn dot_scan_root_preserves_relative_import_in_snippet() {
+        let cwd = std::env::current_dir().expect("cwd");
+        let dot_findings = vec![finding("a.ts", 1, "import", r#"import x from "./helper""#)];
+        let cwd_file = cwd.join("a.ts");
+        let abs_findings = vec![finding(
+            cwd_file.to_str().expect("utf-8"),
+            1,
+            "import",
+            r#"import x from "./helper""#,
+        )];
+        let trailing_root = PathBuf::from(format!("{}/", cwd.display()));
+
+        let dot_fps = compute_fingerprints(&dot_findings, Path::new("."));
+        let cwd_fps = compute_fingerprints(&abs_findings, &cwd);
+        let trailing_fps = compute_fingerprints(&abs_findings, &trailing_root);
+
+        assert_eq!(dot_fps, cwd_fps);
+        assert_eq!(dot_fps, trailing_fps);
     }
 }
