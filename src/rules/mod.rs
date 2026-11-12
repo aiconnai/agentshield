@@ -206,17 +206,12 @@ fn dominant_finding_can_suppress(dominant: &Finding) -> bool {
     // SHIELD-003 finding in that uncertain case; suppress it only when the
     // dominant finding carries a concrete metadata/private indication (or is a
     // synthetic dominant finding with no taint path).
-    if dominant.rule_id == "SHIELD-013"
+    !(dominant.rule_id == "SHIELD-013"
         && dominant.taint_path.is_some()
         && !dominant
             .evidence
             .iter()
-            .any(|evidence| evidence.description.starts_with("Sink: HTTP request to "))
-    {
-        return false;
-    }
-
-    true
+            .any(|evidence| evidence.description.starts_with("Sink: HTTP request to ")))
 }
 
 #[cfg(test)]
