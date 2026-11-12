@@ -65,11 +65,29 @@ jobs:
         if: (startsWith(github.ref, 'refs/tags/v') || inputs.publish == true) && env.VSCE_PAT != ''
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: npx vsce publish -p "$VSCE_PAT" || echo "VSCE version already published or skipped"
+        run: |
+          # Only an already-published version is tolerated; any other failure
+          # (bad token, packaging error, network) must fail the job.
+          set -o pipefail
+          if ! npx vsce publish -p "$VSCE_PAT" 2>&1 | tee /tmp/vsce.log; then
+            if grep -qiE "already exists|already published" /tmp/vsce.log; then
+              echo "::notice::This extension version is already on the VS Code Marketplace"
+            else
+              exit 1
+            fi
+          fi
 
       # Publish to Open VSX Registry if OVSX_PAT secret is available
       - name: Publish to Open VSX Registry
         if: (startsWith(github.ref, 'refs/tags/v') || inputs.publish == true) && env.OVSX_PAT != ''
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx -y ovsx publish agentshield.vsix -p "$OVSX_PAT" || echo "Open VSX version already published or skipped"
+        run: |
+          set -o pipefail
+          if ! npx -y ovsx publish agentshield.vsix -p "$OVSX_PAT" 2>&1 | tee /tmp/ovsx.log; then
+            if grep -qiE "already exists|already published" /tmp/ovsx.log; then
+              echo "::notice::This extension version is already on Open VSX"
+            else
+              exit 1
+            fi
+          fi
