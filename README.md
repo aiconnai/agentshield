@@ -506,8 +506,9 @@ agentshield scan ./node_modules/some-mcp-server
 agentshield scan packages/my-server --trust-target-config
 ```
 
-The GitHub Action and the VS Code extension scan your own repository and
-pass `--trust-target-config` for you.
+The GitHub Action scans your own repository and passes
+`--trust-target-config` for you; the VS Code extension runs from your
+workspace root, so your workspace config applies automatically.
 
 ---
 
