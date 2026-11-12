@@ -522,7 +522,7 @@ pub(crate) fn is_exact_pinned_version(version: &str) -> bool {
         .trim_start_matches('v')
         .trim();
 
-    if normalized.contains('*')
+    !(normalized.contains('*')
         || normalized.contains('x')
         || normalized.contains('>')
         || normalized.contains('<')
@@ -530,12 +530,7 @@ pub(crate) fn is_exact_pinned_version(version: &str) -> bool {
         || normalized.contains('~')
         || normalized.contains('|')
         || normalized.contains(',')
-        || normalized.contains(' ')
-    {
-        return false;
-    }
-
-    true
+        || normalized.contains(' '))
 }
 
 #[cfg(test)]

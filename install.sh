@@ -3,13 +3,16 @@
 # Usage: curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
 #
 # Environment variables:
-#   VERSION      - Specify target version (e.g. "v1.0.2"). Defaults to latest.
+#   VERSION      - Specify target version (e.g. "v1.0.3"). Defaults to latest.
 #   INSTALL_DIR  - Target installation directory. Defaults to ~/.local/bin or /usr/local/bin.
+#
+# The archive is verified against the release's published .sha256 file before
+# anything is installed; a missing or mismatched checksum aborts the install.
 
 set -e
 
 REPO="aiconnai/agentshield"
-DEFAULT_VERSION="v1.0.2"
+DEFAULT_VERSION="v1.0.3"
 
 # Text styling
 if [ -t 1 ]; then
@@ -128,15 +131,42 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Download binary archive
-if command -v curl >/dev/null 2>&1; then
-  curl -fSL --progress-bar "$DOWNLOAD_URL" -o "$TMP_DIR/$ARCHIVE_NAME"
-elif command -v wget >/dev/null 2>&1; then
-  wget -q --show-progress "$DOWNLOAD_URL" -O "$TMP_DIR/$ARCHIVE_NAME"
-else
-  log_error "Neither curl nor wget found in PATH."
+download() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fSL --progress-bar "$1" -o "$2"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q --show-progress "$1" -O "$2"
+  else
+    log_error "Neither curl nor wget found in PATH."
+    exit 1
+  fi
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    log_error "Neither sha256sum nor shasum found in PATH; cannot verify the download."
+    exit 1
+  fi
+}
+
+# Download binary archive and its published checksum
+download "$DOWNLOAD_URL" "$TMP_DIR/$ARCHIVE_NAME"
+if ! download "${DOWNLOAD_URL}.sha256" "$TMP_DIR/${ARCHIVE_NAME}.sha256"; then
+  log_error "Could not download ${ARCHIVE_NAME}.sha256; refusing to install an unverified binary."
   exit 1
 fi
+
+EXPECTED_SHA=$(awk '{print $1}' "$TMP_DIR/${ARCHIVE_NAME}.sha256" | tr -d '\r' | tr 'A-F' 'a-f')
+ACTUAL_SHA=$(sha256_of "$TMP_DIR/$ARCHIVE_NAME")
+if [ -z "$EXPECTED_SHA" ] || [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+  log_error "Checksum mismatch for ${ARCHIVE_NAME} (expected ${EXPECTED_SHA:-none}, got ${ACTUAL_SHA})."
+  exit 1
+fi
+log_info "Checksum verified (sha256 ${ACTUAL_SHA})"
 
 # Extract and install
 log_info "Extracting ${ARCHIVE_NAME}..."
