@@ -14,6 +14,12 @@ use crate::runtime::{RuntimeEvent, RuntimeVerdict, evaluate_runtime_event};
 /// implementation-defined range (-32000..-32099).
 pub const BLOCKED_ERROR_CODE: i64 = -32001;
 
+/// Rule id reported for the allowed members of a JSON-RPC batch that was
+/// rejected because another member was blocked.
+pub const BATCH_REJECTED_RULE_ID: &str = "AGENTSHIELD-RUNTIME-BATCH-REJECTED";
+
+const INVALID_INPUT_RULE_ID: &str = "AGENTSHIELD-RUNTIME-INVALID-INPUT";
+
 /// What the proxy should do with an inbound JSON-RPC message.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProxyDecision {
@@ -62,7 +68,78 @@ impl ProxyPolicy {
 /// A `tools/call` is turned into a [`RuntimeEvent`], evaluated, and either
 /// forwarded or blocked per `policy`. Fails closed: a `tools/call` whose params
 /// cannot be parsed is blocked.
+///
+/// A JSON-RPC batch (a JSON array) is decided per element and handled
+/// atomically, so a `tools/call` cannot hide inside a batch:
+///
+/// - every element forwards: [`ProxyDecision::Forward`] (the batch is
+///   forwarded unchanged);
+/// - every element forwards but some blocks were suppressed by `never`
+///   overrides: [`ProxyDecision::ForwardSuppressed`] with the suppressed rule
+///   ids joined by `,`;
+/// - any element blocks, or is not a JSON object: nothing is forwarded and
+///   [`ProxyDecision::Block`] carries a JSON-RPC batch response, an array with
+///   one error object per member that has an `id` (blocked members carry their
+///   own rule id, the others [`BATCH_REJECTED_RULE_ID`]). If no member has an
+///   `id` the array is empty, which means nothing must be sent to the client;
+/// - an empty batch blocks with a single invalid-input error object.
 pub fn decide(request: &Value, policy: &ProxyPolicy) -> ProxyDecision {
+    if let Value::Array(elements) = request {
+        return decide_batch(elements, policy);
+    }
+    decide_single(request, policy)
+}
+
+fn decide_batch(elements: &[Value], policy: &ProxyPolicy) -> ProxyDecision {
+    if elements.is_empty() {
+        return ProxyDecision::Block(blocked_error(&Value::Null, "block", INVALID_INPUT_RULE_ID));
+    }
+
+    let decisions: Vec<ProxyDecision> = elements
+        .iter()
+        .map(|element| match element {
+            Value::Object(_) => decide_single(element, policy),
+            _ => ProxyDecision::Block(blocked_error(&Value::Null, "block", INVALID_INPUT_RULE_ID)),
+        })
+        .collect();
+
+    let any_blocked = decisions
+        .iter()
+        .any(|decision| matches!(decision, ProxyDecision::Block(_)));
+    if any_blocked {
+        let responses = elements
+            .iter()
+            .zip(decisions)
+            .filter_map(|(element, decision)| match decision {
+                // Non-object members cannot carry an id; report them with a
+                // null id, as JSON-RPC 2.0 does for invalid requests.
+                ProxyDecision::Block(error) if !element.is_object() => Some(error),
+                ProxyDecision::Block(error) => element.get("id").map(|_| error),
+                _ => element
+                    .get("id")
+                    .map(|id| blocked_error(id, "block", BATCH_REJECTED_RULE_ID)),
+            })
+            .collect();
+        return ProxyDecision::Block(Value::Array(responses));
+    }
+
+    let suppressed: Vec<String> = decisions
+        .into_iter()
+        .filter_map(|decision| match decision {
+            ProxyDecision::ForwardSuppressed { rule_id } => Some(rule_id),
+            _ => None,
+        })
+        .collect();
+    if suppressed.is_empty() {
+        ProxyDecision::Forward
+    } else {
+        ProxyDecision::ForwardSuppressed {
+            rule_id: suppressed.join(","),
+        }
+    }
+}
+
+fn decide_single(request: &Value, policy: &ProxyPolicy) -> ProxyDecision {
     if request.get("method").and_then(Value::as_str) != Some("tools/call") {
         return ProxyDecision::Forward;
     }
@@ -73,11 +150,7 @@ pub fn decide(request: &Value, policy: &ProxyPolicy) -> ProxyDecision {
         Some(event) => event,
         // Fail closed: unparseable tools/call params are blocked.
         None => {
-            return ProxyDecision::Block(blocked_error(
-                &id,
-                "block",
-                "AGENTSHIELD-RUNTIME-INVALID-INPUT",
-            ));
+            return ProxyDecision::Block(blocked_error(&id, "block", INVALID_INPUT_RULE_ID));
         }
     };
 
@@ -387,5 +460,107 @@ mod tests {
             ProxyDecision::Block(_) => {}
             other => panic!("expected array metadata to block, got {other:?}"),
         }
+    }
+
+    fn ssrf_call(id: i64) -> Value {
+        json!({
+            "jsonrpc": "2.0", "id": id, "method": "tools/call",
+            "params": {"name": "http.get", "arguments": {"url": "http://169.254.169.254/latest/meta-data/"}}
+        })
+    }
+
+    #[test]
+    fn batch_with_hidden_blocked_call_is_rejected_as_a_whole() {
+        let batch = json!([
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            ssrf_call(2),
+            // A notification (no id) gets no response object.
+            {"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "calc.add", "arguments": {}}},
+        ]);
+        let ProxyDecision::Block(response) = decide(&batch, &ProxyPolicy::default()) else {
+            panic!("a batch hiding a blocked tools/call must not be forwarded");
+        };
+        let responses = response.as_array().expect("batch response is an array");
+        assert_eq!(responses.len(), 2, "one response per request with an id");
+        assert_eq!(responses[0]["id"], 1);
+        assert_eq!(responses[0]["error"]["code"], BLOCKED_ERROR_CODE);
+        assert_eq!(
+            responses[0]["error"]["data"]["rule_id"],
+            BATCH_REJECTED_RULE_ID
+        );
+        assert_eq!(responses[1]["id"], 2);
+        assert_eq!(
+            responses[1]["error"]["data"]["rule_id"],
+            "AGENTSHIELD-RUNTIME-METADATA-SSRF"
+        );
+        assert!(!response.to_string().contains("169.254.169.254"));
+    }
+
+    #[test]
+    fn benign_batch_is_forwarded_unchanged() {
+        let batch = json!([
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            tools_call("calculator.add", json!({"a": 1})),
+        ]);
+        assert_eq!(
+            decide(&batch, &ProxyPolicy::default()),
+            ProxyDecision::Forward
+        );
+    }
+
+    #[test]
+    fn batch_with_suppressed_block_forwards_and_reports_rule() {
+        let batch = json!([ssrf_call(1), tools_call("calculator.add", json!({}))]);
+        let policy = ProxyPolicy {
+            fail_on: FailOn::Block,
+            tool_overrides: vec![("http.get".to_string(), FailOn::Never)],
+        };
+        assert_eq!(
+            decide(&batch, &policy),
+            ProxyDecision::ForwardSuppressed {
+                rule_id: "AGENTSHIELD-RUNTIME-METADATA-SSRF".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn batch_of_blocked_notifications_yields_no_response_objects() {
+        let notification = json!({
+            "jsonrpc": "2.0", "method": "tools/call",
+            "params": {"name": "http.get", "arguments": {"url": "http://169.254.169.254/"}}
+        });
+        assert_eq!(
+            decide(&json!([notification]), &ProxyPolicy::default()),
+            ProxyDecision::Block(json!([]))
+        );
+    }
+
+    #[test]
+    fn empty_or_malformed_batches_fail_closed() {
+        match decide(&json!([]), &ProxyPolicy::default()) {
+            ProxyDecision::Block(err) => {
+                assert!(err.is_object(), "empty batch gets a single error");
+                assert_eq!(err["id"], Value::Null);
+                assert_eq!(
+                    err["error"]["data"]["rule_id"],
+                    "AGENTSHIELD-RUNTIME-INVALID-INPUT"
+                );
+            }
+            other => panic!("expected empty batch to block, got {other:?}"),
+        }
+
+        // A nested array could smuggle a call past a lenient server.
+        let nested = json!([[ssrf_call(1)], {"jsonrpc": "2.0", "id": 2, "method": "ping"}]);
+        let ProxyDecision::Block(response) = decide(&nested, &ProxyPolicy::default()) else {
+            panic!("non-object batch element must fail closed");
+        };
+        let responses = response.as_array().expect("array");
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0]["id"], Value::Null);
+        assert_eq!(
+            responses[0]["error"]["data"]["rule_id"],
+            "AGENTSHIELD-RUNTIME-INVALID-INPUT"
+        );
+        assert_eq!(responses[1]["id"], 2);
     }
 }

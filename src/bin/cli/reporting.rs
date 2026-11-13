@@ -50,9 +50,9 @@ pub(super) fn cmd_suppress(
     };
     let report = agentshield::scan(&workspace, &options)?;
     let matches = report
-        .findings
-        .into_iter()
-        .any(|finding| finding.fingerprint(&report.scan_root) == fingerprint);
+        .finding_fingerprints()
+        .iter()
+        .any(|candidate| candidate == &fingerprint);
     if !matches {
         eprintln!("Error: fingerprint '{fingerprint}' was not found in scan results.");
         return Ok(2);
@@ -175,7 +175,7 @@ pub(super) struct CertifyArgs {
 }
 
 pub(super) fn cmd_certify(args: CertifyArgs) -> Result<i32, agentshield::error::ShieldError> {
-    use agentshield::certify::envelope::{DsseEnvelope, build_attestation};
+    use agentshield::certify::envelope::{DsseEnvelope, build_attestation_with_fingerprints};
 
     let CertifyArgs {
         path,
@@ -204,9 +204,10 @@ pub(super) fn cmd_certify(args: CertifyArgs) -> Result<i32, agentshield::error::
     let report = agentshield::scan(&path, &options)?;
     let suppressions = &policy.config.policy.suppressions;
 
-    let payload = build_attestation(
+    let payload = build_attestation_with_fingerprints(
         &report.scan_root,
         &report.findings,
+        &report.finding_fingerprints(),
         suppressions,
         &report.targets,
         None,

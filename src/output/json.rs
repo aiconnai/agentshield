@@ -93,11 +93,33 @@ pub fn render_with_coverage(
     scan_root: &Path,
     coverage: Option<&ScanCoverage>,
 ) -> Result<String> {
+    let fingerprints = crate::rules::fingerprint::compute_fingerprints(findings, scan_root);
+    render_fingerprinted(
+        findings,
+        &fingerprints,
+        verdict,
+        target_name,
+        scan_root,
+        coverage,
+    )
+}
+
+/// Render a JSON report with precomputed fingerprints aligned with `findings`,
+/// adding the top-level `coverage` object when given.
+pub(crate) fn render_fingerprinted(
+    findings: &[Finding],
+    fingerprints: &[String],
+    verdict: &PolicyVerdict,
+    target_name: &str,
+    scan_root: &Path,
+    coverage: Option<&ScanCoverage>,
+) -> Result<String> {
     let findings_with_fp: Vec<FindingWithFingerprint<'_>> = findings
         .iter()
-        .map(|f| FindingWithFingerprint {
+        .zip(fingerprints)
+        .map(|(f, fp)| FindingWithFingerprint {
             finding: f,
-            fingerprint: f.fingerprint(scan_root),
+            fingerprint: fp.clone(),
         })
         .collect();
 

@@ -115,17 +115,27 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
 
     if let Some(ref bl_path) = baseline_path {
         let baseline = BaselineFile::load(bl_path)?;
-        report.findings.retain(|f| {
-            let fp = f.fingerprint(&report.scan_root);
-            !baseline.contains(&fp)
-        });
+        if baseline.uses_legacy_fingerprints() {
+            eprintln!(
+                "note: baseline {} uses legacy schema v{}; matching with legacy fingerprints. \
+                 Re-run with --write-baseline to upgrade it.",
+                bl_path.display(),
+                baseline.schema_version
+            );
+        }
+        let scan_root = report.scan_root.clone();
+        report.retain_findings(|f, fp| !baseline.matches(f, fp, &scan_root));
         if let Some(fail_on_sev) = fail_on {
             cfg.policy.fail_on = fail_on_sev;
         }
         // Re-apply policy (ignore rules, overrides, suppressions) to the
         // baseline-filtered findings before re-evaluating the verdict, so the
         // verdict stays consistent with the rendered findings (issue #34).
-        let effective = cfg.policy.apply(&report.findings, &report.scan_root);
+        let (effective, _) = cfg.policy.apply_with_fingerprints(
+            &report.findings,
+            &report.fingerprints,
+            &report.scan_root,
+        );
         report.verdict = cfg.policy.evaluate(&effective);
     }
 
@@ -134,8 +144,9 @@ pub(super) fn cmd_scan(args: ScanArgs) -> Result<i32, agentshield::error::Shield
         let entries: Vec<BaselineEntry> = report
             .findings
             .iter()
-            .map(|f| BaselineEntry {
-                fingerprint: f.fingerprint(&report.scan_root),
+            .zip(report.finding_fingerprints().iter())
+            .map(|(f, fp)| BaselineEntry {
+                fingerprint: fp.clone(),
                 rule_id: f.rule_id.clone(),
                 first_seen: now.clone(),
             })
