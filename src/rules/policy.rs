@@ -4,6 +4,7 @@ use std::path::Path;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
+use super::fingerprint::compute_fingerprints;
 use super::{Finding, Severity};
 
 /// Policy verdict — the final pass/fail decision after applying
@@ -127,27 +128,56 @@ impl Policy {
 
     /// Filter findings: remove ignored rules, apply overrides,
     /// and filter out suppressed findings.
+    ///
+    /// Suppressions match either the scheme-v2 fingerprint (computed over
+    /// `findings`, so pass the complete set of a scan) or the legacy v1
+    /// fingerprint written by earlier releases.
     pub fn apply(&self, findings: &[Finding], scan_root: &Path) -> Vec<Finding> {
+        let fingerprints = compute_fingerprints(findings, scan_root);
+        self.apply_with_fingerprints(findings, &fingerprints, scan_root)
+            .0
+    }
+
+    /// Like [`Policy::apply`], but with precomputed scheme-v2 fingerprints
+    /// aligned with `findings`. Returns the effective findings together with
+    /// their fingerprints, still aligned. Misaligned fingerprints are
+    /// recomputed from `findings`.
+    pub fn apply_with_fingerprints(
+        &self,
+        findings: &[Finding],
+        fingerprints: &[String],
+        scan_root: &Path,
+    ) -> (Vec<Finding>, Vec<String>) {
+        let recomputed;
+        let fingerprints = if fingerprints.len() == findings.len() {
+            fingerprints
+        } else {
+            recomputed = compute_fingerprints(findings, scan_root);
+            &recomputed
+        };
         let suppressed = self.active_suppressions();
 
         findings
             .iter()
-            .filter(|f| !self.ignore_rules.contains(&f.rule_id))
-            .filter(|f| {
+            .zip(fingerprints)
+            .filter(|(f, _)| !self.ignore_rules.contains(&f.rule_id))
+            .filter(|(f, fp)| {
                 if suppressed.is_empty() {
                     return true;
                 }
-                let fp = f.fingerprint(scan_root);
-                !suppressed.contains(fp.as_str())
+                if suppressed.contains(fp.as_str()) {
+                    return false;
+                }
+                !suppressed.contains(f.legacy_fingerprint(scan_root).as_str())
             })
-            .map(|f| {
+            .map(|(f, fp)| {
                 let mut f = f.clone();
                 if let Some(&override_sev) = self.overrides.get(&f.rule_id) {
                     f.severity = override_sev;
                 }
-                f
+                (f, fp.clone())
             })
-            .collect()
+            .unzip()
     }
 }
 
@@ -250,7 +280,7 @@ mod tests {
             "/project/src/main.py",
             "subprocess.run receives parameter",
         );
-        let fp = finding.fingerprint(scan_root);
+        let fp = finding.legacy_fingerprint(scan_root);
 
         let mut policy = Policy::default();
         policy.suppressions.push(Suppression {
@@ -276,7 +306,7 @@ mod tests {
             "/project/src/main.py",
             "subprocess.run receives parameter",
         );
-        let fp = finding.fingerprint(scan_root);
+        let fp = finding.legacy_fingerprint(scan_root);
 
         let mut policy = Policy::default();
         policy.suppressions.push(Suppression {
@@ -303,7 +333,7 @@ mod tests {
             "/project/src/main.py",
             "subprocess.run receives parameter",
         );
-        let fp = finding.fingerprint(scan_root);
+        let fp = finding.legacy_fingerprint(scan_root);
 
         let mut policy = Policy::default();
         policy.suppressions.push(Suppression {
@@ -329,7 +359,7 @@ mod tests {
             "/project/src/main.py",
             "subprocess.run receives parameter",
         );
-        let fp = finding.fingerprint(scan_root);
+        let fp = finding.legacy_fingerprint(scan_root);
 
         let mut policy = Policy::default();
         policy.suppressions.push(Suppression {

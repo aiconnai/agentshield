@@ -1,4 +1,3 @@
-use sha2::Digest;
 use std::path::{Path, PathBuf};
 
 use crate::analysis::AnalysisBundle;
@@ -21,6 +20,7 @@ use super::provenance::parse_provenance;
 use super::tools::{
     dedupe_tools_by_name, extract_mcp_tool_declarations_from_source, extract_mcp_tools_from_source,
 };
+use crate::adapter::walk::{read_source_file, record_walk_error, source_walker, source_walker_for};
 
 pub(crate) struct ToolDeclForComposite {
     pub(crate) tool_name: String,
@@ -269,39 +269,20 @@ pub(crate) fn has_recursive_python_import(root: &Path, needles: &[&str]) -> bool
     false
 }
 
-/// Maximum directory depth walked when collecting source files.
-const MAX_SOURCE_WALK_DEPTH: usize = 64;
-
-/// Tooling directories that never hold the scanned extension's own source.
-const SKIPPED_TOOLING_DIRS: &[&str] = &[".git", ".venv", ".tox", ".nox"];
-
-/// Walker shared by source collection and framework detection.
-///
-/// The scanned tree is untrusted: a package must not be able to hide a
-/// payload from the scan, or from adapter detection, with a `.ignore` file, a
-/// dot-directory or deep nesting. Only well-known tooling directories are
-/// skipped.
-pub(crate) fn source_walker(root: &Path) -> ignore::Walk {
-    ignore::WalkBuilder::new(root)
-        .hidden(false)
-        .ignore(false)
-        .git_ignore(true)
-        .max_depth(Some(MAX_SOURCE_WALK_DEPTH))
-        .filter_entry(|entry| {
-            !entry
-                .file_name()
-                .to_str()
-                .is_some_and(|name| SKIPPED_TOOLING_DIRS.contains(&name))
-        })
-        .build()
-}
-
 pub(crate) fn collect_source_files_with_filter(
     root: &Path,
     filter: &ScanPathFilter,
     files: &mut Vec<SourceFile>,
 ) -> Result<()> {
-    for entry in source_walker(root).flatten() {
+    let coverage = filter.coverage();
+    for item in source_walker_for(root, root, filter) {
+        let entry = match item {
+            Ok(entry) => entry,
+            Err(err) => {
+                record_walk_error(coverage, &err);
+                continue;
+            }
+        };
         let path = entry.path();
         if !path.is_file() {
             continue;
@@ -325,29 +306,8 @@ pub(crate) fn collect_source_files_with_filter(
             continue;
         }
 
-        // Skip files larger than 1MB
-        let Ok(metadata) = std::fs::metadata(path) else {
-            continue;
-        };
-        if metadata.len() > 1_048_576 {
-            continue;
-        }
-
-        // Decode lossily: a single non-UTF-8 byte (for example a Latin-1
-        // comment) must not remove the whole file from the scan.
-        if let Ok(bytes) = std::fs::read(path) {
-            let hash = format!(
-                "{:x}",
-                sha2::Digest::finalize(sha2::Sha256::new().chain_update(&bytes))
-            );
-            let content = String::from_utf8_lossy(&bytes).into_owned();
-            files.push(SourceFile {
-                path: path.to_path_buf(),
-                language: lang,
-                size_bytes: metadata.len(),
-                content_hash: hash,
-                content,
-            });
+        if let Some(source_file) = read_source_file(path, lang, coverage) {
+            files.push(source_file);
         }
     }
 

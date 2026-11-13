@@ -1,6 +1,6 @@
 [package]
 name = "agent-shield"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 resolver = "3"
 authors = ["Ronaldo Lima <https://github.com/limaronaldo>", "AgentShield Contributors"]
@@ -97,6 +97,8 @@ levenshtein = "1.0"
 
 # URL parsing
 url = "2.5"
+# Internationalized domain names (UTS #46), already pulled in by `url`
+idna = "1"
 
 # Temporary files
 tempfile = "3.9"

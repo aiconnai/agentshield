@@ -8,12 +8,15 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
+VERSION="$(node -p "require('./package.json').version")"
+VSIX="agentshield-${VERSION}.vsix"
+
 echo "📦 Packaging AgentShield VS Code extension..."
 npm run compile
 npm test
-npx vsce package --out agentshield-1.0.0.vsix
+npx vsce package --out "$VSIX"
 
-echo "✅ Package created: agentshield-1.0.0.vsix"
+echo "✅ Package created: $VSIX"
 
 # Publish to Visual Studio Marketplace
 if [ -n "$VSCE_PAT" ]; then
@@ -28,7 +31,7 @@ fi
 # Publish to Open VSX Registry (Cursor, Windsurf, VSCodium)
 if [ -n "$OVSX_PAT" ]; then
   echo "🚀 Publishing to Open VSX Registry..."
-  npx -y ovsx publish agentshield-1.0.0.vsix -p "$OVSX_PAT"
+  npx -y ovsx publish "$VSIX" -p "$OVSX_PAT"
   echo "✅ Published to Open VSX Registry: https://open-vsx.org/extension/aiconnai/agentshield"
 else
   echo "ℹ️  OVSX_PAT not provided. Skipping Open VSX publish."

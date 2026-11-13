@@ -56,7 +56,9 @@ pub fn run_line_mode(
             }
         };
 
-        write_json_line_to(&mut out, &response)?;
+        if has_client_response(&response) {
+            write_json_line_to(&mut out, &response)?;
+        }
     }
 
     Ok(if blocked_any { block_exit_code } else { 0 })
@@ -125,7 +127,9 @@ pub fn run_transport(
                 }
                 ProxyDecision::Block(error) => {
                     blocked_any = true;
-                    write_client_line(&error)?;
+                    if has_client_response(&error) {
+                        write_client_line(&error)?;
+                    }
                 }
             },
             Err(()) => {
@@ -232,6 +236,12 @@ fn wait_for_child(
         }
         thread::sleep(Duration::from_millis(10));
     }
+}
+
+/// A blocked batch made only of notifications yields an empty batch response,
+/// which JSON-RPC 2.0 says must not be sent at all.
+fn has_client_response(response: &Value) -> bool {
+    !matches!(response, Value::Array(items) if items.is_empty())
 }
 
 fn invalid_input_error() -> Value {

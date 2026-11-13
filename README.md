@@ -3,13 +3,12 @@
 **Find risky behavior in MCP and AI agent extensions before they ship.**
 
 [![CI](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml/badge.svg)](https://github.com/aiconnai/agentshield/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/Release-v1.0.2%20GA-success.svg)](https://github.com/aiconnai/agentshield/releases/tag/v1.0.2)
+[![Release](https://img.shields.io/badge/Release-v1.0.3%20GA-success.svg)](https://github.com/aiconnai/agentshield/releases/tag/v1.0.3)
 [![Website](https://img.shields.io/badge/Website-aiconnai.github.io%2Fagentshield-emerald.svg)](https://aiconnai.github.io/agentshield/)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Crates.io](https://img.shields.io/crates/v/agent-shield.svg)](https://crates.io/crates/agent-shield)
-[![PyPI](https://img.shields.io/pypi/v/agent-shield.svg)](https://pypi.org/project/agent-shield/)
-[![VS Code](https://img.shields.io/badge/VS%20Code-v1.0.2-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=aiconnai-vs.agentshield)
-[![Open VSX](https://img.shields.io/badge/Open%20VSX-v1.0.2-purple?logo=eclipseide)](https://open-vsx.org/extension/aiconnai-vs/agentshield)
+[![VS Code](https://img.shields.io/badge/VS%20Code-v1.0.3-blue?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=aiconnai-vs.agentshield)
+[![Open VSX](https://img.shields.io/badge/Open%20VSX-v1.0.3-purple?logo=eclipseide)](https://open-vsx.org/extension/aiconnai-vs/agentshield)
 [![docs.rs](https://img.shields.io/docsrs/agent-shield)](https://docs.rs/agent-shield)
 
 - [Website & Interactive Playground](https://aiconnai.github.io/agentshield/)
@@ -22,7 +21,7 @@ AgentShield is an offline, high-performance Rust security engine for teams shipp
 
 It catches command injection, credential exfiltration, SSRF, unsafe file access, runtime package installs, prompt-injection surfaces, and dependency hygiene issues before an agent can call those tools.
 
-AgentShield runs as a CLI, GitHub Action, VS Code extension, or Rust library. It operates 100% offline, keeping source code on your machine, and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML reports. The current release line is `1.0.2` (General Availability).
+AgentShield runs as a CLI, GitHub Action, VS Code extension, or Rust library. It operates 100% offline, keeping source code on your machine, and emits console, JSON, SARIF for GitHub Code Scanning, and standalone HTML reports. The current release line is `1.0.3` (General Availability).
 
 ## At a glance
 
@@ -132,7 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: aiconnai/agentshield@main
+      - uses: aiconnai/agentshield@v1.0.3
         with:
           path: '.'
           fail-on: 'high'
@@ -143,6 +142,8 @@ jobs:
 
 Findings appear as PR annotations and in the repository's **Security > Code scanning** tab when SARIF upload is enabled.
 
+The Action applies the `.agentshield.toml` and `.agentshield/rules` found under `path`, even when `path` is a subdirectory, because it scans your own repository. Use the `config` input to point at a different config file.
+
 > [!IMPORTANT]
 > **Shipping fast without a security team?**  
 > Give us a ⭐ **star** to bookmark AgentShield. Run a 50ms scan before your next deploy so you never push rogue tools or leaked credentials to production.
@@ -150,10 +151,6 @@ Findings appear as PR annotations and in the repository's **Security > Code scan
 ### CLI
 
 ```bash
-# 🐍 Install via PyPI (Python & uv)
-pip install agent-shield
-# or: uv add --dev agent-shield
-
 # ⚡ 1-Line Universal Installer (macOS & Linux: Apple Silicon, Intel, ARM64, x86_64)
 curl -fsSL https://aiconnai.github.io/agentshield/install.sh | sh
 
@@ -164,7 +161,7 @@ brew tap aiconnai/tap && brew install agentshield
 cargo install agent-shield --features full
 
 # Or install from source with Cargo
-cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.2 --features full --force
+cargo install --git https://github.com/aiconnai/agentshield --tag v1.0.3 --features full --force
 
 # First-run setup: config + explained first scan
 agentshield quickstart
@@ -209,14 +206,23 @@ Add AgentShield to `.pre-commit-config.yaml` to block vulnerable tools before ea
 ```yaml
 repos:
   - repo: https://github.com/aiconnai/agentshield
-    rev: v1.0.2
+    rev: v1.0.3
     hooks:
       - id: agentshield
 ```
 
 ### Python SDK
 
-Integrate AgentShield directly into test suites or tool definitions:
+Integrate AgentShield directly into test suites or tool definitions.
+
+> [!NOTE]
+> The `agent-shield` Python package is not published on PyPI yet. Install it
+> from source; the build compiles the scanner, so it needs a Rust toolchain,
+> and it installs both the `agentshield` module and the `agentshield` binary:
+>
+> ```bash
+> pip install "git+https://github.com/aiconnai/agentshield@v1.0.3"
+> ```
 
 ```python
 import agentshield
@@ -244,7 +250,7 @@ Download from the [latest release](https://github.com/aiconnai/agentshield/relea
 For container consumers, the release image tag is:
 
 ```text
-ghcr.io/aiconnai/agentshield:1.0.2
+ghcr.io/aiconnai/agentshield:1.0.3
 ```
 
 ### Docker
@@ -252,9 +258,9 @@ ghcr.io/aiconnai/agentshield:1.0.2
 The GHCR image is built with the `full` feature set, including runtime `wrap` support and experimental runtime guard commands. The image is published for `linux/amd64` and `linux/arm64`.
 
 ```bash
-docker pull ghcr.io/aiconnai/agentshield:1.0.2
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:1.0.2 scan .
-docker run --rm ghcr.io/aiconnai/agentshield:1.0.2 --version
+docker pull ghcr.io/aiconnai/agentshield:1.0.3
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:1.0.3 scan .
+docker run --rm ghcr.io/aiconnai/agentshield:1.0.3 --version
 ```
 
 If the GHCR package is private in your organization, authenticate first:
@@ -336,11 +342,11 @@ AgentShield runs all matching adapters in a repository instead of stopping at th
 | `agentshield suppress <fingerprint>` | Add a suppression entry with a required reason and optional expiry. |
 | `agentshield list-suppressions` | Show suppressions configured in `.agentshield.toml`. |
 | `agentshield certify [path]` | Generate a DSSE attestation envelope for scan results. |
-| `agentshield wrap --policy <path> -- <command>` | Enforce an egress policy through a local HTTP proxy when built with the `runtime` feature. |
+| `agentshield wrap --policy <path> -- <command>` | Run a command behind a local HTTP/HTTPS proxy that applies an egress policy to proxy-aware clients (not a sandbox; see `docs/EGRESS.md`). Requires the `runtime` feature. |
 | `agentshield guard --stdin` | Evaluate one runtime event JSON document when built with the `runtime-guard` feature. |
 | `agentshield guard --mcp-proxy [-- <server cmd...>]` | EXPERIMENTAL: evaluate line-delimited MCP JSON-RPC `tools/call` messages, block unsafe calls, and either emit forward markers or bridge stdio to a spawned downstream MCP server when built with the `runtime-guard` feature. |
 
-Useful `scan` options include `--config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--explain`, `--experimental-risk`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
+Useful `scan` options include `--config`, `--rules-dir`, `--trust-target-config`, `--format`, `--fail-on`, `--output`, `--ignore-tests`, `--explain`, `--experimental-risk`, `--baseline`, `--write-baseline`, and `--emit-egress-policy`.
 Configured `[scan] include` and `[scan] exclude` filters scope source and
 metadata-derived findings before detectors run.
 
@@ -377,7 +383,7 @@ agentshield list-rules --format json
 
 ### Custom Declarative Rules
 
-You can define custom organization security policies in `.agentshield/rules/*.yaml` or pass `--rules-dir <path>`:
+You can define custom organization security policies in `.agentshield/rules/*.yaml` or pass `--rules-dir <path>`. The scan root's `.agentshield/rules` loads only under the trust rule in [When the scanned directory's own config applies](#when-the-scanned-directorys-own-config-applies):
 
 ```yaml
 id: "ORG-001"
@@ -425,12 +431,12 @@ match:
 
 ### Trust workflows
 
-AgentShield includes trust workflow documentation for baselines, suppressions, certification attestations, and egress enforcement:
+AgentShield includes trust workflow documentation for baselines, suppressions, certification attestations, and egress policy:
 
 - `docs/BASELINES.md`: write and use `.agentshield-baseline.json` for known findings.
 - `docs/SUPPRESSIONS.md`: suppress individual findings by fingerprint with required reasons and optional expiry.
 - `docs/CERTIFICATION.md`: generate unsigned or Ed25519-signed DSSE attestations.
-- `docs/EGRESS.md`: emit `agentshield.egress.toml` and enforce it with `agentshield wrap`.
+- `docs/EGRESS.md`: emit `agentshield.egress.toml`, route a command's proxy-aware clients through it with `agentshield wrap`, and what that does and does not guarantee.
 
 Release binaries are built with the `full` feature set, including Python parsing, TypeScript parsing, runtime `wrap` support, and experimental runtime guard commands. If building from source, use `cargo build --features full --release` to include `agentshield wrap` and `agentshield guard`.
 
@@ -475,6 +481,34 @@ source-file count before relying on a focused scan in CI.
 Path filter matching is case-sensitive, accepts `/` on all platforms, treats
 leading `./` or `/` as relative to the scan root, and treats a trailing slash
 such as `legacy/` as matching that directory's contents.
+
+### When the scanned directory's own config applies
+
+A scanned directory can contain its own `.agentshield.toml` and
+`.agentshield/rules`. Third-party code (a downloaded MCP server, a package
+under `node_modules/`) could use them to suppress its own findings, so
+AgentShield applies them only when:
+
+- the scan root is the current working directory, as in `agentshield scan .`
+  from your repository root, pre-commit hooks and most CI jobs; or
+- you pass `--trust-target-config` (library: `ScanOptions { trust_target_config: true, .. }`).
+
+Otherwise the scan uses built-in defaults and prints one notice on stderr
+naming the ignored files; JSON, SARIF and HTML output are unaffected.
+`--config <path>` and `--rules-dir <path>` are always honoured. `certify`
+follows the same rule and accepts the same flag.
+
+```bash
+# Scan untrusted third-party code: its own policy is ignored
+agentshield scan ./node_modules/some-mcp-server
+
+# Scan a subdirectory of your own repository with its config
+agentshield scan packages/my-server --trust-target-config
+```
+
+The GitHub Action scans your own repository and passes
+`--trust-target-config` for you; the VS Code extension runs from your
+workspace root, so your workspace config applies automatically.
 
 ---
 
@@ -560,7 +594,7 @@ cargo run -- scan tests/fixtures/mcp_servers/vuln_cmd_inject
 cargo run -- list-rules
 ```
 
-For release-specific notes, see `docs/releases/1.0.2.md`,
-`docs/releases/1.0.1.md`, `docs/releases/1.0.0.md`, and
-`docs/RELEASE_CHECKLIST.md`.
+For release-specific notes, see `docs/releases/1.0.3.md`,
+`docs/releases/1.0.2.md`, `docs/releases/1.0.1.md`, `docs/releases/1.0.0.md`,
+and `docs/RELEASE_CHECKLIST.md`.
 

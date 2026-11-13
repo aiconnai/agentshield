@@ -21,7 +21,7 @@ mod setup;
 use clap::{Parser, Subcommand};
 
 use discover::cmd_discover;
-use reporting::{cmd_certify, cmd_list_suppressions, cmd_suppress};
+use reporting::{CertifyArgs, cmd_certify, cmd_list_suppressions, cmd_suppress};
 use rules::cmd_list_rules;
 #[cfg(all(feature = "runtime-guard", feature = "runtime"))]
 use runtime::cmd_guard_http_sse;
@@ -128,6 +128,11 @@ enum Commands {
         /// Directory containing custom declarative rules (*.yaml, *.yml, *.json)
         #[arg(long, value_name = "PATH")]
         rules_dir: Option<PathBuf>,
+
+        /// Apply the target's own .agentshield.toml and .agentshield/rules even
+        /// when PATH is not the current directory. Use only for code you own.
+        #[arg(long)]
+        trust_target_config: bool,
     },
 
     /// First-run setup: create config, inspect coverage, and run an explained scan
@@ -292,6 +297,11 @@ enum Commands {
         /// Skip test files
         #[arg(long)]
         ignore_tests: bool,
+
+        /// Apply the target's own .agentshield.toml and .agentshield/rules even
+        /// when PATH is not the current directory. Use only for code you own.
+        #[arg(long)]
+        trust_target_config: bool,
     },
 
     /// Enforce egress policy on a command via a local HTTP proxy
@@ -378,6 +388,7 @@ fn main() {
             explain,
             experimental_risk,
             rules_dir,
+            trust_target_config,
         } => cmd_scan(ScanArgs {
             path,
             config,
@@ -393,6 +404,7 @@ fn main() {
             explain,
             experimental_risk,
             rules_dir,
+            trust_target_config,
         }),
         Commands::Quickstart {
             path,
@@ -483,7 +495,15 @@ fn main() {
             output,
             config,
             ignore_tests,
-        } => cmd_certify(path, sign_key, output, config, ignore_tests),
+            trust_target_config,
+        } => cmd_certify(CertifyArgs {
+            path,
+            sign_key,
+            output,
+            config,
+            ignore_tests,
+            trust_target_config,
+        }),
         #[cfg(feature = "runtime")]
         Commands::Wrap {
             policy,

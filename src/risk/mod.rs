@@ -197,7 +197,7 @@ mod tests {
             .overrides
             .insert(overridden.rule_id.clone(), Severity::Low);
         policy.suppressions.push(Suppression {
-            fingerprint: suppressed.fingerprint(scan_root),
+            fingerprint: suppressed.legacy_fingerprint(scan_root),
             reason: "golden suppression".to_owned(),
             expires: None,
             created_at: None,
@@ -207,8 +207,8 @@ mod tests {
             &[ignored, suppressed, overridden, baselined.clone()],
             scan_root,
         );
-        let baseline_fingerprint = baselined.fingerprint(scan_root);
-        effective.retain(|finding| finding.fingerprint(scan_root) != baseline_fingerprint);
+        let baseline_fingerprint = baselined.legacy_fingerprint(scan_root);
+        effective.retain(|finding| finding.legacy_fingerprint(scan_root) != baseline_fingerprint);
 
         let assessment = assess(&effective, scan_root, &coverage()).expect("assessment");
 

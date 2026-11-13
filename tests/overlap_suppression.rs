@@ -1,6 +1,16 @@
 use agentshield::{ScanOptions, scan};
 use tempfile::TempDir;
 
+/// These fixtures exercise `.agentshield.toml` semantics inside a temp
+/// directory that is not the process cwd, so the target's own config is only
+/// applied with an explicit opt-in (see `tests/target_config_trust.rs`).
+fn trusted_target() -> ScanOptions {
+    ScanOptions {
+        trust_target_config: true,
+        ..ScanOptions::default()
+    }
+}
+
 #[test]
 fn preserves_independent_same_line_filesystem_findings_after_policy_ignore() {
     let fixture = TempDir::new().unwrap();
@@ -33,7 +43,7 @@ def read(path: str):
     )
     .unwrap();
 
-    let report = scan(fixture.path(), &ScanOptions::default()).unwrap();
+    let report = scan(fixture.path(), &trusted_target()).unwrap();
     let filesystem_findings: Vec<_> = report
         .findings
         .iter()

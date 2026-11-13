@@ -219,3 +219,73 @@ fn mcp_proxy_transport_fails_closed_when_server_missing() {
     let output = child.wait_with_output().expect("wait");
     assert_eq!(output.status.code(), Some(3), "missing server fails closed");
 }
+
+#[test]
+fn mcp_proxy_rejects_batch_hiding_a_blocked_tool_call() {
+    let input = concat!(
+        r#"[{"jsonrpc":"2.0","id":1,"method":"tools/list"},{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"http.get","arguments":{"url":"http://169.254.169.254/latest/meta-data/"}}}]"#,
+        "\n"
+    );
+    let output = run_mcp_proxy(input.as_bytes());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "one batch response: {stdout}");
+    let response: serde_json::Value = serde_json::from_str(lines[0]).expect("JSON");
+    let responses = response.as_array().expect("batch response array");
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[0]["id"], 1);
+    assert_eq!(
+        responses[0]["error"]["data"]["rule_id"],
+        "AGENTSHIELD-RUNTIME-BATCH-REJECTED"
+    );
+    assert_eq!(responses[1]["id"], 2);
+    assert_eq!(
+        responses[1]["error"]["data"]["rule_id"],
+        "AGENTSHIELD-RUNTIME-METADATA-SSRF"
+    );
+    assert!(!stdout.contains("169.254.169.254"));
+    assert_eq!(output.status.code(), Some(3));
+}
+
+#[test]
+fn mcp_proxy_transport_never_forwards_a_batch_with_a_blocked_member() {
+    let input = concat!(
+        r#"[{"jsonrpc":"2.0","id":10,"method":"tools/list"},{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"http.get","arguments":{"url":"http://169.254.169.254/"}}}]"#,
+        "\n",
+        r#"[{"jsonrpc":"2.0","id":20,"method":"tools/list"},{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"calc.add","arguments":{"a":1}}}]"#,
+        "\n"
+    );
+    let output = run_mcp_proxy_transport(input.as_bytes());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let batches: Vec<Vec<serde_json::Value>> = stdout
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            serde_json::from_str::<serde_json::Value>(line)
+                .expect("each line is JSON")
+                .as_array()
+                .expect("batch response")
+                .clone()
+        })
+        .collect();
+    assert_eq!(batches.len(), 2, "{stdout}");
+
+    let served: Vec<i64> = batches
+        .iter()
+        .flatten()
+        .filter(|response| response.get("result").is_some())
+        .filter_map(|response| response["id"].as_i64())
+        .collect();
+    assert_eq!(served.len(), 2, "only the benign batch is served: {stdout}");
+    assert!(served.contains(&20) && served.contains(&21));
+
+    let rejected: Vec<i64> = batches
+        .iter()
+        .flatten()
+        .filter(|response| response.get("error").is_some())
+        .filter_map(|response| response["id"].as_i64())
+        .collect();
+    assert_eq!(rejected.len(), 2, "{stdout}");
+    assert!(rejected.contains(&10) && rejected.contains(&11));
+    assert_eq!(output.status.code(), Some(3));
+}

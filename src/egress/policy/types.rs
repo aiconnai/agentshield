@@ -39,7 +39,19 @@ impl EgressPolicy {
                 policy.schema_version, CURRENT_SCHEMA_VERSION
             )));
         }
+        policy.validate()?;
         Ok(policy)
+    }
+
+    /// Check that every domain pattern and rate-limit key is well formed.
+    ///
+    /// [`EgressPolicy::load`] and `EgressProxy::new` call this, so a policy
+    /// with an empty-label pattern (`*.`, `.`, `*..x`) or invalid
+    /// internationalized name is refused up front instead of matching more
+    /// than it says. Call it yourself on policies built in code.
+    pub fn validate(&self) -> Result<(), ShieldError> {
+        self.domains.validate()?;
+        self.rate_limits.validate()
     }
 
     /// Save an egress policy to a TOML file.
@@ -93,13 +105,13 @@ allow = ["*.example.com", "api.github.com"]
 deny = []
 
 [networks]
-block_private = true      # 10.x, 172.16-31.x, 192.168.x
-block_link_local = true   # 169.254.x
-block_localhost = true     # 127.x, ::1
-block_metadata = true     # 169.254.169.254, metadata.google.internal
+block_private = true      # 10/8, 172.16/12, 192.168/16, CGNAT 100.64/10, fc00::/7
+block_link_local = true   # 169.254/16, fe80::/10
+block_localhost = true    # 127/8, 0.0.0.0/8, ::1, ::, localhost, *.localhost
+block_metadata = true     # 169.254.169.254, 168.63.129.16, metadata.google.internal, ...
 
 [rate_limits]
-max_requests_per_minute = 60
+max_requests_per_minute = 60   # per host; 0 = unlimited
 
 [audit]
 # log_path = "agentshield-audit.jsonl"
