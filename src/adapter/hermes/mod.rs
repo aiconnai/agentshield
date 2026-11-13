@@ -84,6 +84,7 @@ impl super::Adapter for HermesAgentAdapter {
             }
         }
 
+        crate::adapter::entry_points::mark_framework_entry_points(&source_files, &mut parsed_files);
         apply_cross_file_sanitization(&mut parsed_files);
 
         for (_, parsed) in parsed_files {

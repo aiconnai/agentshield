@@ -130,24 +130,25 @@ pub struct Evidence {
 }
 
 impl Finding {
-    /// Compute a stable fingerprint that survives line shifts.
+    /// Legacy (scheme v1) fingerprint, kept for backward compatibility.
     ///
-    /// Hash of `(rule_id, relative_file_path, evidence_key, attack_category)`.
-    /// Line and column numbers are intentionally excluded so that the
-    /// fingerprint remains the same when surrounding code is edited.
-    pub fn fingerprint(&self, scan_root: &Path) -> String {
+    /// Hash of `(rule_id, path stripped of scan_root, first evidence
+    /// description, attack_category)`. It collides for same-rule findings in
+    /// one file and changes with the spelling of the scan path, so new code
+    /// must use [`crate::rules::fingerprint::compute_fingerprints`]. It is still
+    /// used to match schema-v1 baselines and suppressions written by earlier
+    /// releases.
+    pub fn legacy_fingerprint(&self, scan_root: &Path) -> String {
         let mut hasher = Sha256::new();
         hasher.update(self.rule_id.as_bytes());
         hasher.update(b"|");
 
-        // Use relative path so fingerprint is portable across machines
         if let Some(ref loc) = self.location {
             let rel = loc.file.strip_prefix(scan_root).unwrap_or(&loc.file);
             hasher.update(rel.to_string_lossy().as_bytes());
         }
         hasher.update(b"|");
 
-        // Use first evidence description as the "what" component
         if let Some(ev) = self.evidence.first() {
             hasher.update(ev.description.as_bytes());
         }
@@ -157,6 +158,18 @@ impl Finding {
 
         let result = hasher.finalize();
         hex::encode(result)
+    }
+
+    /// Legacy (scheme v1) fingerprint of a single finding.
+    ///
+    /// Identical to [`Finding::legacy_fingerprint`]. The fingerprints shown in
+    /// reports, baselines and suppressions are now computed per scan by
+    /// [`crate::rules::fingerprint::compute_fingerprints`].
+    #[deprecated(note = "collides for same-rule findings in one file; use \
+                `rules::fingerprint::compute_fingerprints` (or \
+                `legacy_fingerprint` to match v1 baselines)")]
+    pub fn fingerprint(&self, scan_root: &Path) -> String {
+        self.legacy_fingerprint(scan_root)
     }
 }
 
@@ -332,8 +345,8 @@ mod tests {
         );
 
         assert_eq!(
-            finding1.fingerprint(scan_root),
-            finding2.fingerprint(scan_root),
+            finding1.legacy_fingerprint(scan_root),
+            finding2.legacy_fingerprint(scan_root),
             "Fingerprint should be stable across line shifts"
         );
     }
@@ -361,8 +374,8 @@ mod tests {
         );
 
         assert_ne!(
-            finding1.fingerprint(scan_root),
-            finding2.fingerprint(scan_root),
+            finding1.legacy_fingerprint(scan_root),
+            finding2.legacy_fingerprint(scan_root),
             "Different rules should produce different fingerprints"
         );
     }
@@ -390,8 +403,8 @@ mod tests {
         );
 
         assert_ne!(
-            finding1.fingerprint(scan_root),
-            finding3.fingerprint(scan_root),
+            finding1.legacy_fingerprint(scan_root),
+            finding3.legacy_fingerprint(scan_root),
             "Different files should produce different fingerprints"
         );
     }
@@ -416,8 +429,8 @@ mod tests {
             AttackCategory::CommandInjection,
         );
 
-        let fp1 = finding1.fingerprint(Path::new("/project"));
-        let fp2 = finding2.fingerprint(Path::new("/other"));
+        let fp1 = finding1.legacy_fingerprint(Path::new("/project"));
+        let fp2 = finding2.legacy_fingerprint(Path::new("/other"));
 
         assert_eq!(
             fp1, fp2,
@@ -444,7 +457,7 @@ mod tests {
         };
 
         // Should not panic and should produce a valid hex string
-        let fp = finding.fingerprint(scan_root);
+        let fp = finding.legacy_fingerprint(scan_root);
         assert_eq!(fp.len(), 64, "SHA-256 hex digest should be 64 chars");
     }
 
@@ -460,7 +473,7 @@ mod tests {
             AttackCategory::CommandInjection,
         );
 
-        let fp = finding.fingerprint(scan_root);
+        let fp = finding.legacy_fingerprint(scan_root);
         assert_eq!(fp.len(), 64);
         assert!(
             fp.chars().all(|c| c.is_ascii_hexdigit()),

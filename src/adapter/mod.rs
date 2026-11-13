@@ -1,6 +1,7 @@
 pub mod autogen;
 pub mod crewai;
 pub mod cursor_rules;
+pub(crate) mod entry_points;
 pub mod gpt_actions;
 pub mod hermes;
 pub mod langchain;
@@ -11,6 +12,7 @@ pub mod openclaw;
 mod pipeline;
 pub mod semantic_kernel;
 pub mod vercel_ai;
+pub(crate) mod walk;
 
 use std::path::Path;
 
@@ -19,17 +21,14 @@ use crate::config::ScanPathFilter;
 use crate::error::{Result, ShieldError};
 use crate::ir::{Framework, ScanTarget};
 
-/// Maximum file size (1 MB) that adapters will read into memory.
-pub(crate) const MAX_ADAPTER_FILE_SIZE_BYTES: u64 = 1_048_576;
-
-/// Safely read a text file up to 1 MB. Returns None if the file exceeds 1 MB or cannot be read.
+/// Read the head of a text file, up to [`walk::MAX_SOURCE_FILE_BYTES`] (8 MiB).
+///
+/// A larger file is read up to the cap rather than dropped, so padding a file
+/// cannot hide it from detection or manifest parsing. Returns None only when
+/// the file cannot be read. Decodes lossily so one non-UTF-8 byte cannot hide a
+/// file either.
 pub(crate) fn read_file_capped(path: &Path) -> Option<String> {
-    let metadata = std::fs::metadata(path).ok()?;
-    if metadata.len() > MAX_ADAPTER_FILE_SIZE_BYTES {
-        return None;
-    }
-    // Decode lossily so one non-UTF-8 byte cannot hide a file from detection.
-    let bytes = std::fs::read(path).ok()?;
+    let (bytes, _) = walk::read_capped_bytes(path, &crate::coverage::CoverageRecorder::default())?;
     Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 

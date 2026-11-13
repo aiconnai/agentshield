@@ -138,7 +138,7 @@ cargo install agent-shield
 
 # 2. Or build from GitHub with all features
 cargo install --git https://github.com/aiconnai/agentshield \\
-  --tag v1.0.2 --features full --force
+  --tag v1.0.3 --features full --force
 
 # 3. Verify installation
 agentshield --version`,
@@ -161,15 +161,15 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: aiconnai/agentshield@main
+      - uses: aiconnai/agentshield@v1.0.3
         with:
           fail-on: 'high'
           upload-sarif: true`,
   docker: `# Pull the pre-built GHCR image (full features)
-docker pull ghcr.io/aiconnai/agentshield:1.0.2
+docker pull ghcr.io/aiconnai/agentshield:1.0.3
 
 # Run a scan against the current repository
-docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:1.0.2 scan .`
+docker run --rm -v "$PWD:/scan" ghcr.io/aiconnai/agentshield:1.0.3 scan .`
 };
 
 document.addEventListener("DOMContentLoaded", () => {

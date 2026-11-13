@@ -130,6 +130,7 @@ pub(super) fn build_execution_surface(source_files: &[SourceFile]) -> ExecutionS
         })
         .collect::<Vec<_>>();
 
+    super::entry_points::mark_framework_entry_points(source_files, &mut parsed_files);
     apply_cross_file_sanitization(&mut parsed_files);
 
     let mut execution = ExecutionSurface::default();

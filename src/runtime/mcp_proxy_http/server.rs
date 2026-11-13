@@ -12,6 +12,9 @@ use super::types::{AtomicMetrics, HttpSseProxyConfig, MAX_HTTP_BODY_BYTES};
 use crate::error::ShieldError;
 use crate::runtime::mcp_proxy::{ProxyDecision, decide};
 
+/// JSON-RPC 2.0 "Parse error" code.
+const PARSE_ERROR_CODE: i64 = -32700;
+
 /// Run the MCP HTTP / SSE proxy server.
 pub async fn run_http_sse_proxy(config: HttpSseProxyConfig) -> Result<(), ShieldError> {
     let listener = TcpListener::bind(config.listen_addr)
@@ -168,55 +171,90 @@ pub(crate) async fn handle_connection(
                 .map_err(ShieldError::Io)?;
         }
 
-        if let Ok(json_req) = serde_json::from_slice::<Value>(&body) {
-            let decision = decide(&json_req, &config.policy);
-            match decision {
-                ProxyDecision::Block(err_val) => {
-                    metrics.blocked_requests.fetch_add(1, Ordering::Relaxed);
-                    log_audit(
-                        &config.audit_log,
-                        &peer_addr,
-                        method,
-                        path,
-                        "blocked",
-                        None,
-                        None,
-                    );
+        // Fail closed: a body that is not JSON cannot be inspected, so it is
+        // answered with a JSON-RPC parse error instead of being forwarded.
+        let Ok(json_req) = serde_json::from_slice::<Value>(&body) else {
+            metrics.blocked_requests.fetch_add(1, Ordering::Relaxed);
+            log_audit(
+                &config.audit_log,
+                &peer_addr,
+                method,
+                path,
+                "rejected_invalid_json",
+                None,
+                None,
+            );
+            let resp_body = serde_json::to_vec(&parse_error_response()).unwrap_or_default();
+            return send_http_response(
+                &mut client_write,
+                400,
+                "Bad Request",
+                "application/json",
+                &resp_body,
+            )
+            .await;
+        };
 
-                    let resp_body = serde_json::to_vec(&err_val).unwrap_or_default();
+        match decide(&json_req, &config.policy) {
+            ProxyDecision::Block(err_val) => {
+                metrics.blocked_requests.fetch_add(1, Ordering::Relaxed);
+                log_audit(
+                    &config.audit_log,
+                    &peer_addr,
+                    method,
+                    path,
+                    "blocked",
+                    None,
+                    None,
+                );
+
+                // A blocked batch of notifications has no response
+                // objects: acknowledge it without a body, as MCP
+                // Streamable HTTP does for notifications.
+                if matches!(&err_val, Value::Array(items) if items.is_empty()) {
                     return send_http_response(
                         &mut client_write,
-                        200,
-                        "OK",
+                        202,
+                        "Accepted",
                         "application/json",
-                        &resp_body,
+                        b"",
                     )
                     .await;
                 }
-                ProxyDecision::Forward => {
-                    metrics.allowed_requests.fetch_add(1, Ordering::Relaxed);
-                    log_audit(
-                        &config.audit_log,
-                        &peer_addr,
-                        method,
-                        path,
-                        "allowed",
-                        None,
-                        None,
-                    );
-                }
-                ProxyDecision::ForwardSuppressed { rule_id } => {
-                    metrics.allowed_requests.fetch_add(1, Ordering::Relaxed);
-                    log_audit(
-                        &config.audit_log,
-                        &peer_addr,
-                        method,
-                        path,
-                        "allowed_suppressed",
-                        Some(&rule_id),
-                        None,
-                    );
-                }
+
+                let resp_body = serde_json::to_vec(&err_val).unwrap_or_default();
+                return send_http_response(
+                    &mut client_write,
+                    200,
+                    "OK",
+                    "application/json",
+                    &resp_body,
+                )
+                .await;
+            }
+            ProxyDecision::Forward => {
+                metrics.allowed_requests.fetch_add(1, Ordering::Relaxed);
+                log_audit(
+                    &config.audit_log,
+                    &peer_addr,
+                    method,
+                    path,
+                    "allowed",
+                    None,
+                    None,
+                );
+            }
+            ProxyDecision::ForwardSuppressed { rule_id } => {
+                metrics.allowed_requests.fetch_add(1, Ordering::Relaxed);
+                log_audit(
+                    &config.audit_log,
+                    &peer_addr,
+                    method,
+                    path,
+                    "allowed_suppressed",
+                    Some(&rule_id),
+                    None,
+                );
             }
         }
 
@@ -232,21 +270,77 @@ pub(crate) async fn handle_connection(
         .await;
     }
 
-    // Forward any other HTTP requests
-    let mut body = vec![0u8; content_length];
-    if content_length > 0 {
-        reader
-            .read_exact(&mut body)
-            .await
-            .map_err(ShieldError::Io)?;
+    // MCP Streamable HTTP uses GET (SSE), POST (JSON-RPC) and DELETE (session
+    // termination), plus HEAD/OPTIONS. Any other method (for instance PUT or
+    // PATCH) cannot pass through the JSON-RPC inspector, so reject it.
+    if !matches!(method, "GET" | "HEAD" | "DELETE" | "OPTIONS") {
+        metrics.blocked_requests.fetch_add(1, Ordering::Relaxed);
+        log_audit(
+            &config.audit_log,
+            &peer_addr,
+            method,
+            path,
+            "rejected_method",
+            None,
+            None,
+        );
+        return send_http_response(
+            &mut client_write,
+            405,
+            "Method Not Allowed",
+            "text/plain",
+            b"Method Not Allowed: MCP proxy only permits GET, POST, HEAD, DELETE, OPTIONS\n",
+        )
+        .await;
     }
+
+    if content_length > 0 {
+        metrics.blocked_requests.fetch_add(1, Ordering::Relaxed);
+        log_audit(
+            &config.audit_log,
+            &peer_addr,
+            method,
+            path,
+            "rejected_unexpected_body",
+            None,
+            None,
+        );
+        return send_http_response(
+            &mut client_write,
+            400,
+            "Bad Request",
+            "text/plain",
+            b"Request body is only allowed on POST requests\n",
+        )
+        .await;
+    }
+
+    // Forward bodyless GET/HEAD/DELETE/OPTIONS requests.
     forward_http_request(
         &config.target_url,
         method,
         path,
         &headers,
-        &body,
+        &[],
         &mut client_write,
     )
     .await
+}
+
+/// JSON-RPC 2.0 parse error (`-32700`) returned for a POST body that is not
+/// valid JSON.
+fn parse_error_response() -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": Value::Null,
+        "error": {
+            "code": PARSE_ERROR_CODE,
+            "message": "Parse error: request body is not valid JSON",
+            "data": {
+                "verdict": "block",
+                "rule_id": "AGENTSHIELD-RUNTIME-INVALID-INPUT",
+                "schema_version": "v1"
+            }
+        }
+    })
 }

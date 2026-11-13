@@ -164,4 +164,15 @@ if [[ "$formula_url_count" -ne 4 ]]; then
   exit 1
 fi
 
+for doc in README.md docs/site.js docs/mcp-security-scanner.md; do
+  if grep -Fq "aiconnai/agentshield@main" "$doc"; then
+    echo "$doc must pin the Action to a release tag, not @main"
+    exit 1
+  fi
+  if ! grep -Fq "aiconnai/agentshield@v${version}" "$doc"; then
+    echo "$doc does not pin the Action to v${version}"
+    exit 1
+  fi
+done
+
 echo "Release invariants passed for $tag"

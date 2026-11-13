@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::adapter::walk::{read_source_file, record_walk_error, source_walker_for};
 use crate::config::ScanPathFilter;
 use crate::error::Result;
 use crate::ir::taint_builder::build_data_surface;
@@ -26,9 +27,10 @@ impl super::Adapter for OpenClawAdapter {
     }
 
     fn load_with_filter(&self, root: &Path, filter: &ScanPathFilter) -> Result<Vec<ScanTarget>> {
-        find_openclaw_skill_roots(root)
-            .into_iter()
-            .map(|skill_root| load_skill_target(root, &skill_root, filter))
+        let skill_roots = find_openclaw_skill_roots(root);
+        skill_roots
+            .iter()
+            .map(|skill_root| load_skill_target(root, skill_root, &skill_roots, filter))
             .collect()
     }
 }
@@ -36,13 +38,14 @@ impl super::Adapter for OpenClawAdapter {
 fn load_skill_target(
     scan_root: &Path,
     skill_root: &Path,
+    all_skill_roots: &[PathBuf],
     filter: &ScanPathFilter,
 ) -> Result<ScanTarget> {
     let name = skill_root
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "openclaw-skill".to_owned());
-    let source_files = collect_skill_source_files(scan_root, skill_root, filter)?;
+    let source_files = collect_skill_source_files(scan_root, skill_root, all_skill_roots, filter)?;
     let execution = super::pipeline::build_execution_surface(&source_files);
     let tools = Vec::new();
     let data = build_data_surface(&tools, &execution);
@@ -63,20 +66,29 @@ fn load_skill_target(
 fn collect_skill_source_files(
     scan_root: &Path,
     skill_root: &Path,
+    other_skill_roots: &[PathBuf],
     filter: &ScanPathFilter,
 ) -> Result<Vec<SourceFile>> {
-    let walker = ignore::WalkBuilder::new(skill_root)
-        .hidden(true)
-        .git_ignore(true)
-        .max_depth(Some(3))
-        .build();
     let mut source_files = Vec::new();
 
-    for entry in walker.flatten() {
+    for item in source_walker_for(skill_root, scan_root, filter) {
+        let entry = match item {
+            Ok(entry) => entry,
+            Err(err) => {
+                record_walk_error(filter.coverage(), &err);
+                continue;
+            }
+        };
         let path = entry.path();
         if !path.is_file()
             || (filter.ignore_tests() && super::mcp::is_test_file_in(scan_root, path))
             || !filter.allows_path(scan_root, path)
+            // A nested skill is its own target; do not report it twice.
+            || other_skill_roots
+                .iter()
+                .any(|other| {
+                other != skill_root && other.starts_with(skill_root) && path.starts_with(other)
+            })
         {
             continue;
         }
@@ -93,26 +105,8 @@ fn collect_skill_source_files(
             continue;
         }
 
-        let metadata = std::fs::metadata(path)?;
-        if metadata.len() > 1_048_576 {
-            continue;
-        }
-
-        if let Ok(content) = std::fs::read_to_string(path) {
-            use sha2::Digest;
-            let content_hash = format!(
-                "{:x}",
-                sha2::Sha256::new()
-                    .chain_update(content.as_bytes())
-                    .finalize()
-            );
-            source_files.push(SourceFile {
-                path: path.to_path_buf(),
-                language,
-                size_bytes: metadata.len(),
-                content_hash,
-                content,
-            });
+        if let Some(source_file) = read_source_file(path, language, filter.coverage()) {
+            source_files.push(source_file);
         }
     }
 
