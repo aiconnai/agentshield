@@ -18,7 +18,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
 
-    use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
     use tokio::net::{TcpListener, TcpStream};
     use url::Url;
 
@@ -119,11 +119,41 @@ mod tests {
         let contacted = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let contacted_flag = Arc::clone(&contacted);
         tokio::spawn(async move {
-            if let Ok((mut stream, _)) = upstream.accept().await {
+            if let Ok((stream, _)) = upstream.accept().await {
                 contacted_flag.store(true, Ordering::SeqCst);
-                let _ = stream
-                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}")
+                let (read_half, mut write_half) = stream.into_split();
+                let mut req_reader = BufReader::new(read_half);
+                let mut req_content_length: usize = 0;
+                loop {
+                    let mut line = String::new();
+                    match req_reader.read_line(&mut line).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) => {
+                            let trimmed = line.trim();
+                            if trimmed.is_empty() {
+                                break;
+                            }
+                            if let Some((k, v)) = trimmed.split_once(':') {
+                                if k.trim().eq_ignore_ascii_case("content-length") {
+                                    if let Ok(len) = v.trim().parse::<usize>() {
+                                        req_content_length = len;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if req_content_length > 0 {
+                    let mut req_body = vec![0u8; req_content_length];
+                    let _ = req_reader.read_exact(&mut req_body).await;
+                }
+                let _ = write_half
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                    )
                     .await;
+                let _ = write_half.flush().await;
+                let _ = write_half.shutdown().await;
             }
         });
 
@@ -200,6 +230,7 @@ mod tests {
     async fn valid_benign_request_is_still_forwarded() {
         let body = br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
         let (resp, contacted) = post_through_proxy(body).await;
+        assert!(resp.starts_with("HTTP/1.1 200 OK"), "{resp}");
         assert!(contacted, "benign request must reach the upstream: {resp}");
     }
 
