@@ -4,12 +4,15 @@
 //! IPs, and rate limits are enforced by the `wrap` command proxy.
 
 mod domain;
+mod host;
 pub(crate) mod infer;
 mod merge;
 mod network;
 pub(crate) mod types;
 
 pub use domain::DomainPolicy;
+#[cfg(feature = "runtime")]
+pub(crate) use host::normalize_host;
 pub use merge::{AuditPolicy, RateLimitPolicy};
 pub use network::NetworkPolicy;
 pub use types::EgressPolicy;
@@ -415,5 +418,280 @@ allow = ["*"]
         let merged = base.merge_override(&operator);
         assert_eq!(merged.rate_limit_for("api.github.com"), 10);
         assert_eq!(merged.rate_limits.per_domain.len(), 1);
+    }
+
+    /// A policy that blocks exactly one network category, so a test proves
+    /// which category an address is classified into.
+    fn only_blocking(category: &str) -> EgressPolicy {
+        EgressPolicy {
+            networks: NetworkPolicy {
+                block_private: category == "private",
+                block_link_local: category == "link_local",
+                block_localhost: category == "localhost",
+                block_metadata: category == "metadata",
+            },
+            ..open_policy()
+        }
+    }
+
+    /// A policy that blocks nothing at the network layer.
+    fn no_network_blocks() -> EgressPolicy {
+        only_blocking("none")
+    }
+
+    #[test]
+    fn nat64_embedded_ipv4_is_classified_as_that_ipv4() {
+        // 64:ff9b::/96 (RFC 6052): the low 32 bits are the IPv4 destination.
+        assert!(only_blocking("localhost").is_ip_blocked("64:ff9b::7f00:1"));
+        assert!(only_blocking("localhost").is_ip_blocked("[64:ff9b::7f00:1]"));
+        assert!(only_blocking("localhost").is_ip_blocked("64:ff9b::127.0.0.1"));
+        assert!(only_blocking("metadata").is_ip_blocked("64:ff9b::a9fe:a9fe"));
+        assert!(only_blocking("link_local").is_ip_blocked("64:ff9b::a9fe:a9fe"));
+        assert!(only_blocking("private").is_ip_blocked("64:ff9b::a00:1"));
+        assert!(only_blocking("private").is_ip_blocked("64:ff9b::c0a8:101"));
+        // A public IPv4 behind NAT64 stays reachable.
+        assert!(!open_policy().is_ip_blocked("64:ff9b::808:808"));
+    }
+
+    #[test]
+    fn ipv4_compatible_ipv6_is_classified_as_that_ipv4() {
+        assert!(only_blocking("localhost").is_ip_blocked("::127.0.0.1"));
+        assert!(only_blocking("localhost").is_ip_blocked("::7f00:1"));
+        assert!(only_blocking("metadata").is_ip_blocked("::169.254.169.254"));
+        assert!(only_blocking("private").is_ip_blocked("::10.0.0.1"));
+        assert!(!open_policy().is_ip_blocked("::8.8.8.8"));
+        // `::1` and `::` keep their IPv6 meaning.
+        assert!(only_blocking("localhost").is_ip_blocked("::1"));
+        assert!(only_blocking("localhost").is_ip_blocked("::"));
+    }
+
+    #[test]
+    fn six_to_four_embedded_ipv4_is_classified_conservatively() {
+        // 2002::/16: bits 16..48 are the 6to4 gateway's IPv4 address.
+        assert!(only_blocking("localhost").is_ip_blocked("2002:7f00:1::"));
+        assert!(only_blocking("metadata").is_ip_blocked("2002:a9fe:a9fe::1"));
+        assert!(only_blocking("private").is_ip_blocked("2002:c0a8:101::1"));
+        assert!(!open_policy().is_ip_blocked("2002:808:808::1"));
+    }
+
+    #[test]
+    fn whole_this_network_block_counts_as_localhost() {
+        assert!(only_blocking("localhost").is_ip_blocked("0.0.0.0"));
+        assert!(only_blocking("localhost").is_ip_blocked("0.0.0.1"));
+        assert!(only_blocking("localhost").is_ip_blocked("0.255.255.255"));
+        assert!(only_blocking("localhost").is_ip_blocked("::ffff:0.1.2.3"));
+        assert!(!open_policy().is_ip_blocked("1.0.0.0"));
+        assert!(!no_network_blocks().is_ip_blocked("0.0.0.1"));
+    }
+
+    #[test]
+    fn ipv6_zone_identifiers_do_not_hide_the_address() {
+        // Raw, bracketed and percent-encoded (`%25`) zone separators.
+        assert!(only_blocking("link_local").is_ip_blocked("fe80::1%eth0"));
+        assert!(only_blocking("link_local").is_ip_blocked("[fe80::1%eth0]"));
+        assert!(only_blocking("link_local").is_ip_blocked("[fe80::1%25eth0]"));
+        assert!(only_blocking("link_local").is_ip_blocked("fe80::1%25eth0"));
+        assert!(only_blocking("localhost").is_ip_blocked("::1%lo"));
+        assert!(!open_policy().is_ip_blocked("2606:4700:4700::1111%eth0"));
+    }
+
+    fn policy_with_deny(deny: &[&str]) -> EgressPolicy {
+        EgressPolicy {
+            domains: DomainPolicy {
+                allow: vec![],
+                deny: deny.iter().map(|d| d.to_string()).collect(),
+            },
+            ..open_policy()
+        }
+    }
+
+    #[test]
+    fn unicode_deny_rule_matches_punycode_host_and_vice_versa() {
+        let unicode_rule = policy_with_deny(&["bücher.example", "*.Stra\u{df}e.example"]);
+        assert!(!unicode_rule.is_domain_allowed("xn--bcher-kva.example"));
+        assert!(!unicode_rule.is_domain_allowed("XN--BCHER-KVA.example."));
+        assert!(!unicode_rule.is_domain_allowed("BÜCHER.example"));
+        assert!(!unicode_rule.is_domain_allowed("www.xn--strae-oqa.example"));
+        assert!(unicode_rule.is_domain_allowed("bucher.example"));
+
+        let punycode_rule = policy_with_deny(&["xn--bcher-kva.example", "*.xn--strae-oqa.example"]);
+        assert!(!punycode_rule.is_domain_allowed("bücher.example"));
+        assert!(!punycode_rule.is_domain_allowed("www.Stra\u{df}e.example"));
+    }
+
+    #[test]
+    fn unicode_and_punycode_allow_rules_are_interchangeable() {
+        assert!(policy_with_allow(&["bücher.example"]).is_domain_allowed("xn--bcher-kva.example"));
+        assert!(policy_with_allow(&["xn--bcher-kva.example"]).is_domain_allowed("bücher.example"));
+        assert!(
+            policy_with_allow(&["*.bücher.example"])
+                .is_domain_allowed("shop.xn--bcher-kva.example")
+        );
+        assert!(!policy_with_allow(&["bücher.example"]).is_domain_allowed("bucher.example"));
+    }
+
+    #[test]
+    fn invalid_idna_fails_closed() {
+        // A host that is not valid IDNA is never allowed, even by an open policy.
+        assert!(!open_policy().is_domain_allowed("xn--.example"));
+        assert!(!open_policy().is_domain_allowed("a..example"));
+        // A rule that is not valid IDNA grants nothing.
+        let broken_allow = policy_with_allow(&["xn--.example"]);
+        assert!(!broken_allow.is_domain_allowed("xn--.example"));
+        assert!(!broken_allow.is_domain_allowed("anything.example"));
+        let with_broken_deny = EgressPolicy {
+            domains: DomainPolicy {
+                allow: vec!["good.example".into()],
+                deny: vec!["xn--.example".into()],
+            },
+            ..open_policy()
+        };
+        assert!(!with_broken_deny.is_domain_allowed("good.example"));
+    }
+
+    #[test]
+    fn rate_limit_keys_and_hosts_share_one_normalization() {
+        let policy = policy_with_domain_rates(&[("bücher.example", 7)]);
+        assert_eq!(policy.rate_limit_for("xn--bcher-kva.example."), 7);
+        assert_eq!(policy.rate_limit_for("  BÜCHER.example "), 7);
+        let merged =
+            policy.merge_override(&policy_with_domain_rates(&[("XN--BCHER-KVA.example", 3)]));
+        assert_eq!(merged.rate_limit_for("bücher.example"), 3);
+        assert_eq!(merged.rate_limits.per_domain.len(), 1);
+    }
+
+    #[test]
+    fn hostname_classification_uses_the_shared_normalization() {
+        let policy = open_policy();
+        assert!(policy.is_ip_blocked("  LOCALHOST.  "));
+        assert!(policy.is_ip_blocked("api.LocalHost."));
+        // Fullwidth letters fold to ASCII under IDNA.
+        assert!(policy.is_ip_blocked("ｌｏｃａｌｈｏｓｔ"));
+        assert!(policy.is_ip_blocked("Metadata.Google.Internal."));
+        assert!(!policy.is_ip_blocked("localhost.example.com"));
+    }
+
+    #[test]
+    fn extracted_domains_are_normalized() {
+        assert_eq!(
+            extract_domain("https://API.Stripe.com/v1"),
+            Some("api.stripe.com".into())
+        );
+        assert_eq!(
+            extract_domain("https://bücher.example/x"),
+            Some("xn--bcher-kva.example".into())
+        );
+        assert_eq!(extract_domain("http://xn--.example/"), None);
+    }
+
+    fn load_toml(contents: &str) -> Result<EgressPolicy, crate::error::ShieldError> {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("egress.toml");
+        std::fs::write(&path, contents).unwrap();
+        EgressPolicy::load(&path)
+    }
+
+    #[test]
+    fn load_rejects_empty_label_patterns_with_a_clear_error() {
+        for (field, pattern) in [
+            ("allow", "*."),
+            ("deny", "*."),
+            ("allow", "."),
+            ("deny", "*..x"),
+            ("allow", "a..b"),
+            ("allow", ""),
+        ] {
+            let toml = format!(
+                "schema_version = 1\n[domains]\n{field} = [{}]\n",
+                toml::Value::String(pattern.into())
+            );
+            let err = load_toml(&toml).expect_err(&format!("{field} {pattern:?} must be rejected"));
+            let message = err.to_string();
+            assert!(
+                message.contains(&format!("domains.{field}")),
+                "error should name the field: {message}"
+            );
+            assert!(
+                message.contains(&format!("{pattern:?}")),
+                "error should quote the pattern: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn load_error_explains_what_is_wrong_with_the_pattern() {
+        let err = load_toml("schema_version = 1\n[domains]\nallow = [\"*.\"]\n").unwrap_err();
+        assert!(err.to_string().contains("empty label"), "{err}");
+        let err =
+            load_toml("schema_version = 1\n[domains]\nallow = [\"xn--.example\"]\n").unwrap_err();
+        assert!(err.to_string().contains("not a valid host name"), "{err}");
+    }
+
+    #[test]
+    fn load_rejects_empty_label_rate_limit_keys() {
+        let err =
+            load_toml("schema_version = 1\n[domains]\n[rate_limits.per_domain]\n\"a..b\" = 5\n")
+                .unwrap_err();
+        assert!(err.to_string().contains("rate_limits.per_domain"), "{err}");
+    }
+
+    #[test]
+    fn load_still_accepts_existing_policy_shapes() {
+        let policy = load_toml(
+            r#"
+schema_version = 1
+[domains]
+allow = ["*", "*.example.com", "api.github.com.", "Bücher.Example", "203.0.113.5", "[2001:db8::1]", "*legacy.example"]
+deny = ["evil.example.com", "_dmarc.example.com"]
+[rate_limits.per_domain]
+"API.github.com" = 5
+"#,
+        )
+        .unwrap();
+        assert_eq!(policy.domains.allow.len(), 7);
+        assert!(load_toml(EgressPolicy::starter_toml()).is_ok());
+    }
+
+    #[test]
+    fn validate_is_available_to_programmatic_policies() {
+        assert!(open_policy().validate().is_ok());
+        assert!(policy_with_allow(&["*.example.com"]).validate().is_ok());
+        let err = policy_with_allow(&["*."]).validate().unwrap_err();
+        assert!(err.to_string().contains("domains.allow"), "{err}");
+        // Merging valid policies yields a valid policy (deny-all is `*`).
+        let merged =
+            policy_with_allow(&["a.example"]).merge_override(&policy_with_allow(&["b.example"]));
+        assert!(merged.validate().is_ok());
+    }
+
+    #[test]
+    fn merge_unions_denies_ors_network_blocks_and_takes_operator_audit() {
+        let mut base = policy_with_deny(&["a.example", "shared.example"]);
+        base.networks.block_localhost = false;
+        let mut operator = policy_with_deny(&["shared.example", "b.example"]);
+        operator.networks = NetworkPolicy {
+            block_private: false,
+            block_link_local: false,
+            block_localhost: true,
+            block_metadata: false,
+        };
+        operator.audit.log_allowed = true;
+
+        let merged = base.merge_override(&operator);
+        assert_eq!(
+            merged.domains.deny,
+            vec!["a.example", "shared.example", "b.example"]
+        );
+        assert!(merged.domains.allow.is_empty());
+        assert!(merged.networks.block_localhost, "operator block applies");
+        assert!(merged.networks.block_private, "base block is kept");
+        assert!(merged.audit.log_allowed, "operator audit settings win");
+    }
+
+    #[test]
+    fn azure_wireserver_is_a_metadata_endpoint() {
+        assert!(only_blocking("metadata").is_ip_blocked("168.63.129.16"));
+        assert!(only_blocking("metadata").is_ip_blocked("::ffff:168.63.129.16"));
+        assert!(!open_policy().is_ip_blocked("168.63.129.17"));
     }
 }

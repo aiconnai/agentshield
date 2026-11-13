@@ -15,7 +15,40 @@ use parking_lot::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-use super::policy::EgressPolicy;
+use super::policy::{EgressPolicy, normalize_host};
+
+/// Variables that point proxy-aware HTTP clients at the egress proxy.
+///
+/// Both spellings are set because tools disagree on case: curl and most Unix
+/// tools read the lowercase names, many language runtimes read the uppercase
+/// ones. `ALL_PROXY` covers clients that fall back to a catch-all.
+pub const PROXY_ENV_VARS: [&str; 6] = [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+];
+
+/// Proxy bypass lists. These are removed from the child's environment: an
+/// inherited `NO_PROXY=localhost,.internal` would let a proxy-aware client
+/// skip the policy for exactly the hosts an operator most wants checked.
+pub const PROXY_BYPASS_ENV_VARS: [&str; 2] = ["NO_PROXY", "no_proxy"];
+
+/// Route a child process through the proxy at `proxy_url` (`http://host:port`).
+///
+/// Overwrites any inherited proxy variables and clears the bypass lists. This
+/// only steers clients that honour the environment; it is not a sandbox (see
+/// `docs/EGRESS.md`).
+pub fn apply_proxy_env(command: &mut std::process::Command, proxy_url: &str) {
+    for name in PROXY_ENV_VARS {
+        command.env(name, proxy_url);
+    }
+    for name in PROXY_BYPASS_ENV_VARS {
+        command.env_remove(name);
+    }
+}
 
 /// Decision returned by policy evaluation for a single request.
 #[derive(Debug, Clone)]
@@ -93,9 +126,11 @@ pub struct EgressProxy {
 impl EgressProxy {
     /// Create a new proxy from the given policy.
     ///
+    /// The policy is validated first (see [`EgressPolicy::validate`]).
     /// If the policy has an audit log path configured, the file is opened
     /// (append mode) eagerly so errors surface before the child is spawned.
     pub fn new(policy: EgressPolicy) -> Result<Self, crate::error::ShieldError> {
+        policy.validate()?;
         let audit_writer = if let Some(ref log_path) = policy.audit.log_path {
             let file = std::fs::OpenOptions::new()
                 .create(true)
@@ -167,28 +202,9 @@ impl EgressProxy {
 
     /// Handle an HTTP CONNECT tunnel request (used for HTTPS).
     async fn handle_connect(&self, mut client: TcpStream, host: &str, port: u16) {
-        let decision = self.check_request(host, port);
-        let addrs = match &decision {
-            ProxyDecision::Allow => match self.resolve_upstream(host, port).await {
-                Upstream::Verified(addrs) => addrs,
-                Upstream::Blocked(blocked) => {
-                    self.write_audit(host, port, &blocked);
-                    self.send_forbidden(&mut client, host, port, &blocked).await;
-                    return;
-                }
-                Upstream::Unresolvable => {
-                    self.write_audit(host, port, &decision);
-                    let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
-                    return;
-                }
-            },
-            blocked => {
-                self.write_audit(host, port, blocked);
-                self.send_forbidden(&mut client, host, port, blocked).await;
-                return;
-            }
+        let Some(addrs) = self.authorize(&mut client, host, port).await else {
+            return;
         };
-        self.write_audit(host, port, &decision);
 
         // Connect to the verified addresses directly so no second,
         // unverified DNS resolution can steer us to a blocked IP.
@@ -214,28 +230,9 @@ impl EgressProxy {
         port: u16,
         original_request: &[u8],
     ) {
-        let decision = self.check_request(host, port);
-        let addrs = match &decision {
-            ProxyDecision::Allow => match self.resolve_upstream(host, port).await {
-                Upstream::Verified(addrs) => addrs,
-                Upstream::Blocked(blocked) => {
-                    self.write_audit(host, port, &blocked);
-                    self.send_forbidden(&mut client, host, port, &blocked).await;
-                    return;
-                }
-                Upstream::Unresolvable => {
-                    self.write_audit(host, port, &decision);
-                    let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
-                    return;
-                }
-            },
-            blocked => {
-                self.write_audit(host, port, blocked);
-                self.send_forbidden(&mut client, host, port, blocked).await;
-                return;
-            }
+        let Some(addrs) = self.authorize(&mut client, host, port).await else {
+            return;
         };
-        self.write_audit(host, port, &decision);
 
         // Connect to the verified addresses directly so no second,
         // unverified DNS resolution can steer us to a blocked IP.
@@ -250,12 +247,53 @@ impl EgressProxy {
         }
     }
 
+    /// Run the policy for `host:port` and, if it passes, resolve the host to
+    /// addresses that were each verified against the network policy.
+    ///
+    /// On any refusal the audit entry is written and the matching response
+    /// (403 or 502) is sent to `client`, and `None` is returned.
+    async fn authorize(
+        &self,
+        client: &mut TcpStream,
+        host: &str,
+        port: u16,
+    ) -> Option<Vec<SocketAddr>> {
+        let decision = self.check_request(host, port);
+        if !matches!(decision, ProxyDecision::Allow) {
+            self.write_audit(host, port, &decision);
+            self.send_forbidden(client, host, port, &decision).await;
+            return None;
+        }
+        // Resolve the canonical spelling that was just checked, so the policy
+        // decision and the connection are about the same host.
+        let canonical = normalize_host(host)?;
+        match self.resolve_upstream(&canonical, port).await {
+            Upstream::Verified(addrs) => {
+                self.write_audit(host, port, &decision);
+                Some(addrs)
+            }
+            Upstream::Blocked(blocked) => {
+                self.write_audit(host, port, &blocked);
+                self.send_forbidden(client, host, port, &blocked).await;
+                None
+            }
+            Upstream::Unresolvable => {
+                self.write_audit(host, port, &decision);
+                let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
+                None
+            }
+        }
+    }
+
     /// Evaluate the egress policy for a target host:port.
     pub fn check_request(&self, host: &str, port: u16) -> ProxyDecision {
-        // DNS names are case-insensitive and may carry a trailing root dot;
-        // canonicalise once so policy lookups and rate-limit buckets cannot
-        // be dodged by respelling the same host.
-        let canonical = host.trim_end_matches('.').to_ascii_lowercase();
+        // Canonicalise once (case, root dot, Unicode versus punycode, IP
+        // spellings) so policy lookups and rate-limit buckets cannot be
+        // dodged by respelling the same host. A host with no canonical form
+        // fails closed.
+        let Some(canonical) = normalize_host(host) else {
+            return ProxyDecision::BlockedByDomain(host.to_string());
+        };
         let host = canonical.as_str();
 
         // Check IP blocking first
@@ -307,11 +345,10 @@ impl EgressProxy {
     /// so no second, unverified DNS resolution can steer the connection to
     /// a blocked internal IP (DNS rebinding TOCTOU).
     async fn resolve_upstream(&self, host: &str, port: u16) -> Upstream {
-        let addrs: Vec<SocketAddr> =
-            match tokio::net::lookup_host(format!("{}:{}", host, port)).await {
-                Ok(addrs) => addrs.collect(),
-                Err(_) => return Upstream::Unresolvable,
-            };
+        let addrs: Vec<SocketAddr> = match tokio::net::lookup_host((host, port)).await {
+            Ok(addrs) => addrs.collect(),
+            Err(_) => return Upstream::Unresolvable,
+        };
         for addr in &addrs {
             if self.policy.is_ip_blocked(&addr.ip().to_string()) {
                 return Upstream::Blocked(ProxyDecision::BlockedByNetwork(addr.ip().to_string()));
@@ -558,6 +595,114 @@ mod tests {
             matches!(d, ProxyDecision::BlockedByRateLimit { .. }),
             "4th request should be rate limited"
         );
+    }
+
+    #[test]
+    fn test_apply_proxy_env_sets_every_variable_and_clears_bypass_lists() {
+        let mut command = std::process::Command::new("true");
+        command
+            .env("NO_PROXY", "internal")
+            .env("HTTP_PROXY", "stale");
+        apply_proxy_env(&mut command, "http://127.0.0.1:9");
+
+        let envs: HashMap<_, _> = command
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| v.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+        let lookup = |name: &str| -> Option<&Option<String>> {
+            #[cfg(windows)]
+            {
+                envs.iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case(name))
+                    .map(|(_, v)| v)
+            }
+            #[cfg(not(windows))]
+            {
+                envs.get(name)
+            }
+        };
+        for name in PROXY_ENV_VARS {
+            let value = lookup(name)
+                .unwrap_or_else(|| panic!("{name} must be present in child env"))
+                .as_deref();
+            assert_eq!(value, Some("http://127.0.0.1:9"), "{name}");
+        }
+        for name in PROXY_BYPASS_ENV_VARS {
+            assert_eq!(
+                lookup(name),
+                Some(&None),
+                "{name} must be explicitly removed"
+            );
+        }
+    }
+
+    #[test]
+    fn test_new_refuses_a_policy_with_empty_label_patterns() {
+        let mut policy = test_policy();
+        policy.domains.deny = vec!["*.".into()];
+        let err = EgressProxy::new(policy).err().expect("must be refused");
+        assert!(err.to_string().contains("domains.deny"), "{err}");
+    }
+
+    #[test]
+    fn test_check_request_trims_and_classifies_ip_spellings() {
+        let proxy = EgressProxy::new(test_policy()).unwrap();
+        for host in [
+            " 127.0.0.1 ",
+            "[::ffff:127.0.0.1]",
+            "0.0.0.0",
+            "[64:ff9b::7f00:1]",
+            "[64:ff9b::a9fe:a9fe]",
+            "::127.0.0.1",
+            "[fe80::1%25eth0]",
+        ] {
+            assert!(
+                matches!(
+                    proxy.check_request(host, 80),
+                    ProxyDecision::BlockedByNetwork(_)
+                ),
+                "{host} must be blocked by the network policy"
+            );
+        }
+    }
+
+    #[test]
+    fn test_check_request_fails_closed_on_invalid_host() {
+        let proxy = EgressProxy::new(test_policy()).unwrap();
+        assert!(matches!(
+            proxy.check_request("xn--.github.com", 443),
+            ProxyDecision::BlockedByDomain(_)
+        ));
+        assert!(matches!(
+            proxy.check_request("api..github.com", 443),
+            ProxyDecision::BlockedByDomain(_)
+        ));
+    }
+
+    #[test]
+    fn test_check_request_unicode_spellings_share_one_rate_bucket() {
+        let mut policy = test_policy();
+        policy.domains.allow = vec!["xn--bcher-kva.example".into()];
+        policy.rate_limits.per_domain = HashMap::from([("bücher.example".to_string(), 2)]);
+        let proxy = EgressProxy::new(policy).unwrap();
+
+        assert!(matches!(
+            proxy.check_request("bücher.example", 443),
+            ProxyDecision::Allow
+        ));
+        assert!(matches!(
+            proxy.check_request("XN--BCHER-KVA.EXAMPLE", 443),
+            ProxyDecision::Allow
+        ));
+        assert!(matches!(
+            proxy.check_request("xn--bcher-kva.example.", 443),
+            ProxyDecision::BlockedByRateLimit { .. }
+        ));
     }
 
     #[test]

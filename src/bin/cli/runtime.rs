@@ -144,7 +144,7 @@ pub(super) fn cmd_wrap(
     use std::sync::Arc;
 
     use agentshield::egress::policy::EgressPolicy;
-    use agentshield::egress::proxy::EgressProxy;
+    use agentshield::egress::proxy::{EgressProxy, apply_proxy_env};
 
     if command.is_empty() {
         return Err(agentshield::error::ShieldError::Internal(
@@ -193,19 +193,18 @@ pub(super) fn cmd_wrap(
         eprintln!("agentshield: proxy listening on {}", addr);
         eprintln!("agentshield: wrapping command: {}", command.join(" "));
 
-        let mut child = std::process::Command::new(&command[0])
-            .args(&command[1..])
-            .env("HTTP_PROXY", &proxy_url)
-            .env("HTTPS_PROXY", &proxy_url)
-            .env("http_proxy", &proxy_url)
-            .env("https_proxy", &proxy_url)
-            .spawn()
-            .map_err(|e| {
-                agentshield::error::ShieldError::Internal(format!(
-                    "Failed to start command '{}': {}",
-                    command[0], e
-                ))
-            })?;
+        // Proxy-aware clients are routed through the policy. This is not a
+        // sandbox: a process that ignores these variables can still open
+        // sockets directly.
+        let mut child_command = std::process::Command::new(&command[0]);
+        child_command.args(&command[1..]);
+        apply_proxy_env(&mut child_command, &proxy_url);
+        let mut child = child_command.spawn().map_err(|e| {
+            agentshield::error::ShieldError::Internal(format!(
+                "Failed to start command '{}': {}",
+                command[0], e
+            ))
+        })?;
 
         let status = child.wait().map_err(|e| {
             agentshield::error::ShieldError::Internal(format!("Failed to wait for command: {}", e))

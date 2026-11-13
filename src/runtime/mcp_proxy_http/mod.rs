@@ -66,10 +66,15 @@ mod tests {
             .await
             .unwrap();
 
-        let mut resp = String::new();
+        let mut raw = Vec::new();
         let (read_half, _) = client.split();
         let mut reader = BufReader::new(read_half);
-        reader.read_to_string(&mut resp).await.unwrap();
+        match reader.read_to_end(&mut raw).await {
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::ConnectionReset && !raw.is_empty() => {}
+            Err(err) => panic!("reading proxy response failed: {err}"),
+        }
+        let resp = String::from_utf8_lossy(&raw).into_owned();
 
         assert!(resp.contains("HTTP/1.1 200 OK"));
         assert!(resp.contains(r#""status": "ok""#));
@@ -103,10 +108,15 @@ mod tests {
             .await
             .unwrap();
 
-        let mut resp = String::new();
+        let mut raw = Vec::new();
         let (read_half, _) = client.split();
         let mut reader = BufReader::new(read_half);
-        reader.read_to_string(&mut resp).await.unwrap();
+        match reader.read_to_end(&mut raw).await {
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::ConnectionReset && !raw.is_empty() => {}
+            Err(err) => panic!("reading proxy response failed: {err}"),
+        }
+        let resp = String::from_utf8_lossy(&raw).into_owned();
 
         assert!(resp.contains("HTTP/1.1 413 Payload Too Large"));
     }
@@ -186,10 +196,15 @@ mod tests {
             client.write_all(body).await.unwrap();
         }
 
-        let mut resp = String::new();
+        let mut raw = Vec::new();
         let (read_half, _) = client.split();
         let mut reader = BufReader::new(read_half);
-        reader.read_to_string(&mut resp).await.unwrap();
+        match reader.read_to_end(&mut raw).await {
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::ConnectionReset && !raw.is_empty() => {}
+            Err(err) => panic!("reading proxy response failed: {err}"),
+        }
+        let resp = String::from_utf8_lossy(&raw).into_owned();
         (resp, contacted.load(Ordering::SeqCst))
     }
 

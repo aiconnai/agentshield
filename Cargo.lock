@@ -13,6 +13,7 @@ dependencies = [
  "ed25519-dalek",
  "glob",
  "hex",
+ "idna",
  "ignore",
  "levenshtein",
  "once_cell",
