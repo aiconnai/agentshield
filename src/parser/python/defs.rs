@@ -77,7 +77,7 @@ pub(crate) fn collect_http_client_vars(content: &str) -> HashSet<String> {
 /// Final segments of decorator names that expose a function to the agent or
 /// MCP client (MCP, FastMCP, CrewAI, LangChain, OpenAI Agents, pydantic-ai,
 /// Semantic Kernel, AutoGen).
-const TOOL_DECORATORS: &[&str] = &[
+pub(crate) const TOOL_DECORATORS: &[&str] = &[
     "tool",
     "tool_plain",
     "function_tool",
@@ -151,7 +151,7 @@ fn paren_delta(text: &str) -> i32 {
 
 /// Replace the contents of string literals and comments with spaces, keeping
 /// quotes and newlines so line structure is preserved.
-fn mask_strings_and_comments(content: &str) -> String {
+pub(crate) fn mask_strings_and_comments(content: &str) -> String {
     let mut out = String::with_capacity(content.len());
     let mut chars = content.chars().peekable();
     while let Some(c) = chars.next() {

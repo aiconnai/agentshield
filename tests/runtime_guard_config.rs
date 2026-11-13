@@ -16,12 +16,15 @@ fn guard_mcp_proxy(cwd: &Path, extra: &[&str]) -> Output {
         .stderr(Stdio::piped())
         .spawn()
         .expect("spawn agentshield guard --mcp-proxy");
-    child
-        .stdin
-        .as_mut()
-        .expect("stdin")
-        .write_all(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#)
-        .expect("write stdin");
+    if let Some(mut stdin) = child.stdin.take() {
+        if let Err(err) = stdin.write_all(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#) {
+            assert_eq!(
+                err.kind(),
+                std::io::ErrorKind::BrokenPipe,
+                "write stdin: {err}"
+            );
+        }
+    }
     child.wait_with_output().expect("wait")
 }
 

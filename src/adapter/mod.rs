@@ -1,6 +1,7 @@
 pub mod autogen;
 pub mod crewai;
 pub mod cursor_rules;
+pub(crate) mod entry_points;
 pub mod gpt_actions;
 pub mod hermes;
 pub mod langchain;
