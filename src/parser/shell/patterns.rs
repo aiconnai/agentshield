@@ -13,7 +13,7 @@ pub(crate) static EVAL_RE: Lazy<Regex> =
 // an unquoted one.
 pub(crate) static SHELL_C_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r#"(?m)(?:^|[\s;&|(`])((?:/(?:usr/)?bin/(?:env\s+)?)?(?:ba|z|da|k)?sh)\s+(?:-[A-Za-z]+\s+)*-c\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)'|(\S+))"#,
+        r#"(?m)(?:^|[\s;&|(`])((?:/(?:usr/)?bin/(?:env\s+)?)?(?:ba|z|da|k)?sh)\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*c\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)'|(\S+))"#,
     )
     .expect("static regex pattern is valid")
 });

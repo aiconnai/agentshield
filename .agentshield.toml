@@ -7,5 +7,6 @@ ignore_tests = true
 # python/ is the PyPI CLI wrapper that invokes the agentshield binary.
 # skills/ and install.sh are installation and agent guidance scripts.
 # .github/ (CI and release scripts) is scanned: dot-directories are included.
-exclude = ["docs/**", "vscode/**", "skills/**", "python/**", "install.sh"]
+# .claude/ and .worktrees/ hold local agent worktrees (ignored by git).
+exclude = ["docs/**", "vscode/**", "skills/**", "python/**", "install.sh", ".claude/**", ".worktrees/**"]
 
