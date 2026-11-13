@@ -9,7 +9,7 @@ use crate::runtime::ProxyPolicy;
 use crate::runtime::mcp_proxy::{self, ProxyDecision, decide};
 
 const DOWNSTREAM_UNAVAILABLE_ERROR_CODE: i64 = -32002;
-const DOWNSTREAM_EXIT_TIMEOUT: Duration = Duration::from_secs(2);
+const DOWNSTREAM_EXIT_TIMEOUT: Duration = Duration::from_secs(10);
 
 enum ReadLine {
     Eof,
