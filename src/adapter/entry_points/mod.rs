@@ -20,7 +20,7 @@ mod python;
 mod typescript;
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::ir::{Language, SourceFile};
 use crate::parser::ParsedFile;
@@ -71,8 +71,12 @@ pub(crate) fn mark_framework_entry_points(
     mark_referenced_functions(&names, parsed_files);
 
     let methods = python::tool_class_entry_methods(&class_groups);
+    let mut parsed_by_path: HashMap<&Path, &mut ParsedFile> = parsed_files
+        .iter_mut()
+        .map(|(p, parsed)| (p.as_path(), parsed))
+        .collect();
     for (path, methods) in class_files.into_iter().zip(methods) {
-        if let Some((_, parsed)) = parsed_files.iter_mut().find(|(p, _)| p == path) {
+        if let Some(parsed) = parsed_by_path.get_mut(path.as_path()) {
             parsed.entry_points.extend(methods);
         }
     }
