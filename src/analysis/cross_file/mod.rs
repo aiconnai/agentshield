@@ -12,7 +12,8 @@ mod sink_policy;
 pub use engine::{CrossFileResult, apply_cross_file_sanitization};
 #[allow(unused_imports)]
 pub(crate) use sanitizer::{
-    SanitizerCategory, is_redaction_sanitizer, is_sanitizer, sanitizer_category, sanitizer_label,
+    SanitizerCategory, assignment_sanitizer_label, is_redaction_sanitizer, is_sanitizer,
+    sanitizer_category, sanitizer_label,
 };
 pub use sink_policy::sanitizer_allows_sink;
 
@@ -53,8 +54,12 @@ mod tests {
     #[test]
     fn sanitizer_names_recognized() {
         assert!(is_sanitizer("validatePath"));
-        assert!(is_sanitizer("path.resolve"));
         assert!(is_sanitizer("os.path.realpath"));
+        assert!(!is_sanitizer("path.resolve"));
+        assert!(!is_sanitizer("path.normalize"));
+        assert!(!is_sanitizer("os.path.abspath"));
+        assert!(!is_sanitizer("os.path.normpath"));
+        assert!(!is_sanitizer("Promise.resolve"));
         assert!(!is_sanitizer("URL.parse"));
         assert!(is_sanitizer("parseInt"));
         assert!(!is_sanitizer("urlparse"));
@@ -62,6 +67,33 @@ mod tests {
         assert!(is_sanitizer("validateUrl"));
         assert!(!is_sanitizer("processData"));
         assert!(!is_sanitizer("readFile"));
+    }
+
+    #[test]
+    fn canonicalizer_sanitizes_only_with_a_containment_check() {
+        use super::assignment_sanitizer_label as label;
+
+        assert_eq!(
+            label("path.resolve", "p", "const p = path.resolve(b, x);"),
+            None
+        );
+        assert_eq!(
+            label("path.resolve", "p", "if (!p.startsWith(BASE)) throw 1;").as_deref(),
+            Some("path:path.resolve")
+        );
+        assert!(label("os.path.abspath", "p", "if p.is_relative_to(ROOT):").is_some());
+        assert!(label("abspath", "p", "os.path.commonpath([ROOT, p])").is_some());
+        assert!(label("path.resolve", "p", "path.relative(BASE, p)").is_some());
+        assert_eq!(
+            label("path.resolve", "p", "if (!q.startsWith(BASE)) {}"),
+            None
+        );
+        assert_eq!(
+            label("path.resolve", "p", "if (!pp.startsWith(BASE)) {}"),
+            None
+        );
+        assert!(label("validatePath", "p", "").is_some());
+        assert_eq!(label("redactSecret", "p", ""), None);
     }
 
     #[test]

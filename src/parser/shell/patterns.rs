@@ -8,6 +8,16 @@ pub(crate) static CURL_WGET_RE: Lazy<Regex> = Lazy::new(|| {
 pub(crate) static EVAL_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?m)\beval\s+").expect("static regex pattern is valid"));
 
+// `sh -c SCRIPT`, `bash -c SCRIPT`, `/bin/sh -c SCRIPT`. Group 1 is the shell,
+// group 2 a double-quoted script, group 3 a single-quoted script, and group 4
+// an unquoted one.
+pub(crate) static SHELL_C_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r#"(?m)(?:^|[\s;&|(`])((?:/(?:usr/)?bin/(?:env\s+)?)?(?:ba|z|da|k)?sh)\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*c\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)'|(\S+))"#,
+    )
+    .expect("static regex pattern is valid")
+});
+
 pub(crate) static INSTALL_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?m)\b(pip3?\s+install|npm\s+install|npm\s+i\b|yarn\s+add|pnpm\s+add|cargo\s+install|gem\s+install|go\s+install)")
         .expect("static regex pattern is valid")

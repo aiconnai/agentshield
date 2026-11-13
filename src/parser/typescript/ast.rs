@@ -13,11 +13,17 @@ use crate::ir::{ArgumentSource, SourceLocation};
 use crate::parser::{CallSite, FunctionDef, FunctionParam, ParsedFile};
 
 #[cfg(feature = "typescript")]
+use super::child_process::ChildProcessBindings;
+#[cfg(feature = "typescript")]
 use super::classify::classify_all_arguments;
 #[cfg(feature = "typescript")]
 use super::patterns::{
-    DYNAMIC_EXEC_PATTERNS, EXEC_PATTERNS, FILE_PATTERNS, NETWORK_PATTERNS, matches_pattern,
+    DYNAMIC_EXEC_PATTERNS, FILE_PATTERNS, NETWORK_PATTERNS, is_command_sink, matches_pattern,
 };
+#[cfg(feature = "typescript")]
+use super::scoped::scope_path;
+#[cfg(feature = "typescript")]
+use crate::parser::common::ScopedSanitizers;
 
 /// Recursively collect function/method/arrow parameter names + FunctionDef entries.
 #[cfg(feature = "typescript")]
@@ -209,6 +215,8 @@ pub(super) fn walk_node(
     source: &[u8],
     file_path: &Path,
     param_names: &HashSet<String>,
+    child_process: &ChildProcessBindings,
+    scoped_sanitizers: &ScopedSanitizers,
     parsed: &mut ParsedFile,
 ) {
     let kind = node.kind();
@@ -236,8 +244,9 @@ pub(super) fn walk_node(
 
             // Classify all arguments (not just the first) for CallSite recording
             let args_node = node.child_by_field_name("arguments");
+            let sanitized = visible_sanitizers(node, scoped_sanitizers);
             let all_arg_sources =
-                classify_all_arguments(args_node, source, param_names, &parsed.sanitized_vars);
+                classify_all_arguments(args_node, source, param_names, &sanitized);
 
             // First argument source for existing detector logic
             let arg_source = all_arg_sources
@@ -255,7 +264,7 @@ pub(super) fn walk_node(
             });
 
             // Command execution
-            if matches_pattern(&func_name, &EXEC_PATTERNS) {
+            if is_command_sink(&func_name, child_process) {
                 parsed.commands.push(CommandInvocation {
                     function: func_name.clone(),
                     command_arg: arg_source.clone(),
@@ -329,8 +338,9 @@ pub(super) fn walk_node(
         if let Some(constructor_node) = node.child_by_field_name("constructor") {
             let constructor_name = resolve_call_name(constructor_node, source);
             let args_node = node.child_by_field_name("arguments");
+            let sanitized = visible_sanitizers(node, scoped_sanitizers);
             let all_arg_sources =
-                classify_all_arguments(args_node, source, param_names, &parsed.sanitized_vars);
+                classify_all_arguments(args_node, source, param_names, &sanitized);
             let code_arg = all_arg_sources
                 .first()
                 .cloned()
@@ -357,8 +367,26 @@ pub(super) fn walk_node(
     // Recurse into children (skip already-processed subtrees)
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        walk_node(child, source, file_path, param_names, parsed);
+        walk_node(
+            child,
+            source,
+            file_path,
+            param_names,
+            child_process,
+            scoped_sanitizers,
+            parsed,
+        );
     }
+}
+
+/// Sanitized variable names visible at `node`: those of its own function, of
+/// the functions around it, and of module level.
+#[cfg(feature = "typescript")]
+fn visible_sanitizers(node: tree_sitter::Node, scoped: &ScopedSanitizers) -> HashSet<String> {
+    if scoped.is_empty() {
+        return HashSet::new();
+    }
+    scoped.view(&scope_path(node))
 }
 
 /// Find the enclosing function name for a node (for caller tracking).

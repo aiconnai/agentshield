@@ -1,7 +1,10 @@
 pub(crate) mod ast;
+pub(crate) mod child_process;
 pub(crate) mod classify;
 pub(crate) mod fallback;
 pub(crate) mod patterns;
+#[cfg(feature = "typescript")]
+pub(crate) mod scoped;
 
 #[cfg(test)]
 mod tests;
@@ -15,9 +18,11 @@ use std::path::PathBuf;
 #[cfg(feature = "typescript")]
 use ast::{collect_params, walk_node};
 #[cfg(feature = "typescript")]
-use classify::detect_sanitizer_assignments;
+use child_process::ChildProcessBindings;
 #[cfg(not(feature = "typescript"))]
 use fallback::parse_file_fallback;
+#[cfg(feature = "typescript")]
+use scoped::collect_scoped_sanitizers;
 
 use crate::error::Result;
 use crate::ir::Language;
@@ -64,8 +69,9 @@ impl LanguageParser for TypeScriptParser {
         let mut parsed = ParsedFile::default();
         let mut param_names = HashSet::new();
 
-        // Phase 0: Detect sanitizer assignments via regex on source text
-        detect_sanitizer_assignments(content, &mut parsed.sanitized_vars);
+        // Phase 0: Detect sanitizer assignments, per enclosing function
+        let scoped_sanitizers = collect_scoped_sanitizers(tree.root_node(), source);
+        parsed.sanitized_vars.extend(scoped_sanitizers.all());
 
         // Phase 1: Collect function parameters + function defs
         collect_params(
@@ -77,11 +83,14 @@ impl LanguageParser for TypeScriptParser {
         );
 
         // Phase 2: Walk AST for call expressions, call sites, and env accesses
+        let child_process = ChildProcessBindings::from_source(content);
         walk_node(
             tree.root_node(),
             source,
             &file_path,
             &param_names,
+            &child_process,
+            &scoped_sanitizers,
             &mut parsed,
         );
 

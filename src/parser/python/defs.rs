@@ -1,27 +1,54 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::analysis::cross_file::{SanitizerCategory, sanitizer_category, sanitizer_label};
+use crate::analysis::cross_file::assignment_sanitizer_label;
+use crate::parser::common::ScopedSanitizers;
 use crate::parser::{FunctionDef, FunctionParam, ParsedFile};
 
-use super::classify::{loc, sanitized_var_marker};
+use super::classify::loc;
 use super::patterns::{FUNC_DEF_RE, HTTP_CLIENT_CTX_RE, SANITIZER_ASSIGN_RE};
+use super::scope::FunctionScopes;
 
-pub(crate) fn collect_sanitizer_vars(content: &str, parsed: &mut ParsedFile) {
-    for cap in SANITIZER_ASSIGN_RE.captures_iter(content) {
-        let var_name = &cap[1];
-        let func_name = &cap[2];
-        if sanitizer_category(func_name)
-            .is_some_and(|category| !matches!(category, SanitizerCategory::Redaction))
-        {
-            parsed.sanitized_vars.insert(var_name.to_string());
-            if let Some(label) = sanitizer_label(func_name) {
-                parsed
-                    .sanitized_vars
-                    .insert(sanitized_var_marker(var_name, &label));
+/// Find `var = sanitizer(...)` assignments, recording each in the scope of the
+/// function that contains it. `parsed.sanitized_vars` receives the union of
+/// all scopes for callers that only need to know a name is sanitized somewhere.
+pub(crate) fn collect_sanitizer_vars(content: &str, parsed: &mut ParsedFile) -> ScopedSanitizers {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut scopes = FunctionScopes::default();
+    let mut scoped = ScopedSanitizers::default();
+
+    for (line_idx, line) in lines.iter().enumerate() {
+        scopes.advance(line, line_idx);
+        if line.trim_start().starts_with('#') {
+            continue;
+        }
+        for cap in SANITIZER_ASSIGN_RE.captures_iter(line) {
+            let var_name = &cap[1];
+            let scope_text = scope_text_from(&lines, line_idx, scopes.current_indent());
+            if let Some(label) = assignment_sanitizer_label(&cap[2], var_name, &scope_text) {
+                scoped.insert(&scopes.path(), var_name, &label);
             }
         }
     }
+
+    parsed.sanitized_vars.extend(scoped.all());
+    scoped
+}
+
+/// Source text from `start` to the end of the enclosing function (or of the
+/// file at module level): where a containment check on the value can appear.
+fn scope_text_from(lines: &[&str], start: usize, function_indent: Option<usize>) -> String {
+    let end = match function_indent {
+        None => lines.len(),
+        Some(indent) => lines[start + 1..]
+            .iter()
+            .position(|line| {
+                !line.trim().is_empty()
+                    && line.chars().take_while(|c| c.is_whitespace()).count() <= indent
+            })
+            .map_or(lines.len(), |offset| start + 1 + offset),
+    };
+    lines[start..end].join("\n")
 }
 
 pub(crate) fn collect_function_defs_and_params(

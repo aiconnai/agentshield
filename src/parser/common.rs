@@ -1,6 +1,52 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::analysis::cross_file::SanitizerCategory;
+
+/// Sanitized variables recorded per function scope. A name sanitized in one
+/// function must not read as sanitized in a sibling function that merely
+/// reuses it.
+///
+/// A scope is a path of `/`-separated function keys, outermost first (the
+/// empty path is module level). A scope sees its own entries, those of every
+/// enclosing function, and module-level ones (closures read outer variables).
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ScopedSanitizers {
+    by_scope: HashMap<String, HashSet<String>>,
+}
+
+impl ScopedSanitizers {
+    /// Record `var` as sanitized by `label` in `scope`.
+    pub(crate) fn insert(&mut self, scope: &str, var: &str, label: &str) {
+        let entries = self.by_scope.entry(scope.to_string()).or_default();
+        entries.insert(var.to_string());
+        entries.insert(sanitized_var_marker(var, label));
+    }
+
+    #[cfg(feature = "typescript")]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.by_scope.is_empty()
+    }
+
+    /// Every entry, regardless of scope.
+    pub(crate) fn all(&self) -> HashSet<String> {
+        self.by_scope.values().flatten().cloned().collect()
+    }
+
+    /// Entries visible from `scope`.
+    pub(crate) fn view(&self, scope: &str) -> HashSet<String> {
+        self.by_scope
+            .iter()
+            .filter(|(key, _)| {
+                key.is_empty()
+                    || scope == key.as_str()
+                    || scope
+                        .strip_prefix(key.as_str())
+                        .is_some_and(|rest| rest.starts_with('/'))
+            })
+            .flat_map(|(_, entries)| entries.iter().cloned())
+            .collect()
+    }
+}
 
 pub(crate) fn sanitized_var_marker(var_name: &str, sanitizer_label: &str) -> String {
     format!("{var_name}::{sanitizer_label}")
@@ -68,6 +114,39 @@ pub(crate) fn leading_string_literal(arg: &str) -> Option<(&str, usize)> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod scoped_sanitizers_tests {
+    use super::ScopedSanitizers;
+
+    #[test]
+    fn scope_sees_itself_enclosing_functions_and_module_level() {
+        let mut scoped = ScopedSanitizers::default();
+        scoped.insert("", "root", "path:validatePath");
+        scoped.insert("a@1", "outer", "path:validatePath");
+        scoped.insert("a@1/b@2", "inner", "path:validatePath");
+        scoped.insert("c@9", "other", "path:validatePath");
+
+        let view = scoped.view("a@1/b@2");
+        assert!(view.contains("root"));
+        assert!(view.contains("outer"));
+        assert!(view.contains("inner"));
+        assert!(!view.contains("other"));
+        assert!(view.contains("inner::path:validatePath"));
+    }
+
+    #[test]
+    fn sibling_and_prefix_lookalike_scopes_do_not_leak() {
+        let mut scoped = ScopedSanitizers::default();
+        scoped.insert("a@1", "safe", "path:validatePath");
+
+        assert!(!scoped.view("a@10").contains("safe"));
+        assert!(!scoped.view("b@2").contains("safe"));
+        assert!(!scoped.view("").contains("safe"));
+        assert!(scoped.view("a@1/inner@2").contains("safe"));
+        assert_eq!(scoped.all().len(), 2);
+    }
 }
 
 #[cfg(test)]

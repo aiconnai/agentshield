@@ -8,10 +8,13 @@ use crate::ir::Language;
 
 pub struct PythonParser;
 
+pub mod calls;
 pub mod classify;
 pub mod defs;
+pub mod imports;
 pub mod patterns;
 pub mod scanner;
+pub mod scope;
 
 use defs::{
     collect_entry_points, collect_function_defs_and_params, collect_http_client_vars,
@@ -29,7 +32,7 @@ impl LanguageParser for PythonParser {
         let file_path = PathBuf::from(path);
 
         // Detect sanitizer assignments: safe_path = validate_path(x)
-        collect_sanitizer_vars(content, &mut parsed);
+        let scoped_sanitizers = collect_sanitizer_vars(content, &mut parsed);
 
         // Collect function parameter names + FunctionDef entries
         let param_names = collect_function_defs_and_params(content, &file_path, &mut parsed);
@@ -44,6 +47,7 @@ impl LanguageParser for PythonParser {
             &file_path,
             &param_names,
             &http_client_vars,
+            &scoped_sanitizers,
             &mut parsed,
         );
 
@@ -382,5 +386,164 @@ def handler(path: str):
             parsed.file_operations[0].path_arg.is_tainted(),
             "redaction output must remain tainted for file path sinks"
         );
+    }
+
+    fn first_command(code: &str) -> crate::ir::execution_surface::CommandInvocation {
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert_eq!(parsed.commands.len(), 1, "commands: {:?}", parsed.commands);
+        parsed.commands.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn multiline_concatenation_is_interpolated() {
+        let code = "def f(user):\n    return os.system(\n        \"ls \"\n        + user\n        + \" -la\"\n    )\n";
+        let command = first_command(code);
+        assert!(matches!(command.command_arg, ArgumentSource::Interpolated));
+        assert_eq!(command.location.line, 2);
+    }
+
+    #[test]
+    fn multiline_subprocess_with_keyword_after_concatenation() {
+        let code = "def f(user):\n    subprocess.run(\n        \"ls \"\n        + user,\n        shell=True)\n";
+        assert!(matches!(
+            first_command(code).command_arg,
+            ArgumentSource::Interpolated
+        ));
+    }
+
+    #[test]
+    fn multiline_literal_and_adjacent_literals_stay_literal() {
+        let one = "def f():\n    os.system(\n        \"ls -la\"\n    )\n";
+        assert!(matches!(
+            first_command(one).command_arg,
+            ArgumentSource::Literal(ref v) if v == "ls -la"
+        ));
+        let adjacent = "def f():\n    os.system(\n        \"ls \"\n        \"-la\"\n    )\n";
+        assert!(matches!(
+            first_command(adjacent).command_arg,
+            ArgumentSource::Literal(ref v) if v == "ls -la"
+        ));
+    }
+
+    #[test]
+    fn multiline_call_closing_paren_inside_string_or_comment_is_ignored() {
+        let code =
+            "def f(user):\n    os.system(\n        \"echo ) \"  # )\n        + user\n    )\n";
+        assert!(matches!(
+            first_command(code).command_arg,
+            ArgumentSource::Interpolated
+        ));
+    }
+
+    #[test]
+    fn comma_inside_literal_does_not_truncate_first_argument() {
+        let code = "def f():\n    os.system(\"echo a, b\")\n";
+        assert!(matches!(
+            first_command(code).command_arg,
+            ArgumentSource::Literal(ref v) if v == "echo a, b"
+        ));
+    }
+
+    #[test]
+    fn multiline_call_is_recorded_once_as_a_call_site() {
+        let code = "def f(user):\n    helper(\n        user,\n        1,\n    )\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        let sites: Vec<_> = parsed
+            .call_sites
+            .iter()
+            .filter(|site| site.callee == "helper")
+            .collect();
+        assert_eq!(sites.len(), 1);
+        assert_eq!(sites[0].arguments.len(), 2);
+        assert!(matches!(
+            sites[0].arguments[0],
+            ArgumentSource::Parameter { .. }
+        ));
+        assert_eq!(sites[0].caller.as_deref(), Some("f"));
+    }
+
+    #[test]
+    fn multiline_def_header_is_not_a_call_site() {
+        let code = "def helper(\n    a,\n    b,\n):\n    return a\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert!(parsed.call_sites.iter().all(|site| site.callee != "helper"));
+    }
+
+    #[test]
+    fn from_import_alias_is_a_subprocess_sink() {
+        let code = "from subprocess import run\n\ndef f(cmd):\n    run(cmd, shell=True)\n";
+        let command = first_command(code);
+        assert_eq!(command.function, "subprocess.run");
+        assert!(matches!(
+            command.command_arg,
+            ArgumentSource::Parameter { .. }
+        ));
+    }
+
+    #[test]
+    fn module_alias_is_a_subprocess_sink() {
+        let code = "import subprocess as sp\n\ndef f(cmd):\n    sp.check_output(cmd)\n";
+        assert_eq!(first_command(code).function, "subprocess.check_output");
+    }
+
+    #[test]
+    fn unimported_run_is_not_a_subprocess_sink() {
+        let code = "def run(cmd):\n    return cmd\n\ndef f(cmd):\n    run(cmd)\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert!(parsed.commands.is_empty());
+    }
+
+    #[test]
+    fn sanitized_name_is_scoped_to_its_function() {
+        let code = "def a(p):\n    safe = validate_path(p)\n    return open(safe).read()\n\n\ndef b(safe):\n    return open(safe).read()\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert_eq!(parsed.file_operations.len(), 2);
+        assert!(!parsed.file_operations[0].path_arg.is_tainted());
+        assert!(parsed.file_operations[1].path_arg.is_tainted());
+    }
+
+    #[test]
+    fn module_level_and_enclosing_sanitized_names_are_visible_in_nested_functions() {
+        let code = "root = validate_path(BASE)\n\ndef outer(p):\n    safe = validate_path(p)\n\n    def inner():\n        return open(safe).read() + open(root).read()\n\n    return inner\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert_eq!(parsed.file_operations.len(), 2);
+        assert!(
+            parsed
+                .file_operations
+                .iter()
+                .all(|op| !op.path_arg.is_tainted())
+        );
+    }
+
+    #[test]
+    fn same_named_functions_do_not_share_sanitized_names() {
+        let code = "def run(p):\n    safe = validate_path(p)\n    return open(safe).read()\n\n\ndef run(safe):\n    return open(safe).read()\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert!(!parsed.file_operations[0].path_arg.is_tainted());
+        assert!(parsed.file_operations[1].path_arg.is_tainted());
+    }
+
+    #[test]
+    fn abspath_alone_does_not_sanitize_but_with_containment_check_does() {
+        let alone = "def f(p):\n    safe = os.path.abspath(p)\n    return open(safe).read()\n";
+        let parsed = PythonParser
+            .parse_file(Path::new("test.py"), alone)
+            .unwrap();
+        assert!(!parsed.sanitized_vars.contains("safe"));
+        assert!(parsed.file_operations[0].path_arg.is_tainted());
+
+        let checked = "def f(p):\n    safe = os.path.abspath(os.path.join(ROOT, p))\n    if not safe.startswith(ROOT):\n        raise ValueError(p)\n    return open(safe).read()\n";
+        let parsed = PythonParser
+            .parse_file(Path::new("test.py"), checked)
+            .unwrap();
+        assert!(parsed.sanitized_vars.contains("safe"));
+        assert!(!parsed.file_operations[0].path_arg.is_tainted());
+    }
+
+    #[test]
+    fn containment_check_in_another_function_does_not_sanitize() {
+        let code = "def f(p):\n    safe = os.path.abspath(p)\n    return open(safe).read()\n\n\ndef g(safe):\n    return safe.startswith(ROOT)\n";
+        let parsed = PythonParser.parse_file(Path::new("test.py"), code).unwrap();
+        assert!(parsed.file_operations[0].path_arg.is_tainted());
     }
 }

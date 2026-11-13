@@ -26,11 +26,18 @@ static PATH_SANITIZER_NAMES: &[&str] = &[
     "resolvePath",
     "canonicalizePath",
     "realpath",
+    "os.path.realpath",
+];
+
+/// Path canonicalizers that do NOT confine a path: `path.resolve(base,
+/// "../../etc/passwd")` and `os.path.abspath(...)` happily leave `base`. A
+/// value they produce is sanitized only when the same scope also checks that
+/// it stays inside an allowed root (see [`assignment_sanitizer_label`]).
+static UNCONFINED_CANONICALIZER_NAMES: &[&str] = &[
     "path.resolve",
     "path.normalize",
     "resolve",
     "normalize",
-    "os.path.realpath",
     "os.path.abspath",
     "os.path.normpath",
     "abspath",
@@ -163,6 +170,42 @@ pub fn is_sanitizer(name: &str) -> bool {
 #[allow(dead_code)]
 pub fn is_redaction_sanitizer(name: &str) -> bool {
     matches!(sanitizer_category(name), Some(SanitizerCategory::Redaction))
+}
+
+/// Whether `name` canonicalizes a path without confining it to a root.
+pub fn is_unconfined_canonicalizer(name: &str) -> bool {
+    exact_or_method_match(name, UNCONFINED_CANONICALIZER_NAMES)
+}
+
+/// Sanitizer label for `var = name(...)`, or `None` when the assignment does
+/// not sanitize `var`.
+///
+/// Named sanitizers (`validatePath`, `realpath`, ...) sanitize on their own.
+/// Unconfined canonicalizers (`path.resolve`, `os.path.abspath`) sanitize only
+/// when `scope_text` -- the enclosing function, or the file at module level --
+/// also contains a containment check on `var` (`var.startsWith(root)`,
+/// `var.is_relative_to(root)`, `commonpath`, `path.relative`).
+pub fn assignment_sanitizer_label(name: &str, var: &str, scope_text: &str) -> Option<String> {
+    match sanitizer_category(name) {
+        Some(SanitizerCategory::Redaction) => return None,
+        Some(_) => return sanitizer_label(name),
+        None => {}
+    }
+    (is_unconfined_canonicalizer(name) && has_containment_check(var, scope_text))
+        .then(|| format!("{}:{name}", SanitizerCategory::Path.as_str()))
+}
+
+/// Whether `scope_text` checks that `var` stays inside a root directory.
+fn has_containment_check(var: &str, scope_text: &str) -> bool {
+    let var = regex::escape(var);
+    let patterns = [
+        format!(r"\b{var}\s*\.\s*(?:startsWith|startswith|is_relative_to|relative_to)\s*\("),
+        format!(r"(?:commonpath|commonprefix)\s*\([^)]*\b{var}\b"),
+        format!(r"\brelative\s*\([^)]*\b{var}\b"),
+    ];
+    patterns
+        .iter()
+        .any(|pattern| regex::Regex::new(pattern).is_ok_and(|re| re.is_match(scope_text)))
 }
 
 pub fn sanitizer_label(name: &str) -> Option<String> {

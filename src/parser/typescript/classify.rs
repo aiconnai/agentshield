@@ -1,5 +1,8 @@
-use super::patterns::{SANITIZER_ASSIGN_RE, TEMPLATE_LITERAL_RE};
-use crate::analysis::cross_file::{SanitizerCategory, sanitizer_category, sanitizer_label};
+#[cfg(not(feature = "typescript"))]
+use super::patterns::SANITIZER_ASSIGN_RE;
+use super::patterns::TEMPLATE_LITERAL_RE;
+#[cfg(not(feature = "typescript"))]
+use crate::analysis::cross_file::assignment_sanitizer_label;
 use crate::ir::ArgumentSource;
 use std::collections::HashSet;
 
@@ -27,24 +30,23 @@ pub(super) fn classify_all_arguments(
     result
 }
 
-/// Detect sanitizer assignments in source code and populate sanitized_vars.
+/// Detect sanitizer assignments in source code and populate sanitized_vars
+/// (regex path, no function scoping).
 /// Matches patterns like: `const validPath = await validatePath(x)`
+#[cfg(not(feature = "typescript"))]
 pub(super) fn detect_sanitizer_assignments(content: &str, sanitized_vars: &mut HashSet<String>) {
     for cap in SANITIZER_ASSIGN_RE.captures_iter(content) {
         let var_name = &cap[1];
-        let func_name = &cap[2];
-        if sanitizer_category(func_name)
-            .is_some_and(|category| !matches!(category, SanitizerCategory::Redaction))
-        {
+        if let Some(label) = assignment_sanitizer_label(&cap[2], var_name, content) {
             sanitized_vars.insert(var_name.to_string());
-            if let Some(label) = sanitizer_label(func_name) {
-                sanitized_vars.insert(sanitized_var_marker(var_name, &label));
-            }
+            sanitized_vars.insert(sanitized_var_marker(var_name, &label));
         }
     }
 }
 
-pub(super) use crate::parser::common::{sanitized_label_for_var, sanitized_var_marker};
+pub(super) use crate::parser::common::sanitized_label_for_var;
+#[cfg(not(feature = "typescript"))]
+pub(super) use crate::parser::common::sanitized_var_marker;
 
 /// Classify an argument, considering sanitized variables.
 pub(super) fn classify_argument_with_sanitizers(

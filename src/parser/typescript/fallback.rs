@@ -15,11 +15,13 @@ use crate::ir::{ArgumentSource, SourceLocation};
 use crate::parser::{CallSite, FunctionDef, FunctionParam, ParsedFile};
 
 #[cfg(not(feature = "typescript"))]
+use super::child_process::{ChildProcessBindings, INLINE_EXEC_CALL_RE};
+#[cfg(not(feature = "typescript"))]
 use super::classify::{classify_argument_with_sanitizers, detect_sanitizer_assignments};
 #[cfg(not(feature = "typescript"))]
 use super::patterns::{
-    CALL_RE, DYNAMIC_EXEC_PATTERNS, ENV_ACCESS_RE, EXEC_PATTERNS, FILE_PATTERNS, FUNC_DEF_RE,
-    NETWORK_PATTERNS, matches_pattern,
+    CALL_RE, DYNAMIC_EXEC_PATTERNS, ENV_ACCESS_RE, FILE_PATTERNS, FUNC_DEF_RE, NETWORK_PATTERNS,
+    is_command_sink, matches_pattern,
 };
 
 #[cfg(not(feature = "typescript"))]
@@ -30,6 +32,7 @@ pub(super) fn parse_file_fallback(path: &Path, content: &str) -> Result<ParsedFi
 
     // Phase 0: Detect sanitizer assignments
     detect_sanitizer_assignments(content, &mut parsed.sanitized_vars);
+    let child_process = ChildProcessBindings::from_source(content);
 
     // Collect function parameter names + FunctionDef entries
     for cap in FUNC_DEF_RE.captures_iter(content) {
@@ -103,6 +106,16 @@ pub(super) fn parse_file_fallback(path: &Path, content: &str) -> Result<ParsedFi
             });
         }
 
+        for cap in INLINE_EXEC_CALL_RE.captures_iter(line) {
+            let arg_source =
+                classify_argument_with_sanitizers(&cap[2], &param_names, &parsed.sanitized_vars);
+            parsed.commands.push(CommandInvocation {
+                function: format!("child_process.{}", &cap[1]),
+                command_arg: arg_source,
+                location: regex_loc(&file_path, line_num),
+            });
+        }
+
         for cap in CALL_RE.captures_iter(line) {
             let func_name = &cap[1];
             let args_str = &cap[2];
@@ -127,7 +140,7 @@ pub(super) fn parse_file_fallback(path: &Path, content: &str) -> Result<ParsedFi
                 location: regex_loc(&file_path, line_num),
             });
 
-            if matches_pattern(func_name, &EXEC_PATTERNS) {
+            if is_command_sink(func_name, &child_process) {
                 parsed.commands.push(CommandInvocation {
                     function: func_name.to_string(),
                     command_arg: arg_source.clone(),
