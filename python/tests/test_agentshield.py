@@ -5,7 +5,7 @@ from agentshield import shield, SecurityBlockError
 
 
 def test_version():
-    assert agentshield.__version__ == "1.0.3"
+    assert agentshield.__version__ == "1.1.0"
 
 
 def test_find_binary():

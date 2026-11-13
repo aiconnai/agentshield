@@ -1,6 +1,6 @@
 [package]
 name = "agent-shield"
-version = "1.0.3"
+version = "1.1.0"
 edition = "2024"
 resolver = "3"
 authors = ["Ronaldo Lima <https://github.com/limaronaldo>", "AgentShield Contributors"]
@@ -17,6 +17,7 @@ exclude = [
     "vscode/**",
     "docs/**",
     ".github/**",
+    ".githooks/**",
     "fuzz/**",
     "tests/fixtures/**",
 ]
@@ -104,7 +105,7 @@ idna = "1"
 tempfile = "3.9"
 
 # Async runtime for egress proxy (feature-gated)
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time"], optional = true }
 parking_lot = { version = "0.12", optional = true }
 
 [target.'cfg(unix)'.dependencies]

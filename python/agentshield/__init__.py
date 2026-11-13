@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-__version__ = "1.0.3"
+__version__ = "1.1.0"
 
 
 class AgentShieldError(Exception):

@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents when working with this repositor
 
 ## Project Overview
 
-**AgentShield** (`v1.0.3`) is a Rust-based, offline-first security scanner and runtime guard for AI agent extensions
+**AgentShield** (`v1.1.0`) is a Rust-based, offline-first security scanner and runtime guard for AI agent extensions
 (MCP servers, OpenClaw skills, CrewAI tools, LangChain tools, GPT Actions, Cursor Rules,
 Hermes Agent projects, Vercel AI SDK, AutoGen, LlamaIndex, and Semantic Kernel).
 Official Website: https://aiconnai.github.io/agentshield/
@@ -185,6 +185,7 @@ agentshield/
 │       ├── mod.rs                # PolicyConfig, ScanConfig, suppressions loader
 │       └── trust.rs              # Target .agentshield.toml / rules trust boundary (--trust-target-config)
 ├── tests/                        # Integration suites & fixtures (safe + vulnerable)
+│   ├── certify_dsse_interop.rs   # Spec-only DSSE v1.0 PAE + Ed25519 + source-manifest v2 interop tests
 │   ├── fingerprint_contract.rs   # Scheme-v2 fingerprint stability across path forms
 │   ├── framework_entry_points.rs # Framework tool registration entry-point coverage
 │   ├── parser_accuracy.rs        # Multiline, alias, containment & sanitizer-scope regression suite
@@ -212,7 +213,7 @@ agentshield/
 │       ├── fuzz_py_parser.rs     # Python parser fuzzing
 │       ├── fuzz_mcp_tools.rs     # MCP tools extractor fuzzing
 │       └── fuzz_composite_flow.rs # Composite flow engine fuzzing
-├── vscode/                       # VS Code extension (v1.0.3)
+├── vscode/                       # VS Code extension (v1.1.0)
 │   ├── package.json              # Extension manifest
 │   ├── tsconfig.json             # TypeScript config
 │   └── src/                      # Extension source (TypeScript)
@@ -235,7 +236,7 @@ agentshield/
 # Build
 cargo build --release
 
-# Test (1024 Rust tests under --all-features, including doctests)
+# Test (1032 Rust tests under --all-features, including doctests)
 cargo test --workspace --all-targets --locked
 
 # Benchmarks
@@ -435,3 +436,4 @@ CLI flag overrides config (`options.ignore_tests || config.scan.ignore_tests`).
 | 1.0.1 | 668 | SARIF 2.1.0 taxonomy placement fix (run.taxonomies), GitHub Action SHA pinning + shell injection hardening, gitleaks config, mcp/tests.rs cfg-feature guard, SHIELD-037 (agent memory poisoning CWE-20) |
 | 1.0.2 | 704 | Composite flow wiring in `RuleEngine::run()` & non-MCP adapters (`SHIELD-020`), scan-root-relative `--ignore-tests` (`is_test_file_in`), safe-Rust `serde-saphyr` YAML migration (0 `cargo deny` exceptions), adapter/parser/test-helper deduplication (`pipeline.rs`, `common.rs`, `test_helpers.rs`), full `SHIELD-001..037` TP/FP invariant matrix, VS Code extension audit fix (`0` vulns, `-57.5%` deps), git packfile optimization (`73.17 MiB -> 1.54 MiB`) |
 | 1.0.3 | 732 | GitHub Action fails on unexpected scanner exit codes, quote-bounded concatenation treated as interpolated, test-file call sites ignored in cross-file sanitization, depth-aware expansion in interprocedural propagation, shared `source_walker` for collection and detection (dot-directories, depth 64, lossy UTF-8), egress override merge no longer widens allow lists, range-based IP and case-insensitive domain and rate-limit key matching |
+| 1.1.0 | 1032 | Framework-registered entry-point detection (`src/adapter/entry_points/`), per-function confined path sanitizers, hardened shared walker (`walk.rs`: ignores `.gitignore`/`.ignore`, marker-gated & linked-worktree pruning, depth 512, 8 MiB cap, additive scan `coverage`), `--trust-target-config` policy trust boundary (`src/config/trust.rs`), scheme-v2 path-stable fingerprints & baseline schema v2 (`src/rules/fingerprint.rs`), content-bound DSSE v2 attestations with standard PAE (`src/certify/`), fail-closed runtime guard config & RFC 9112 HTTP/1.1 framing + JSON-RPC batch proxy enforcement, IDNA UTS #46 + IPv6-embedded IPv4 egress hardening & proxy env routing (`ALL_PROXY`, `NO_PROXY` stripped), multi-line Python / TS `child_process` / combined shell `-c` parser accuracy, CWE/control-char output escaping |

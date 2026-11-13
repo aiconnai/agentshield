@@ -12,6 +12,7 @@ target/
 .superpowers/
 .zed/
 .zed-state/
+.githooks/pre-commit
 
 # Harness & audit dumps
 *.raw

@@ -46,7 +46,7 @@
           <path d="m9 12 2 2 4-4"/>
         </svg>
         <span>AgentShield</span>
-        <span class="badge-version">v1.0.3 GA</span>
+        <span class="badge-version">v1.1.0 GA</span>
       </a>
       <nav>
         <ul class="nav-links">
@@ -72,8 +72,23 @@
 
     <div class="rel-card">
       <h2>
-        v1.0.3: Action Exit Codes, Evasion Fixes & Egress Hardening
+        v1.1.0: Framework Entry Points, Scheme-v2 Fingerprints, DSSE v2 & Trust Boundaries
         <span class="badge-version">Latest</span>
+      </h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Released November 2026</p>
+      <ul>
+        <li><strong>Framework Entry-Point Tracking</strong>: Tool handlers registered across Python and TypeScript agent frameworks are marked as untrusted entry points so literal-arg callers cannot suppress <code>SHIELD-001</code>; path sanitizers are scoped per function and checked for prefix containment.</li>
+        <li><strong>Hardened Source Tree Walker & Coverage</strong>: Shared walker ignores all <code>.gitignore</code>/<code>.ignore</code> files, requires directory markers before pruning tooling/venv dirs, scans up to depth <code>512</code> and <code>8 MiB</code>, and emits additive scan coverage telemetry.</li>
+        <li><strong>Target Config Trust Boundary (<code>--trust-target-config</code>)</strong>: Scanning another directory no longer implicitly loads its <code>.agentshield.toml</code> or custom <code>.agentshield/rules</code> unless explicitly trusted.</li>
+        <li><strong>Scheme-v2 Fingerprints & DSSE Attestation v2</strong>: Path-stable, collision-free finding fingerprints (<code>schema_version = 2</code> baselines) and content-bound DSSE <code>v2</code> attestations signed over the standard DSSE PAE.</li>
+        <li><strong>Runtime Guard, Proxy & Egress Hardening</strong>: Fail-closed guard config loading, full JSON-RPC batch inspection and HTTP method/body enforcement in MCP proxies, IDNA UTS #46 + IPv6-embedded IPv4 normalization in <code>wrap</code>, and multi-line Python / TypeScript <code>child_process</code> / combined shell <code>-c</code> parser accuracy.</li>
+        <li><strong>Verification Suite</strong>: <code>1032</code> unit, integration, interop, doctest, and property tests passing with zero warnings.</li>
+      </ul>
+    </div>
+
+    <div class="rel-card">
+      <h2>
+        v1.0.3: Action Exit Codes, Evasion Fixes & Egress Hardening
       </h2>
       <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">Released November 2026</p>
       <ul>

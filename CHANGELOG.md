@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-13
+
+### Added
+
+- **Scan Coverage Telemetry (`src/coverage.rs`)**: JSON scan reports include an additive `coverage` summary listing any pruned directories, files truncated above the 8 MiB per-file read limit, depth-capped paths, or unreadable entries so nothing is silently skipped.
+- **Target Policy Trust Boundary (`--trust-target-config`, `src/config/trust.rs`)**: Scanning an external directory no longer implicitly loads its `.agentshield.toml` suppressions or custom `.agentshield/rules` unless invoked from `cwd == target`, supplied via explicit `--config` / `--rules-dir`, or opted in with `--trust-target-config`.
+- **Framework-Registered Entry-Point Detection (`src/adapter/entry_points/`)**: Python (`@tool`, `@mcp.tool`, FastMCP, CrewAI `BaseTool`, LangChain, AutoGen `register_function` / `@register_tool`, LlamaIndex `FunctionTool`, Semantic Kernel `@kernel_function`, class inheritance, and alias chains) and TypeScript (Vercel AI `tool({ execute })`, factory wrappers, and bound/shorthand references) mark registered handlers on `ParsedFile::entry_points` so internal literal-argument call sites cannot sanitize untrusted tool inputs.
+- **Scheme-v2 Finding Fingerprints & Baseline Schema v2 (`src/rules/fingerprint.rs`, `src/baseline.rs`)**: Distinct, scan-root-relative, line-shift-resilient SHA-256 fingerprints with per-scan occurrence disambiguation; legacy `schema_version = 1` baselines remain readable with a stderr migration notice.
+- **DSSE Attestation v2 (`src/certify/`)**: `agentshield certify` emits `https://agentshield.dev/attestation/v2` predicates whose subject `digest.sha256` hashes a sorted source-file content manifest and whose Ed25519 signature signs the standard `DSSEv1` pre-authentication encoding (PAE) of the raw payload bytes.
+
+### Fixed
+
+- **Path Sanitizer Scope & Containment (`src/analysis/cross_file/sanitizer.rs`, `src/parser/python/scope.rs`, `src/parser/typescript/scoped.rs`)**: Sanitized variables are tracked per function rather than across an entire file, and `os.path.realpath` / `Path.resolve` / `path.resolve` count as path sanitizers only when followed by a containment check (`commonpath`, `is_relative_to`, or trailing-separator `startswith`).
+- **Source Walker Anti-Evasion (`src/adapter/walk.rs`)**: Shared walker across MCP, OpenClaw, Hermes Agent, Vercel AI SDK, and framework detection ignores `.gitignore`, `.ignore`, global gitignores, and `.git/info/exclude`; prunes `.git`, `.venv`, `venv`, `node_modules`, `.tox`, `.nox`, and verified linked Git worktrees (`is_linked_git_worktree`, validated against bidirectional `.git/worktrees/<id>` metadata) only when authentic markers exist; and walks up to depth `512` and `8 MiB` per file.
+- **Parser Accuracy (`src/parser/python/`, `src/parser/typescript/`, `src/parser/shell/`)**:
+  - Multi-line Python call arguments and string concatenations are joined before classification, and `import` / `from ... import ... as` aliases are resolved to canonical sinks.
+  - TypeScript `exec(...)` / `execSync(...)` calls resolve against `child_process` / `node:child_process` imports (avoiding `RegExp.prototype.exec` false positives while catching aliased imports).
+  - Shell command extraction treats positional data arguments to non-shell commands as non-executing while flagging `sh`/`bash`/`zsh`/`dash`/`ksh` `-c` invocations including combined short flags (`-ec`, `-lc`).
+- **Runtime Guard & MCP Proxy Enforcement (`src/runtime/`)**:
+  - `agentshield guard` fails closed (exit non-zero) when an explicit or malformed `.agentshield.toml` cannot be loaded.
+  - Stdio and HTTP/SSE MCP proxies inspect every member of JSON-RPC batch arrays and reject the entire batch if any call is blocked.
+  - MCP HTTP proxy enforces strict RFC 9112 HTTP/1.1 framing (rejecting `Transfer-Encoding`, malformed/conflicting/signed `Content-Length`, unsupported HTTP methods with `405`, `GET`/`HEAD` requests carrying bodies with `400`, and non-JSON request bodies with `400`, while draining unread bytes cleanly before socket close).
+- **Egress Proxy & Policy Hardening (`src/egress/`)**:
+  - Domain rules and target hosts normalize through IDNA (UTS #46) so Unicode and punycode spellings match identically; empty-label patterns (`*.`, `.`, `*..x`) are rejected at policy load time.
+  - IPv6-embedded IPv4 forms (`::ffff:x.x.x.x`, NAT64 `64:ff9b::/96`, IPv4-compatible, 6to4 `2002::/16`), zone IDs (`%eth0`), and all of `0.0.0.0/8` are normalized before network range checks, and upstream sockets connect directly to the policy-verified resolved IP addresses to prevent DNS rebinding.
+  - `agentshield wrap` sets `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` (upper and lower case) and strips `NO_PROXY` / `no_proxy` from child environments.
+- **Report Output Escaping (`src/output/console.rs`, `src/output/html.rs`)**: Console output escapes ANSI/control characters from untrusted source snippets and paths; HTML reports escape CWE identifiers and dynamic metadata.
+- **Supply Chain & CI**: Updated `rustix` (`1.1.6`, resolving `RUSTSEC-2026-0486`), cleared VS Code extension transitive `npm audit` advisories, and configured self-scan CI (`.github/workflows/agentshield.yml`) to build and run the checked-out scanner binary directly.
+
+### Changed
+
+- **Source Collection & Policy Defaults (behavior change)**: `.gitignore` is no longer honored when scanning a target tree (use `[scan] exclude` or `--exclude` for intentional exclusions), walk depth increased from `64` to `512`, per-file scan cap increased from `1 MiB` to `8 MiB`, and untrusted target configs require `--trust-target-config` when scanning outside `cwd`.
+
 ## [1.0.3] - 2026-11-10
 
 ### Fixed
