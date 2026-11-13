@@ -81,5 +81,6 @@ pub(crate) async fn handle_sse_tunnel<R: AsyncReadExt + Unpin>(
         client_write.flush().await.map_err(ShieldError::Io)?;
     }
 
+    let _ = client_write.shutdown().await;
     Ok(())
 }

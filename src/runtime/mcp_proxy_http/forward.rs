@@ -30,13 +30,24 @@ pub(crate) async fn forward_http_request(
     );
     for h in headers {
         let trimmed = h.trim();
-        if !trimmed.is_empty()
-            && !trimmed.to_lowercase().starts_with("host:")
-            && !trimmed.to_lowercase().starts_with("connection:")
-        {
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((raw_name, _)) = trimmed.split_once(':') {
+            let name = raw_name.trim();
+            if name.eq_ignore_ascii_case("host")
+                || name.eq_ignore_ascii_case("connection")
+                || name.eq_ignore_ascii_case("content-length")
+                || name.eq_ignore_ascii_case("transfer-encoding")
+            {
+                continue;
+            }
             req_header.push_str(trimmed);
             req_header.push_str("\r\n");
         }
+    }
+    if !body.is_empty() || method == "POST" {
+        req_header.push_str(&format!("Content-Length: {}\r\n", body.len()));
     }
     req_header.push_str("\r\n");
 
@@ -65,6 +76,7 @@ pub(crate) async fn forward_http_request(
             .map_err(ShieldError::Io)?;
     }
     client_write.flush().await.map_err(ShieldError::Io)?;
+    let _ = client_write.shutdown().await;
     Ok(())
 }
 
@@ -93,6 +105,7 @@ pub(crate) async fn send_http_response(
             .map_err(ShieldError::Io)?;
     }
     client_write.flush().await.map_err(ShieldError::Io)?;
+    let _ = client_write.shutdown().await;
     Ok(())
 }
 

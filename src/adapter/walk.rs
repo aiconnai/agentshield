@@ -206,17 +206,90 @@ fn is_gitfile(entry: &ignore::DirEntry) -> bool {
     entry.file_name() == ".git"
 }
 
+/// Maximum size read from small Git pointer files (`.git`, `commondir`, `gitdir`).
+const MAX_GIT_POINTER_BYTES: u64 = 4096;
+
+fn read_small_trimmed_file(path: &Path) -> Option<String> {
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    if !meta.file_type().is_file() || meta.len() > MAX_GIT_POINTER_BYTES {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take(MAX_GIT_POINTER_BYTES)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    let text = std::str::from_utf8(&bytes).ok()?.trim();
+    (!text.is_empty()).then(|| text.to_owned())
+}
+
+/// True when `dir` is a genuine linked Git worktree (`git worktree add`,
+/// `.claude/worktrees/<branch>`, `.worktrees/<branch>`), verified against its
+/// enclosing repository's `.git/worktrees/<id>` metadata and backlink.
+fn is_linked_git_worktree(dir: &Path) -> bool {
+    let dot_git = dir.join(".git");
+    let Some(pointer) = read_small_trimmed_file(&dot_git) else {
+        return false;
+    };
+    let Some(gitdir_raw) = pointer.strip_prefix("gitdir:").map(str::trim) else {
+        return false;
+    };
+    if gitdir_raw.is_empty() {
+        return false;
+    }
+
+    let (Ok(canon_dir), Ok(canon_admin)) = (
+        std::fs::canonicalize(dir),
+        std::fs::canonicalize(dir.join(gitdir_raw)),
+    ) else {
+        return false;
+    };
+    if !canon_admin.is_dir()
+        || canon_admin.starts_with(&canon_dir)
+        || !canon_admin.join("HEAD").is_file()
+    {
+        return false;
+    }
+
+    let Some(commondir_raw) = read_small_trimmed_file(&canon_admin.join("commondir")) else {
+        return false;
+    };
+    let Ok(canon_common) = std::fs::canonicalize(canon_admin.join(commondir_raw)) else {
+        return false;
+    };
+    if canon_common.starts_with(&canon_dir)
+        || !canon_common.join("HEAD").is_file()
+        || canon_admin.parent() != Some(canon_common.join("worktrees").as_path())
+    {
+        return false;
+    }
+
+    let Some(backlink_raw) = read_small_trimmed_file(&canon_admin.join("gitdir")) else {
+        return false;
+    };
+    let Ok(canon_backlink) = std::fs::canonicalize(canon_admin.join(backlink_raw)) else {
+        return false;
+    };
+    canon_backlink == canon_dir.join(".git")
+}
+
 /// The pruned directory's name if `path` is one, judged by name and marker.
 fn pruned_dir(path: &Path, depth: usize) -> Option<&'static str> {
     if depth == 0 {
         // The scan root is what the user asked to scan, whatever it is named.
         return None;
     }
-    let name = path.file_name()?.to_str()?;
-    let rule = PRUNED_DIRS.iter().find(|rule| rule.name == name)?;
-    let looks_real = (rule.root_child_always && depth == 1)
-        || rule.markers.iter().any(|marker| has_marker(path, marker));
-    looks_real.then_some(rule.name)
+    if let Some(name) = path.file_name().and_then(|os| os.to_str()) {
+        if let Some(rule) = PRUNED_DIRS.iter().find(|rule| rule.name == name) {
+            let looks_real = (rule.root_child_always && depth == 1)
+                || rule.markers.iter().any(|marker| has_marker(path, marker));
+            if looks_real {
+                return Some(rule.name);
+            }
+        }
+    }
+    is_linked_git_worktree(path).then_some("git worktree")
 }
 
 fn has_marker(dir: &Path, marker: &str) -> bool {

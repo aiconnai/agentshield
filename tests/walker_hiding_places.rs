@@ -139,6 +139,86 @@ fn real_git_directory_with_head_stays_skipped() {
 }
 
 #[test]
+fn forged_gitfile_in_subdirectory_cannot_hide_a_payload() {
+    // A plain `.git` file pointing at `.` or a parent `.git` without a valid
+    // enclosing `.git/worktrees/<id>` admin record + backlink must NOT prune.
+    let dir = package(&[
+        (".git/HEAD", b"ref: refs/heads/main\n".to_vec()),
+        ("subdir/.git", b"gitdir: ../.git\n".to_vec()),
+        ("subdir/payload.py", payload()),
+    ]);
+    assert!(has_command_injection(dir.path()));
+
+    // A self-contained fake worktree admin directory inside `subdir/` itself
+    // must also NOT prune `subdir/`.
+    let self_contained = package(&[
+        ("subdir/.fake_git/HEAD", b"ref: refs/heads/main\n".to_vec()),
+        (
+            "subdir/.fake_git/worktrees/sub/HEAD",
+            b"ref: refs/heads/sub\n".to_vec(),
+        ),
+        (
+            "subdir/.fake_git/worktrees/sub/commondir",
+            b"../..\n".to_vec(),
+        ),
+        (
+            "subdir/.fake_git/worktrees/sub/gitdir",
+            b"../../../.git\n".to_vec(),
+        ),
+        ("subdir/.git", b"gitdir: .fake_git/worktrees/sub\n".to_vec()),
+        ("subdir/payload.py", payload()),
+    ]);
+    assert!(has_command_injection(self_contained.path()));
+}
+
+#[test]
+fn linked_git_worktree_is_pruned_and_reported_while_claude_files_stay_scanned() {
+    let dir = package(&[
+        (".git/HEAD", b"ref: refs/heads/main\n".to_vec()),
+        (".git/worktrees/wt1/HEAD", b"ref: refs/heads/wt1\n".to_vec()),
+        (".git/worktrees/wt1/commondir", b"../..\n".to_vec()),
+        (
+            ".git/worktrees/wt1/gitdir",
+            b"../../../.claude/worktrees/wt1/.git\n".to_vec(),
+        ),
+        (
+            ".claude/worktrees/wt1/.git",
+            b"gitdir: ../../../.git/worktrees/wt1\n".to_vec(),
+        ),
+        (
+            ".claude/worktrees/wt1/package.json",
+            PACKAGE_JSON.as_bytes().to_vec(),
+        ),
+        (".claude/worktrees/wt1/payload.py", payload()),
+    ]);
+
+    let (rep, coverage) = covered(dir.path());
+    assert!(
+        !rep.findings.iter().any(|f| f.rule_id == "SHIELD-001"),
+        "linked git worktree should be pruned when scanning parent repo: {:?}",
+        rep.findings
+    );
+    assert!(
+        coverage.skipped.iter().any(|entry| {
+            entry.path.replace('\\', "/") == ".claude/worktrees/wt1"
+                && entry.reason.as_str() == "pruned"
+        }),
+        "pruned linked git worktree must be surfaced in coverage: {coverage:?}"
+    );
+
+    // Scanning the linked worktree directly as the scan root (`depth == 0`)
+    // MUST still scan its contents.
+    assert!(has_command_injection(
+        &dir.path().join(".claude/worktrees/wt1")
+    ));
+
+    // Sibling files in `.claude/` (outside `.claude/worktrees/wt1`) MUST stay
+    // scanned and cannot hide behind the worktree directory.
+    write(dir.path(), ".claude/skills/evil.py", payload());
+    assert!(has_command_injection(dir.path()));
+}
+
+#[test]
 fn root_node_modules_stays_pruned() {
     let dir = package(&[("node_modules/dep/payload.py", payload())]);
     assert!(!has_command_injection(dir.path()));

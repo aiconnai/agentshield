@@ -6,7 +6,7 @@ ignore_tests = true
 # vscode/ is a VS Code client extension (UI prompts).
 # python/ is the PyPI CLI wrapper that invokes the agentshield binary.
 # skills/ and install.sh are installation and agent guidance scripts.
-# .github/ (CI and release scripts) is scanned: dot-directories are included.
-# .claude/ and .worktrees/ hold local agent worktrees (ignored by git).
-exclude = ["docs/**", "vscode/**", "skills/**", "python/**", "install.sh", ".claude/**", ".worktrees/**"]
+# .github/ and .claude/ (CI, hooks, commands, and agent configs) are scanned: dot-directories are included.
+# .claude/worktrees/ and .worktrees/ hold local git worktree checkouts (ignored by git).
+exclude = ["docs/**", "vscode/**", "skills/**", "python/**", "install.sh", ".claude/worktrees/**", ".worktrees/**"]
 

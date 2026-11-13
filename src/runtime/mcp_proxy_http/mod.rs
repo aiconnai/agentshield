@@ -69,11 +69,7 @@ mod tests {
         let mut raw = Vec::new();
         let (read_half, _) = client.split();
         let mut reader = BufReader::new(read_half);
-        match reader.read_to_end(&mut raw).await {
-            Ok(_) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::ConnectionReset && !raw.is_empty() => {}
-            Err(err) => panic!("reading proxy response failed: {err}"),
-        }
+        reader.read_to_end(&mut raw).await.unwrap();
         let resp = String::from_utf8_lossy(&raw).into_owned();
 
         assert!(resp.contains("HTTP/1.1 200 OK"));
@@ -111,19 +107,15 @@ mod tests {
         let mut raw = Vec::new();
         let (read_half, _) = client.split();
         let mut reader = BufReader::new(read_half);
-        match reader.read_to_end(&mut raw).await {
-            Ok(_) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::ConnectionReset && !raw.is_empty() => {}
-            Err(err) => panic!("reading proxy response failed: {err}"),
-        }
+        reader.read_to_end(&mut raw).await.unwrap();
         let resp = String::from_utf8_lossy(&raw).into_owned();
 
         assert!(resp.contains("HTTP/1.1 413 Payload Too Large"));
     }
 
-    /// Send one HTTP request through a proxy whose upstream records whether it
-    /// was contacted. Returns the raw HTTP response and the upstream flag.
-    async fn send_through_proxy(method: &str, body: &[u8]) -> (String, bool) {
+    /// Send one raw HTTP wire payload through a proxy whose upstream records
+    /// whether it was contacted. Requires a clean TCP EOF (`FIN`), never `RST`.
+    async fn send_raw_through_proxy(wire_request: &[u8]) -> (String, bool) {
         let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let upstream_addr = upstream.local_addr().unwrap();
         let contacted = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -183,6 +175,22 @@ mod tests {
         });
 
         let mut client = TcpStream::connect(listen_addr).await.unwrap();
+        client.write_all(wire_request).await.unwrap();
+
+        let mut raw = Vec::new();
+        let (read_half, _) = client.split();
+        let mut reader = BufReader::new(read_half);
+        reader
+            .read_to_end(&mut raw)
+            .await
+            .expect("proxy must close cleanly with TCP FIN, not ConnectionReset");
+        let resp = String::from_utf8_lossy(&raw).into_owned();
+        (resp, contacted.load(Ordering::SeqCst))
+    }
+
+    /// Send one HTTP request through a proxy whose upstream records whether it
+    /// was contacted. Returns the raw HTTP response and the upstream flag.
+    async fn send_through_proxy(method: &str, body: &[u8]) -> (String, bool) {
         let head = if body.is_empty() && method != "POST" {
             format!("{method} /mcp HTTP/1.1\r\nHost: localhost\r\n\r\n")
         } else {
@@ -191,21 +199,9 @@ mod tests {
                 body.len()
             )
         };
-        client.write_all(head.as_bytes()).await.unwrap();
-        if !body.is_empty() {
-            client.write_all(body).await.unwrap();
-        }
-
-        let mut raw = Vec::new();
-        let (read_half, _) = client.split();
-        let mut reader = BufReader::new(read_half);
-        match reader.read_to_end(&mut raw).await {
-            Ok(_) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::ConnectionReset && !raw.is_empty() => {}
-            Err(err) => panic!("reading proxy response failed: {err}"),
-        }
-        let resp = String::from_utf8_lossy(&raw).into_owned();
-        (resp, contacted.load(Ordering::SeqCst))
+        let mut wire = head.into_bytes();
+        wire.extend_from_slice(body);
+        send_raw_through_proxy(&wire).await
     }
 
     async fn post_through_proxy(body: &[u8]) -> (String, bool) {
@@ -269,5 +265,60 @@ mod tests {
         let (resp, contacted) = send_through_proxy("DELETE", b"").await;
         assert!(resp.starts_with("HTTP/1.1 200 OK"), "{resp}");
         assert!(contacted, "bodyless DELETE must forward to upstream");
+    }
+
+    #[tokio::test]
+    async fn rejected_requests_with_large_body_close_cleanly_without_rst() {
+        let large_body = vec![b'x'; 64 * 1024];
+        for _ in 0..25 {
+            let (resp, contacted) = send_through_proxy("PUT", &large_body).await;
+            assert!(
+                resp.starts_with("HTTP/1.1 405 Method Not Allowed"),
+                "{resp}"
+            );
+            assert!(!contacted);
+
+            let (resp, contacted) = send_through_proxy("DELETE", &large_body).await;
+            assert!(resp.starts_with("HTTP/1.1 400 Bad Request"), "{resp}");
+            assert!(!contacted);
+        }
+    }
+
+    #[tokio::test]
+    async fn transfer_encoding_requests_are_rejected_not_forwarded() {
+        let chunked_delete = b"DELETE /mcp HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n{}\r\n0\r\n\r\n";
+        let (resp, contacted) = send_raw_through_proxy(chunked_delete).await;
+        assert!(resp.starts_with("HTTP/1.1 400 Bad Request"), "{resp}");
+        assert!(!contacted, "chunked DELETE must not reach upstream");
+
+        let chunked_post = b"POST /mcp HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n{}\r\n0\r\n\r\n";
+        let (resp, contacted) = send_raw_through_proxy(chunked_post).await;
+        assert!(resp.starts_with("HTTP/1.1 400 Bad Request"), "{resp}");
+        assert!(!contacted, "chunked POST must not reach upstream");
+    }
+
+    #[tokio::test]
+    async fn conflicting_or_malformed_framing_headers_are_rejected() {
+        let conflicting_cl = b"POST /mcp HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\nContent-Length: 45\r\n\r\n{}";
+        let (resp, contacted) = send_raw_through_proxy(conflicting_cl).await;
+        assert!(resp.starts_with("HTTP/1.1 400 Bad Request"), "{resp}");
+        assert!(
+            !contacted,
+            "conflicting Content-Length must not reach upstream"
+        );
+
+        let non_digit_cl = b"POST /mcp HTTP/1.1\r\nHost: localhost\r\nContent-Length: +2\r\n\r\n{}";
+        let (resp, contacted) = send_raw_through_proxy(non_digit_cl).await;
+        assert!(resp.starts_with("HTTP/1.1 400 Bad Request"), "{resp}");
+        assert!(!contacted, "signed Content-Length must not reach upstream");
+
+        let space_before_colon =
+            b"POST /mcp HTTP/1.1\r\nHost: localhost\r\nContent-Length : 2\r\n\r\n{}";
+        let (resp, contacted) = send_raw_through_proxy(space_before_colon).await;
+        assert!(resp.starts_with("HTTP/1.1 400 Bad Request"), "{resp}");
+        assert!(
+            !contacted,
+            "whitespace-before-colon header smuggling must not reach upstream"
+        );
     }
 }
