@@ -614,11 +614,30 @@ mod tests {
                 )
             })
             .collect();
+        let lookup = |name: &str| -> Option<&Option<String>> {
+            #[cfg(windows)]
+            {
+                envs.iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case(name))
+                    .map(|(_, v)| v)
+            }
+            #[cfg(not(windows))]
+            {
+                envs.get(name)
+            }
+        };
         for name in PROXY_ENV_VARS {
-            assert_eq!(envs[name].as_deref(), Some("http://127.0.0.1:9"), "{name}");
+            let value = lookup(name)
+                .unwrap_or_else(|| panic!("{name} must be present in child env"))
+                .as_deref();
+            assert_eq!(value, Some("http://127.0.0.1:9"), "{name}");
         }
         for name in PROXY_BYPASS_ENV_VARS {
-            assert_eq!(envs[name], None, "{name} must be explicitly removed");
+            assert_eq!(
+                lookup(name),
+                Some(&None),
+                "{name} must be explicitly removed"
+            );
         }
     }
 
