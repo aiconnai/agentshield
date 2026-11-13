@@ -7,6 +7,10 @@ pub struct CiInstallOptions<'a> {
     pub upload_sarif: bool,
 }
 
+/// Action reference pinned to the release that produced this binary, so a
+/// generated workflow never tracks a moving branch.
+const ACTION_REF: &str = concat!("aiconnai/agentshield@v", env!("CARGO_PKG_VERSION"));
+
 pub fn github_actions_workflow(options: &CiInstallOptions<'_>) -> String {
     let baseline_input = options
         .baseline_path
@@ -31,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: aiconnai/agentshield@main
+      - uses: {action_ref}
         with:
           path: "{scan_path}"
           fail-on: "{fail_on}"
@@ -44,6 +48,7 @@ jobs:
         ignore_tests = options.ignore_tests,
         baseline_input = baseline_input,
         upload_sarif = options.upload_sarif,
+        action_ref = ACTION_REF,
     )
 }
 
@@ -106,7 +111,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: aiconnai/agentshield@main
+      - uses: {action_ref}
         with:
           path: "{scan_path}"
           fail-on: "{fail_on}"
@@ -119,6 +124,7 @@ jobs:
         ignore_tests = options.ignore_tests,
         baseline_input = baseline_input,
         upload_sarif = options.upload_sarif,
+        action_ref = ACTION_REF,
     )
 }
 
@@ -136,7 +142,11 @@ mod tests {
             upload_sarif: true,
         });
 
-        assert!(workflow.contains("uses: aiconnai/agentshield@main"));
+        assert!(workflow.contains(&format!(
+            "uses: aiconnai/agentshield@v{}",
+            env!("CARGO_PKG_VERSION")
+        )));
+        assert!(!workflow.contains("agentshield@main"));
         assert!(workflow.contains("fail-on: \"high\""));
         assert!(workflow.contains("ignore-tests: true"));
         assert!(workflow.contains("upload-sarif: true"));
@@ -175,7 +185,11 @@ mod tests {
         assert!(workflow.contains("uses: github/codeql-action/init@v4"));
         assert!(workflow.contains("uses: gitleaks/gitleaks-action@v3"));
         assert!(workflow.contains("semgrep scan --config auto"));
-        assert!(workflow.contains("uses: aiconnai/agentshield@main"));
+        assert!(workflow.contains(&format!(
+            "uses: aiconnai/agentshield@v{}",
+            env!("CARGO_PKG_VERSION")
+        )));
+        assert!(!workflow.contains("agentshield@main"));
         assert!(workflow.contains("baseline: \".agentshield-baseline.json\""));
         assert!(workflow.contains("strict: true"));
         assert!(workflow.contains("actions: read"));

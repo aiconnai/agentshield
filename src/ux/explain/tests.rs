@@ -64,6 +64,7 @@ fn report(findings: Vec<Finding>) -> ScanReport {
             }],
         }],
         path_filter_summary: ScanPathFilterSummary::default(),
+        fingerprints: Vec::new(),
     }
 }
 
@@ -100,4 +101,24 @@ fn quickstart_config_enables_project_defaults() {
     assert!(config.contains("fail_on = \"high\""));
     assert!(config.contains("ignore_tests = true"));
     assert!(config.contains("[runtime.proxy]"));
+}
+
+#[test]
+fn explain_neutralizes_terminal_escapes_from_scanned_text() {
+    let mut hostile = finding(
+        "SHIELD-001",
+        Severity::High,
+        AttackCategory::CommandInjection,
+    );
+    hostile.message = "boom \x1b[2J\x1b]8;;https://evil\x07".into();
+    hostile.remediation = Some("fix \x1b[31m".into());
+
+    let output = render_explain(
+        &report(vec![hostile]),
+        &ExplainOptions { ignore_tests: true },
+    );
+
+    assert!(!output.contains('\x1b'), "{output:?}");
+    assert!(!output.contains('\x07'), "{output:?}");
+    assert!(output.contains('\n'), "line structure must survive");
 }

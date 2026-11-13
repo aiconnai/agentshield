@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 use crate::rules::Finding;
+use crate::rules::fingerprint::compute_fingerprints;
 use crate::rules::policy::PolicyVerdict;
 
 /// Output format selection.
@@ -48,6 +49,9 @@ pub fn render(
 }
 
 /// Render findings with registry metadata for enriched formats such as SARIF.
+///
+/// Fingerprints are computed over `findings`; when rendering a filtered subset
+/// of a scan, prefer [`render_with_fingerprints`] with the scan's fingerprints.
 pub fn render_with_metadata(
     findings: &[Finding],
     verdict: &PolicyVerdict,
@@ -56,16 +60,60 @@ pub fn render_with_metadata(
     scan_root: &Path,
     rule_metadata: &[crate::rules::RuleMetadata],
 ) -> Result<String> {
+    let fingerprints = compute_fingerprints(findings, scan_root);
+    render_with_fingerprints(
+        findings,
+        &fingerprints,
+        verdict,
+        format,
+        target_name,
+        scan_root,
+        rule_metadata,
+    )
+}
+
+/// Render findings with precomputed fingerprints aligned with `findings`
+/// (for example [`crate::ScanReport::fingerprints`]). Misaligned fingerprints
+/// are recomputed from `findings`.
+pub fn render_with_fingerprints(
+    findings: &[Finding],
+    fingerprints: &[String],
+    verdict: &PolicyVerdict,
+    format: OutputFormat,
+    target_name: &str,
+    scan_root: &Path,
+    rule_metadata: &[crate::rules::RuleMetadata],
+) -> Result<String> {
+    let recomputed;
+    let fingerprints = if fingerprints.len() == findings.len() {
+        fingerprints
+    } else {
+        recomputed = compute_fingerprints(findings, scan_root);
+        &recomputed
+    };
     match format {
-        OutputFormat::Console => Ok(console::render(findings, verdict, scan_root)),
-        OutputFormat::Json => json::render(findings, verdict, target_name, scan_root),
-        OutputFormat::Sarif => sarif::render_with_metadata_and_verdict(
+        OutputFormat::Console => Ok(console::render_fingerprinted(
             findings,
+            fingerprints,
+            verdict,
+        )),
+        OutputFormat::Json => json::render_fingerprinted(
+            findings,
+            fingerprints,
+            verdict,
             target_name,
             scan_root,
-            rule_metadata,
-            verdict,
+            None,
         ),
-        OutputFormat::Html => html::render(findings, verdict, target_name, scan_root),
+        OutputFormat::Sarif => sarif::render_fingerprinted(
+            findings,
+            fingerprints,
+            target_name,
+            rule_metadata,
+            Some(verdict),
+        ),
+        OutputFormat::Html => {
+            html::render_fingerprinted(findings, fingerprints, verdict, target_name)
+        }
     }
 }

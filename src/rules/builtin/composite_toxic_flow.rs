@@ -302,8 +302,14 @@ mod tests {
         let shifted_finding =
             shield_020_finding(&shifted, &target).expect("shifted candidate emits");
         assert_eq!(
-            original_finding.fingerprint(Path::new(".")),
-            shifted_finding.fingerprint(Path::new("."))
+            crate::rules::fingerprint::compute_fingerprints(
+                std::slice::from_ref(&original_finding),
+                Path::new(".")
+            )[0],
+            crate::rules::fingerprint::compute_fingerprints(
+                std::slice::from_ref(&shifted_finding),
+                Path::new(".")
+            )[0]
         );
 
         let mut second_sink = original;
@@ -311,8 +317,14 @@ mod tests {
         let second_finding =
             shield_020_finding(&second_sink, &target).expect("second candidate emits");
         assert_ne!(
-            original_finding.fingerprint(Path::new(".")),
-            second_finding.fingerprint(Path::new("."))
+            crate::rules::fingerprint::compute_fingerprints(
+                std::slice::from_ref(&original_finding),
+                Path::new(".")
+            )[0],
+            crate::rules::fingerprint::compute_fingerprints(
+                std::slice::from_ref(&second_finding),
+                Path::new(".")
+            )[0]
         );
     }
 }

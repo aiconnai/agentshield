@@ -50,3 +50,23 @@ Recommended workflow:
 Update the baseline only after intentional review. Common cases are initial adoption, accepted legacy risk, or after changing detection rules and re-triaging the resulting findings.
 
 Avoid automatically rewriting the baseline in CI. That would hide newly introduced findings instead of surfacing them.
+
+## Fingerprints and schema versions
+
+Baselines match findings by fingerprint. Since fingerprint scheme v2, a fingerprint is the SHA-256 of:
+
+1. the rule ID;
+2. the file path relative to the scan root, with `/` separators;
+3. the normalized evidence text (every evidence description and snippet, with the file path rewritten relative to the scan root and whitespace collapsed; the message is used only when a finding has no evidence);
+4. an occurrence index among the findings of the same scan that share items 1 to 3, ordered by line and column.
+
+Line and column numbers are not hashed. Editing code above a finding keeps its fingerprint, while two findings of the same rule with the same evidence in one file still get different fingerprints, so a baseline never hides a new copy of a known finding. Fingerprints do not depend on how the scan path is spelled: `agentshield scan .`, a relative path, and the absolute path of the same tree produce the same values, and renaming or moving the repository root does not change them.
+
+Baseline files carry a `schema_version`:
+
+| `schema_version` | Fingerprints | Written by |
+|---:|---|---|
+| `1` | legacy scheme v1: rule ID, path stripped of the scan root, first evidence description, attack category | AgentShield 1.0.2 and earlier |
+| `2` | scheme v2, described above | current releases |
+
+Schema-v1 baselines are still read and matched with the legacy algorithm, so they keep hiding exactly what they hid before. That includes every finding that collided with a recorded one, and v1 fingerprints still depend on the scan path spelling used when the baseline was written. AgentShield prints a note on stderr when it reads a v1 baseline. To upgrade, review the current findings and rewrite the baseline with `--write-baseline`. A baseline with a `schema_version` newer than the running AgentShield supports is rejected.

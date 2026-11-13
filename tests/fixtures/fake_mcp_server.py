@@ -20,10 +20,23 @@ while True:
         req = json.loads(line)
     except json.JSONDecodeError:
         continue
-    resp = {
-        "jsonrpc": "2.0",
-        "id": req.get("id"),
-        "result": {"served": req.get("method"), "name": (req.get("params") or {}).get("name")},
-    }
+
+    def serve(message):
+        return {
+            "jsonrpc": "2.0",
+            "id": message.get("id"),
+            "result": {
+                "served": message.get("method"),
+                "name": (message.get("params") or {}).get("name"),
+            },
+        }
+
+    if isinstance(req, list):
+        # JSON-RPC batch: one response per member that has an id.
+        resp = [serve(m) for m in req if isinstance(m, dict) and "id" in m]
+        if not resp:
+            continue
+    else:
+        resp = serve(req)
     sys.stdout.write(json.dumps(resp) + "\n")
     sys.stdout.flush()

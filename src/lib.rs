@@ -19,6 +19,7 @@ pub mod analysis;
 pub mod baseline;
 pub mod certify;
 pub mod config;
+pub mod coverage;
 pub mod doctor;
 pub mod egress;
 pub mod error;
@@ -34,7 +35,8 @@ pub mod ux;
 
 use std::path::Path;
 
-use config::{Config, ScanPathFilter, ScanPathFilterSummary};
+use config::trust::{PolicySources, ResolvedPolicy};
+use config::{ScanPathFilter, ScanPathFilterSummary};
 use error::Result;
 use ir::ScanTarget;
 use output::OutputFormat;
@@ -42,9 +44,24 @@ use rules::policy::PolicyVerdict;
 use rules::{Finding, RuleEngine};
 
 /// Options for a scan invocation.
+///
+/// Construct with struct-update syntax so new options stay source compatible:
+///
+/// ```
+/// use agentshield::ScanOptions;
+///
+/// let options = ScanOptions {
+///     ignore_tests: true,
+///     ..ScanOptions::default()
+/// };
+/// assert!(!options.trust_target_config);
+/// ```
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
-    /// Path to config file (defaults to `.agentshield.toml` in scan dir).
+    /// Explicit config file. Always honoured when set.
+    ///
+    /// When `None`, `<scan path>/.agentshield.toml` is used only if the scan
+    /// target is trusted (see [`scan`]); otherwise built-in defaults apply.
     pub config_path: Option<std::path::PathBuf>,
     /// Preferred output format for callers that render the resulting [`ScanReport`].
     pub format: OutputFormat,
@@ -52,8 +69,15 @@ pub struct ScanOptions {
     pub fail_on_override: Option<rules::Severity>,
     /// Skip test files (test/, tests/, *.test.ts, *.spec.ts, etc.).
     pub ignore_tests: bool,
-    /// Optional directory containing custom declarative rules (*.yaml, *.yml, *.json).
+    /// Explicit directory containing custom declarative rules (*.yaml, *.yml, *.json).
+    /// Always honoured when set.
     pub custom_rules_dir: Option<std::path::PathBuf>,
+    /// Apply the scan target's own `.agentshield.toml` and `.agentshield/rules`
+    /// even when the scan root is not the current working directory.
+    ///
+    /// Defaults to `false`. Enable it only for code you own; a target's policy
+    /// can suppress or ignore its own findings. CLI: `--trust-target-config`.
+    pub trust_target_config: bool,
 }
 
 impl Default for ScanOptions {
@@ -64,6 +88,7 @@ impl Default for ScanOptions {
             fail_on_override: None,
             ignore_tests: false,
             custom_rules_dir: None,
+            trust_target_config: false,
         }
     }
 }
@@ -81,9 +106,43 @@ pub struct ScanReport {
     /// Used by callers that need to inspect the IR (e.g., `--emit-egress-policy`).
     pub targets: Vec<ScanTarget>,
     pub path_filter_summary: ScanPathFilterSummary,
+    /// Scheme-v2 fingerprints aligned with `findings` (see
+    /// [`rules::fingerprint`]). They are computed over the complete set of
+    /// findings before policy filtering, so they stay stable when sibling
+    /// findings are suppressed or baselined. Keep them aligned when filtering
+    /// `findings` (see [`ScanReport::retain_findings`]); misaligned values are
+    /// recomputed from `findings` by the renderers.
+    pub fingerprints: Vec<String>,
 }
 
 impl ScanReport {
+    /// Fingerprints aligned with `findings`, recomputed if `fingerprints` was
+    /// left out of sync with `findings`.
+    pub fn finding_fingerprints(&self) -> std::borrow::Cow<'_, [String]> {
+        if self.fingerprints.len() == self.findings.len() {
+            std::borrow::Cow::Borrowed(&self.fingerprints)
+        } else {
+            std::borrow::Cow::Owned(rules::fingerprint::compute_fingerprints(
+                &self.findings,
+                &self.scan_root,
+            ))
+        }
+    }
+
+    /// Keep only the findings for which `keep(finding, fingerprint)` is true,
+    /// keeping `fingerprints` aligned.
+    pub fn retain_findings(&mut self, mut keep: impl FnMut(&Finding, &str) -> bool) {
+        let fingerprints = self.finding_fingerprints().into_owned();
+        let (findings, fingerprints): (Vec<Finding>, Vec<String>) =
+            std::mem::take(&mut self.findings)
+                .into_iter()
+                .zip(fingerprints)
+                .filter(|(finding, fingerprint)| keep(finding, fingerprint))
+                .unzip();
+        self.findings = findings;
+        self.fingerprints = fingerprints;
+    }
+
     /// Render this report in the specified output format.
     pub fn render(&self, format: OutputFormat) -> Result<String> {
         render_report(self, format)
@@ -91,6 +150,21 @@ impl ScanReport {
 }
 
 /// Run a complete scan: detect framework, parse, analyze, evaluate policy.
+///
+/// # Target policy trust
+///
+/// The scanned directory may contain its own `.agentshield.toml` and
+/// `.agentshield/rules`. Because a third-party target could use them to
+/// suppress its own findings, they are applied only when:
+///
+/// - the canonicalized `path` equals the canonicalized current working
+///   directory (scanning your own repository from its root), or
+/// - [`ScanOptions::trust_target_config`] is `true`.
+///
+/// Otherwise built-in defaults are used. [`ScanOptions::config_path`] and
+/// [`ScanOptions::custom_rules_dir`] are always honoured. Use
+/// [`resolve_scan_policy`] to inspect the decision, including any target
+/// policy files that were ignored.
 pub fn scan(path: &Path, options: &ScanOptions) -> Result<ScanReport> {
     scan_with_path_filter_overrides(path, options, &[], &[])
 }
@@ -107,12 +181,27 @@ pub fn scan_with_path_filter_overrides(
     include_patterns: &[String],
     exclude_patterns: &[String],
 ) -> Result<ScanReport> {
-    // Load config
-    let config_path = options
-        .config_path
-        .clone()
-        .unwrap_or_else(|| path.join(".agentshield.toml"));
-    let mut config = Config::load(&config_path)?;
+    scan_with_coverage(path, options, include_patterns, exclude_patterns).map(|(report, _)| report)
+}
+
+/// Like [`scan_with_path_filter_overrides`], also returning the
+/// [`ScanCoverage`](coverage::ScanCoverage): the files and directories the file
+/// walker pruned, truncated or could not read.
+///
+/// Coverage is returned beside the report rather than inside it so
+/// [`ScanReport`] keeps its shape. Render it into the JSON report with
+/// [`render_report_with_coverage`].
+pub fn scan_with_coverage(
+    path: &Path,
+    options: &ScanOptions,
+    include_patterns: &[String],
+    exclude_patterns: &[String],
+) -> Result<(ScanReport, coverage::ScanCoverage)> {
+    let policy = resolve_scan_policy(path, options)?;
+    if let Some(notice) = policy.ignored_notice() {
+        tracing::info!("{notice}");
+    }
+    let mut config = policy.config;
 
     // Apply CLI path-filter overrides before constructing the filter used by
     // adapters. This keeps execution and the reported filter summary aligned.
@@ -133,35 +222,16 @@ pub fn scan_with_path_filter_overrides(
     let path_filter = ScanPathFilter::from_scan_config(&config.scan, ignore_tests)?;
     let path_filter_summary = path_filter.summary();
     let mut bundles = adapter::auto_detect_analysis_with_filter(path, &path_filter)?;
+    let coverage = path_filter.coverage().snapshot(path);
 
     // Perform interprocedural call-graph taint propagation
     crate::analysis::interprocedural::analyze_and_enrich_targets(&mut bundles);
 
     // Run detectors on all targets (built-in + custom)
     let mut engine = RuleEngine::new();
-    if let Some(ref dir) = options.custom_rules_dir {
+    if let Some(ref dir) = policy.rules_dir {
         if let Err(err) = engine.load_custom_rules_from(dir) {
             tracing::warn!(dir = %dir.display(), error = %err, "Failed to load custom rules");
-        }
-    } else if let Some(ref dir) = config.rules.custom_dir {
-        let abs_dir = if dir.is_absolute() {
-            dir.clone()
-        } else {
-            path.join(dir)
-        };
-        if let Err(err) = engine.load_custom_rules_from(&abs_dir) {
-            tracing::warn!(dir = %abs_dir.display(), error = %err, "Failed to load custom rules");
-        }
-    } else {
-        let default_rules_dir = path.join(".agentshield").join("rules");
-        if default_rules_dir.is_dir() {
-            if let Err(err) = engine.load_custom_rules_from(&default_rules_dir) {
-                tracing::warn!(
-                    dir = %default_rules_dir.display(),
-                    error = %err,
-                    "Failed to load default custom rules"
-                );
-            }
         }
     }
     let mut all_findings: Vec<Finding> = Vec::new();
@@ -187,25 +257,81 @@ pub fn scan_with_path_filter_overrides(
     // Canonicalize for stable fingerprints; fall back to the raw path on error.
     let scan_root = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
+    // Fingerprint the complete set before filtering so occurrence indexes do
+    // not depend on which siblings are suppressed.
+    let all_fingerprints = rules::fingerprint::compute_fingerprints(&all_findings, &scan_root);
+
     // Apply policy (ignore rules, overrides, suppressions)
-    let effective_findings = config.policy.apply(&all_findings, &scan_root);
+    let (effective_findings, fingerprints) =
+        config
+            .policy
+            .apply_with_fingerprints(&all_findings, &all_fingerprints, &scan_root);
     let verdict = config.policy.evaluate(&effective_findings);
 
-    Ok(ScanReport {
+    let report = ScanReport {
         target_name,
         findings: effective_findings,
         verdict,
         scan_root,
         targets,
         path_filter_summary,
-    })
+        fingerprints,
+    };
+    Ok((report, coverage))
+}
+
+/// Decide which config file and custom rules directory a scan of `path` uses.
+///
+/// Applies the trust rule documented on [`scan`]. The returned value lists
+/// target policy files that exist but were ignored; callers such as the CLI
+/// surface [`ResolvedPolicy::ignored_notice`] on stderr.
+pub fn resolve_scan_policy(path: &Path, options: &ScanOptions) -> Result<ResolvedPolicy> {
+    ResolvedPolicy::resolve(
+        path,
+        PolicySources {
+            explicit_config: options.config_path.as_deref(),
+            explicit_rules_dir: options.custom_rules_dir.as_deref(),
+            trust_target_config: options.trust_target_config,
+        },
+    )
 }
 
 /// Render a scan report in the specified format.
 pub fn render_report(report: &ScanReport, format: OutputFormat) -> Result<String> {
+    render_report_inner(report, format, None)
+}
+
+/// Render a scan report, adding the additive top-level `coverage` object to
+/// JSON output. Other formats render exactly as [`render_report`].
+pub fn render_report_with_coverage(
+    report: &ScanReport,
+    format: OutputFormat,
+    coverage: &coverage::ScanCoverage,
+) -> Result<String> {
+    render_report_inner(report, format, Some(coverage))
+}
+
+fn render_report_inner(
+    report: &ScanReport,
+    format: OutputFormat,
+    coverage: Option<&coverage::ScanCoverage>,
+) -> Result<String> {
+    if matches!(format, OutputFormat::Json) {
+        // Use the fingerprints computed before policy filtering so occurrence
+        // indexes match the baseline and suppression semantics.
+        return output::json::render_fingerprinted(
+            &report.findings,
+            &report.finding_fingerprints(),
+            &report.verdict,
+            &report.target_name,
+            &report.scan_root,
+            coverage,
+        );
+    }
     let rule_metadata = rules::RuleEngine::new().list_scanner_rules();
-    output::render_with_metadata(
+    output::render_with_fingerprints(
         &report.findings,
+        &report.finding_fingerprints(),
         &report.verdict,
         format,
         &report.target_name,
@@ -222,15 +348,33 @@ pub fn render_report_with_experimental_risk(
     report: &ScanReport,
     format: OutputFormat,
 ) -> Result<String> {
+    render_experimental_inner(report, format, None)
+}
+
+/// Like [`render_report_with_experimental_risk`], also adding the `coverage`
+/// object to JSON output.
+pub fn render_report_with_experimental_risk_and_coverage(
+    report: &ScanReport,
+    format: OutputFormat,
+    coverage: &coverage::ScanCoverage,
+) -> Result<String> {
+    render_experimental_inner(report, format, Some(coverage))
+}
+
+fn render_experimental_inner(
+    report: &ScanReport,
+    format: OutputFormat,
+    coverage: Option<&coverage::ScanCoverage>,
+) -> Result<String> {
     if !matches!(format, OutputFormat::Console | OutputFormat::Json) {
         return Err(error::ShieldError::Config(
             "`--experimental-risk` supports only console and JSON output".to_owned(),
         ));
     }
 
-    let base_report = render_report(report, format)?;
-    let coverage = risk::CoverageDescriptor::current();
-    let assessment = risk::assess(&report.findings, &report.scan_root, &coverage)
+    let base_report = render_report_inner(report, format, coverage)?;
+    let descriptor = risk::CoverageDescriptor::current();
+    let assessment = risk::assess(&report.findings, &report.scan_root, &descriptor)
         .map_err(|error| error::ShieldError::Internal(error.to_string()))?;
     risk::render_experimental(&base_report, &assessment, format)
 }
@@ -351,8 +495,9 @@ mod integration_tests {
         let entries: Vec<BaselineEntry> = report
             .findings
             .iter()
-            .map(|f| BaselineEntry {
-                fingerprint: f.fingerprint(&report.scan_root),
+            .zip(&report.fingerprints)
+            .map(|(f, fp)| BaselineEntry {
+                fingerprint: fp.clone(),
                 rule_id: f.rule_id.clone(),
                 first_seen: now.clone(),
             })
@@ -365,11 +510,10 @@ mod integration_tests {
         let loaded_baseline = BaselineFile::load(baseline_file.path()).unwrap();
         let filtered: Vec<_> = report2
             .findings
-            .into_iter()
-            .filter(|f| {
-                let fp = f.fingerprint(&report2.scan_root);
-                !loaded_baseline.contains(&fp)
-            })
+            .iter()
+            .zip(&report2.fingerprints)
+            .filter(|(f, fp)| !loaded_baseline.matches(f, fp, &report2.scan_root))
+            .map(|(f, _)| f)
             .collect();
 
         // Step 4: all findings should be filtered out
@@ -400,7 +544,7 @@ mod integration_tests {
         );
 
         let first_finding = &report.findings[0];
-        let fp = first_finding.fingerprint(&report.scan_root);
+        let fp = report.fingerprints[0].clone();
         let rule_id = first_finding.rule_id.clone();
 
         // Step 2: Write a config with the suppression into a temp dir
@@ -435,7 +579,8 @@ mod integration_tests {
         let still_present = report2
             .findings
             .iter()
-            .any(|f| f.rule_id == rule_id && f.fingerprint(&report2.scan_root) == fp);
+            .zip(&report2.fingerprints)
+            .any(|(f, f_fp)| f.rule_id == rule_id && f_fp == &fp);
 
         assert!(
             !still_present,

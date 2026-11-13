@@ -1,6 +1,6 @@
 [package]
 name = "agent-shield"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 resolver = "3"
 authors = ["Ronaldo Lima <https://github.com/limaronaldo>", "AgentShield Contributors"]

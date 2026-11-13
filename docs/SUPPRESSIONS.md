@@ -14,6 +14,10 @@ agentshield scan . --format json
 
 In the JSON output, copy the fingerprint for the finding you want to suppress.
 
+Fingerprints are stable across unrelated edits and scan-path spellings and are distinct per finding; see [Fingerprints and schema versions](BASELINES.md#fingerprints-and-schema-versions) for the algorithm. The SARIF (`properties.fingerprint`), HTML and console (first 12 characters) outputs show the same value.
+
+Suppressions written with the legacy fingerprints of AgentShield 1.0.2 and earlier keep working: a suppression matches when its `fingerprint` equals either the current fingerprint or the legacy one. Because legacy fingerprints collide, a legacy suppression silences every finding that shares its legacy fingerprint, as it did before. Replace it with the current fingerprint to silence one finding only. `agentshield suppress` always records the current fingerprint.
+
 ## Add a suppression
 
 Use the `suppress` command with a required reason:

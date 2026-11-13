@@ -155,6 +155,36 @@ larger than 1 MiB fail closed with a safe JSON-RPC block error. A
 `fail_on = "never"` override forwards the request but writes the suppressed rule
 ID to stderr so the suppression remains auditable.
 
+### JSON-RPC batches
+
+A JSON-RPC 2.0 batch (a JSON array of requests) is inspected element by
+element, so a `tools/call` cannot hide inside a batch. A batch is handled
+atomically:
+
+- If every member is allowed (or warned), the batch is forwarded unchanged.
+  If some blocks were suppressed by `fail_on = "never"`, the suppressed rule
+  IDs are written to stderr, comma-separated.
+- If any member is blocked, or a member is not a JSON object (for example a
+  nested array), **no member is forwarded**. The proxy answers with a JSON-RPC
+  batch response: an array holding one error object (code `-32001`) for each
+  member that has an `id`. Blocked members carry their own rule id; the other
+  members carry `AGENTSHIELD-RUNTIME-BATCH-REJECTED`, meaning "not executed
+  because the batch contained a blocked call". Non-object members are reported
+  with a `null` id and `AGENTSHIELD-RUNTIME-INVALID-INPUT`. Notifications (no
+  `id`) get no response object; if no member has an `id`, nothing is sent (over
+  HTTP the proxy answers `202 Accepted` with an empty body).
+- An empty batch (`[]`) is blocked with a single invalid-input error object.
+
+The stdio loop exits `3` when a batch is blocked, as for a single blocked call.
+
+### HTTP / SSE proxy input handling
+
+The HTTP proxy inspects every `POST` body. A body that is not valid JSON
+(including an empty body) is not forwarded: the proxy returns
+`400 Bad Request` with a JSON-RPC parse error (`code` `-32700`, `id` `null`,
+`data.rule_id` `AGENTSHIELD-RUNTIME-INVALID-INPUT`) and counts it as a blocked
+request. Batches follow the rules above.
+
 In transport mode, if an allowed request cannot be written to the downstream MCP
 server, the proxy returns JSON-RPC error `-32002` with message
 `Downstream MCP server unavailable` for that request instead of dropping it
@@ -183,6 +213,14 @@ fail_on = "never"       # never block this tool, still audited
 
 Defaults preserve the stdin guard's behavior (block only on `block`). The config
 is optional; with no `[runtime.proxy]` section the proxy uses defaults.
+
+The proxy reads the file given with `--config`, or `.agentshield.toml` in the
+current directory. It fails closed on configuration errors: if the config file
+exists but cannot be read, parsed or validated, or if a `--config` path does
+not exist, `agentshield guard` prints `Error: ...` naming the file and exits
+`2` without proxying anything. Only when no `--config` is given and no
+`.agentshield.toml` exists does it fall back to the default policy, and it says
+so on stderr.
 
 ### Safe error response for blocked tool calls
 

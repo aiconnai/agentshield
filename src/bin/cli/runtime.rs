@@ -68,7 +68,7 @@ pub(super) fn cmd_guard(read_stdin: bool) -> agentshield::error::Result<i32> {
 
 #[cfg(feature = "runtime-guard")]
 pub(super) fn cmd_mcp_proxy(config_path: Option<PathBuf>) -> agentshield::error::Result<i32> {
-    let policy = load_proxy_policy(config_path);
+    let policy = load_proxy_policy(config_path)?;
     agentshield::runtime::mcp_proxy_stdio::run_line_mode(
         &policy,
         GUARD_STDIN_MAX_BYTES,
@@ -82,7 +82,7 @@ pub(super) fn cmd_mcp_proxy_transport(
     config_path: Option<PathBuf>,
     server: Vec<String>,
 ) -> agentshield::error::Result<i32> {
-    let policy = load_proxy_policy(config_path);
+    let policy = load_proxy_policy(config_path)?;
     agentshield::runtime::mcp_proxy_stdio::run_transport(
         &policy,
         &server,
@@ -115,7 +115,7 @@ pub(super) fn cmd_guard_http_sse(
         agentshield::error::ShieldError::Config(format!("Invalid target URL: {}", e))
     })?;
 
-    let policy = load_proxy_policy(config_path);
+    let policy = load_proxy_policy(config_path)?;
 
     let config = HttpSseProxyConfig {
         listen_addr,
@@ -228,8 +228,11 @@ pub(super) fn cmd_wrap(
 }
 
 #[cfg(feature = "runtime-guard")]
-fn load_proxy_policy(config_path: Option<PathBuf>) -> agentshield::runtime::ProxyPolicy {
+fn load_proxy_policy(
+    config_path: Option<PathBuf>,
+) -> agentshield::error::Result<agentshield::runtime::ProxyPolicy> {
     use agentshield::config::{Config, ProxyFailOn};
+    use agentshield::error::ShieldError;
     use agentshield::runtime::{FailOn, ProxyPolicy};
 
     fn map_fail_on(value: ProxyFailOn) -> FailOn {
@@ -240,10 +243,32 @@ fn load_proxy_policy(config_path: Option<PathBuf>) -> agentshield::runtime::Prox
         }
     }
 
+    let explicit = config_path.is_some();
     let path = config_path.unwrap_or_else(|| PathBuf::from(".agentshield.toml"));
-    let config = Config::load(&path).unwrap_or_default();
+    let config = if path.exists() {
+        // Fail closed: a guard must not run with a policy other than the one
+        // the operator wrote, so any config that exists but cannot be read,
+        // parsed or validated is an error, explicit or not.
+        Config::load(&path).map_err(|error| {
+            ShieldError::Config(format!(
+                "failed to load runtime guard config '{}': {error}",
+                path.display()
+            ))
+        })?
+    } else if explicit {
+        return Err(ShieldError::Config(format!(
+            "runtime guard config '{}' does not exist",
+            path.display()
+        )));
+    } else {
+        eprintln!(
+            "agentshield: no {} found; using the default runtime proxy policy (fail_on = \"block\")",
+            path.display()
+        );
+        Config::default()
+    };
 
-    ProxyPolicy {
+    Ok(ProxyPolicy {
         fail_on: map_fail_on(config.runtime.proxy.fail_on),
         tool_overrides: config
             .runtime
@@ -252,7 +277,7 @@ fn load_proxy_policy(config_path: Option<PathBuf>) -> agentshield::runtime::Prox
             .into_iter()
             .map(|override_entry| (override_entry.name, map_fail_on(override_entry.fail_on)))
             .collect(),
-    }
+    })
 }
 
 #[cfg(feature = "runtime-guard")]

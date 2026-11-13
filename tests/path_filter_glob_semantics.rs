@@ -3,6 +3,16 @@ use std::path::Path;
 use agentshield::{ScanOptions, scan};
 use tempfile::TempDir;
 
+/// These fixtures exercise `.agentshield.toml` semantics inside a temp
+/// directory that is not the process cwd, so the target's own config is only
+/// applied with an explicit opt-in (see `tests/target_config_trust.rs`).
+fn trusted_target() -> ScanOptions {
+    ScanOptions {
+        trust_target_config: true,
+        ..ScanOptions::default()
+    }
+}
+
 const PACKAGE_JSON: &str = r#"{"dependencies":{"@modelcontextprotocol/sdk":"1.0.0"}}"#;
 
 const VULNERABLE_TOOL: &str = r#"
@@ -32,7 +42,7 @@ fn wildcard_segment_does_not_cross_directories_when_excluding() {
     fixture.write(".agentshield.toml", "[scan]\nexclude = [\"*.py\"]\n");
     fixture.write("src/vulnerable.py", VULNERABLE_TOOL);
 
-    let report = scan(fixture.path(), &ScanOptions::default()).unwrap();
+    let report = scan(fixture.path(), &trusted_target()).unwrap();
 
     assert!(source_paths(&report).contains(&"src/vulnerable.py".to_string()));
     assert!(has_shield_001_for_file(&report, "src/vulnerable.py"));
@@ -45,7 +55,7 @@ fn trailing_slash_excludes_directory_contents() {
     fixture.write("src/safe.py", SAFE_TOOL);
     fixture.write("legacy/vulnerable.py", VULNERABLE_TOOL);
 
-    let report = scan(fixture.path(), &ScanOptions::default()).unwrap();
+    let report = scan(fixture.path(), &trusted_target()).unwrap();
 
     assert!(source_paths(&report).contains(&"src/safe.py".to_string()));
     assert!(!source_paths(&report).contains(&"legacy/vulnerable.py".to_string()));
@@ -59,7 +69,7 @@ fn dot_slash_patterns_are_relative_to_scan_root() {
     fixture.write("src/vulnerable.py", VULNERABLE_TOOL);
     fixture.write("legacy/vulnerable.py", VULNERABLE_TOOL);
 
-    let report = scan(fixture.path(), &ScanOptions::default()).unwrap();
+    let report = scan(fixture.path(), &trusted_target()).unwrap();
 
     assert!(source_paths(&report).contains(&"src/vulnerable.py".to_string()));
     assert!(!source_paths(&report).contains(&"legacy/vulnerable.py".to_string()));
@@ -77,7 +87,7 @@ fn double_star_prefix_matches_root_and_nested_directories() {
     fixture.write("generated/root.py", VULNERABLE_TOOL);
     fixture.write("src/generated/nested.py", VULNERABLE_TOOL);
 
-    let report = scan(fixture.path(), &ScanOptions::default()).unwrap();
+    let report = scan(fixture.path(), &trusted_target()).unwrap();
 
     assert!(source_paths(&report).contains(&"src/safe.py".to_string()));
     assert!(!source_paths(&report).contains(&"generated/root.py".to_string()));
@@ -92,7 +102,7 @@ fn path_filters_are_case_sensitive() {
     fixture.write(".agentshield.toml", "[scan]\nexclude = [\"SRC/**\"]\n");
     fixture.write("src/vulnerable.py", VULNERABLE_TOOL);
 
-    let report = scan(fixture.path(), &ScanOptions::default()).unwrap();
+    let report = scan(fixture.path(), &trusted_target()).unwrap();
 
     assert!(source_paths(&report).contains(&"src/vulnerable.py".to_string()));
     assert!(has_shield_001_for_file(&report, "src/vulnerable.py"));

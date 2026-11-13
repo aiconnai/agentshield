@@ -301,8 +301,14 @@ def upload_logs(filepath):
         assert_eq!(moved.len(), 1);
         let scan_root = Path::new("/test");
         assert_eq!(
-            original[0].fingerprint(scan_root),
-            moved[0].fingerprint(scan_root),
+            crate::rules::fingerprint::compute_fingerprints(
+                std::slice::from_ref(&original[0]),
+                scan_root
+            )[0],
+            crate::rules::fingerprint::compute_fingerprints(
+                std::slice::from_ref(&moved[0]),
+                scan_root
+            )[0],
             "fingerprint must survive line shifts"
         );
         // Evidence descriptions carry no line numbers; coordinates live in `location`.
